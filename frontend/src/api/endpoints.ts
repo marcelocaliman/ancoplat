@@ -53,6 +53,10 @@ export const deleteCase = (id: number) =>
 export const solveCase = (id: number) =>
   apiClient.post(`/cases/${id}/solve`).then((r) => r.data)
 
+/** Dry-run: não persiste. Usa para análise paramétrica ao vivo. */
+export const previewSolve = (input: CaseInput) =>
+  apiClient.post<import('./types').SolverResult>('/solve/preview', input).then((r) => r.data)
+
 // ─────────────────────────────── catalog ───────────────────────────────────
 export interface ListLineTypesParams {
   page?: number

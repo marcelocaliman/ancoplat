@@ -141,6 +141,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/solve/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dry-run do solver (não persiste)
+         * @description Recebe um `CaseInput` completo no body, executa o solver e retorna o `SolverResult`. **Não** cria caso nem execução no banco — use para análises paramétricas ao vivo (ex: slider no frontend).
+         *
+         *     Para fluxo com persistência, veja `POST /cases/{id}/solve`.
+         *
+         *     HTTP response codes:
+         *     - **200** se convergiu ou ill_conditioned ou max_iterations
+         *     - **422** se o caso é fisicamente inviável; body inclui SolverResult completo
+         */
+        post: operations["preview_solve_api_v1_solve_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/line-types": {
         parameters: {
             query?: never;
@@ -1418,6 +1444,39 @@ export interface operations {
                 };
             };
             /** @description Caso inviável fisicamente (T_fl ≤ w·h, linha rompida, âncora elevada, etc.). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_solve_api_v1_solve_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SolverResult"];
+                };
+            };
+            /** @description Unprocessable Entity */
             422: {
                 headers: {
                     [name: string]: unknown;

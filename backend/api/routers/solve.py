@@ -13,13 +13,15 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from backend.api.db.session import get_db
-from backend.api.schemas.cases import ExecutionOutput
+from backend.api.schemas.cases import CaseInput, ExecutionOutput
 from backend.api.schemas.errors import ErrorResponse
 from backend.api.services.case_service import CaseNotFound
 from backend.api.services.execution_service import (
     http_status_for_solver_status,
     run_solve_and_persist,
 )
+from backend.solver.solver import solve as solver_solve
+from backend.solver.types import SolverResult
 
 router = APIRouter(tags=["solve"])
 
@@ -90,6 +92,47 @@ def solve_case(
         result=result,
         executed_at=exec_rec.executed_at,
     )
+
+
+@router.post(
+    "/solve/preview",
+    response_model=SolverResult,
+    summary="Dry-run do solver (não persiste)",
+    description=(
+        "Recebe um `CaseInput` completo no body, executa o solver e retorna "
+        "o `SolverResult`. **Não** cria caso nem execução no banco — use para "
+        "análises paramétricas ao vivo (ex: slider no frontend).\n\n"
+        "Para fluxo com persistência, veja `POST /cases/{id}/solve`.\n\n"
+        "HTTP response codes:\n"
+        "- **200** se convergiu ou ill_conditioned ou max_iterations\n"
+        "- **422** se o caso é fisicamente inviável; body inclui SolverResult completo"
+    ),
+    responses={
+        422: {"model": ErrorResponse},
+    },
+)
+def preview_solve(case_input: CaseInput, response: Response) -> SolverResult:
+    # Pydantic já validou formato; a fachada solve() aplica validação física
+    # e nunca lança — sempre retorna SolverResult (mesmo para INVALID_CASE).
+    result = solver_solve(
+        line_segments=list(case_input.segments),
+        boundary=case_input.boundary,
+        seabed=case_input.seabed,
+        criteria_profile=case_input.criteria_profile,
+        user_limits=case_input.user_defined_limits,
+    )
+    http_status = http_status_for_solver_status(result.status)
+    if http_status != 200:
+        raise HTTPException(
+            status_code=http_status,
+            detail={
+                "code": f"solver_{result.status.value}",
+                "message": result.message,
+                "detail": result.model_dump(),
+            },
+        )
+    response.status_code = http_status
+    return result
 
 
 __all__ = ["router"]
