@@ -48,20 +48,67 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.debug("Shutdown da API.")
 
 
+TAGS_METADATA = [
+    {
+        "name": "metadata",
+        "description": (
+            "Healthcheck, versão e perfis de critério de utilização. "
+            "Úteis para integração com UI e monitoring local."
+        ),
+    },
+    {
+        "name": "cases",
+        "description": (
+            "CRUD de casos de ancoragem. Um caso guarda o input do solver "
+            "(segmentos, boundary, seabed, perfil de critério) e o histórico "
+            "das últimas 10 execuções."
+        ),
+    },
+    {
+        "name": "solve",
+        "description": (
+            "Execução do solver de catenária em um caso salvo. "
+            "Persiste o resultado e retorna SolverResult completo."
+        ),
+    },
+    {
+        "name": "catalog",
+        "description": (
+            "Catálogo de tipos de linha (522 entradas legacy_qmoor "
+            "em SI, imutáveis). Entradas `user_input` podem ser criadas, "
+            "editadas e removidas livremente."
+        ),
+    },
+    {
+        "name": "import-export",
+        "description": (
+            "Importação de casos a partir de JSON `.moor` "
+            "(schema Seção 5.2 do MVP v2) e exportação em três formatos: "
+            "`.moor` (JSON), JSON normalizado e PDF técnico."
+        ),
+    },
+]
+
+
 def _create_app() -> FastAPI:
     """Factory: cria e configura a app FastAPI (facilita testes)."""
     app = FastAPI(
         title="QMoor Web API",
         description=(
-            "API REST para análise estática de linhas de ancoragem offshore. "
-            "Solver de catenária elástica com seabed e atrito de Coulomb, "
-            "validado contra MoorPy.\n\n"
-            "Uso pessoal/local. Sem autenticação — servidor deve rodar "
-            "apenas em localhost."
+            "API REST para análise estática de linhas de ancoragem offshore.\n\n"
+            "Solver de **catenária elástica** com contato com seabed e "
+            "atrito de Coulomb, validado contra [MoorPy](https://github.com/NREL/MoorPy) "
+            "em 9 casos de benchmark (BC-01..BC-09) com desvio < 1% em força "
+            "e < 0,5% em geometria.\n\n"
+            "**Uso pessoal/local.** Servidor roda em `localhost:8000` sem "
+            "autenticação — firewall do macOS é a barreira.\n\n"
+            "Unidades **internas em SI** (m, N, Pa, N/m). Conversões "
+            "para imperial/metric acontecem nas bordas (`.moor` import/export, UI)."
         ),
         version="0.1.0",
         contact={"name": "Marcelo Caliman"},
         license_info={"name": "Uso pessoal, sem fins comerciais"},
+        openapi_tags=TAGS_METADATA,
         docs_url="/api/v1/docs",
         redoc_url="/api/v1/redoc",
         openapi_url="/api/v1/openapi.json",
