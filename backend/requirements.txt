@@ -11,3 +11,5 @@ pytest
 pytest-cov
 python-multipart
 moorpy
+reportlab
+httpx
