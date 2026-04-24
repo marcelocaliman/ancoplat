@@ -33,6 +33,109 @@ class ConvergenceStatus(str, Enum):
     ILL_CONDITIONED = "ill_conditioned"
 
 
+class AlertLevel(str, Enum):
+    """
+    Classificação da utilização T_fl/MBL (Seção 5 do Documento A v2.2).
+
+    - ok:     utilização abaixo do limite amarelo (linha em regime normal)
+    - yellow: atenção (padrão: T/MBL ≥ 0,50)
+    - red:    limite operacional intacto atingido (padrão: T/MBL ≥ 0,60)
+    - broken: linha rompida matemáticamente (T/MBL ≥ 1,00 → INVALID_CASE)
+    """
+
+    OK = "ok"
+    YELLOW = "yellow"
+    RED = "red"
+    BROKEN = "broken"
+
+
+class CriteriaProfile(str, Enum):
+    """
+    Perfis de critério de utilização (Seção 5 do Documento A v2.2, resposta P-04).
+
+    - MVP_Preliminary: default simples, 0.50/0.60/1.00
+    - API_RP_2SK:      intacto 0.60, danificado 0.80 (ainda 1.00 para broken)
+    - DNV_placeholder: reservado para ULS/ALS/FLS; tratado como MVP até F4+
+    - UserDefined:     usuário fornece yellow/red/broken ratios
+    """
+
+    MVP_PRELIMINARY = "MVP_Preliminary"
+    API_RP_2SK = "API_RP_2SK"
+    DNV_PLACEHOLDER = "DNV_placeholder"
+    USER_DEFINED = "UserDefined"
+
+
+class UtilizationLimits(BaseModel):
+    """
+    Limites absolutos de T_fl/MBL que disparam cada AlertLevel.
+
+    A ordem deve ser: yellow_ratio < red_ratio < broken_ratio.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    yellow_ratio: float = Field(default=0.50, gt=0.0, le=1.0)
+    red_ratio: float = Field(default=0.60, gt=0.0, le=1.0)
+    broken_ratio: float = Field(default=1.00, gt=0.0, le=2.0)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "UtilizationLimits":
+        if not (self.yellow_ratio < self.red_ratio < self.broken_ratio):
+            raise ValueError(
+                "limites devem satisfazer yellow < red < broken "
+                f"(recebido {self.yellow_ratio}/{self.red_ratio}/{self.broken_ratio})"
+            )
+        return self
+
+
+# Limites padrão por perfil (Seção 5 e resposta P-04 do Documento B).
+PROFILE_LIMITS: dict[CriteriaProfile, UtilizationLimits] = {
+    CriteriaProfile.MVP_PRELIMINARY: UtilizationLimits(
+        yellow_ratio=0.50, red_ratio=0.60, broken_ratio=1.00,
+    ),
+    CriteriaProfile.API_RP_2SK: UtilizationLimits(
+        yellow_ratio=0.50, red_ratio=0.60, broken_ratio=0.80,
+    ),
+    CriteriaProfile.DNV_PLACEHOLDER: UtilizationLimits(
+        yellow_ratio=0.50, red_ratio=0.60, broken_ratio=1.00,
+    ),
+    # USER_DEFINED não tem default — o usuário obrigatoriamente passa.
+}
+
+
+def classify_utilization(
+    utilization: float,
+    profile: CriteriaProfile = CriteriaProfile.MVP_PRELIMINARY,
+    user_limits: Optional[UtilizationLimits] = None,
+) -> AlertLevel:
+    """
+    Retorna o AlertLevel dado a utilização e o perfil.
+
+    Parâmetros
+    ----------
+    utilization : T_fl / MBL (adimensional, 0..∞). Valores acima de broken
+                  sempre retornam BROKEN.
+    profile : perfil de critério. Default MVP_PRELIMINARY.
+    user_limits : obrigatório se profile == USER_DEFINED; ignorado senão.
+    """
+    if profile == CriteriaProfile.USER_DEFINED:
+        if user_limits is None:
+            raise ValueError(
+                "CriteriaProfile.USER_DEFINED requer `user_limits` explicito"
+            )
+        limits = user_limits
+    else:
+        limits = PROFILE_LIMITS[profile]
+
+    if utilization >= limits.broken_ratio:
+        return AlertLevel.BROKEN
+    if utilization >= limits.red_ratio:
+        return AlertLevel.RED
+    if utilization >= limits.yellow_ratio:
+        return AlertLevel.YELLOW
+    return AlertLevel.OK
+
+
 class LineSegment(BaseModel):
     """
     Segmento homogêneo de linha de ancoragem.
@@ -175,14 +278,20 @@ class SolverResult(BaseModel):
     H: float = 0.0  # Componente horizontal da tração (constante no trecho suspenso)
     iterations_used: int = 0
     utilization: float = 0.0  # fairlead_tension / MBL (0..1)
+    alert_level: AlertLevel = AlertLevel.OK  # classificação por CriteriaProfile
 
 
 __all__ = [
+    "AlertLevel",
     "BoundaryConditions",
     "ConvergenceStatus",
+    "CriteriaProfile",
     "LineSegment",
+    "PROFILE_LIMITS",
     "SeabedConfig",
     "SolutionMode",
     "SolverConfig",
     "SolverResult",
+    "UtilizationLimits",
+    "classify_utilization",
 ]

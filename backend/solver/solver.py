@@ -5,7 +5,8 @@ Unifica todas as camadas anteriores (catenária rígida, seabed no-friction,
 atrito de Coulomb, correção elástica) em uma única função de entrada que
 aceita as estruturas Pydantic de alto nível:
 
-  solve(line_segments, boundary, seabed, config) -> SolverResult
+  solve(line_segments, boundary, seabed, config, criteria_profile, user_limits)
+    -> SolverResult
 
 Despacha para solve_elastic_iterative, que por sua vez usa o dispatch
 rígido-suspenso vs touchdown em solve_rigid_suspended.
@@ -16,17 +17,22 @@ fica para v2.1 conforme Seção 9 do Documento A v2.2.
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from typing import Optional, Sequence
 
 from .elastic import solve_elastic_iterative
 from .types import (
+    PROFILE_LIMITS,
+    AlertLevel,
     BoundaryConditions,
     ConvergenceStatus,
+    CriteriaProfile,
     LineSegment,
     SeabedConfig,
     SolutionMode,
     SolverConfig,
     SolverResult,
+    UtilizationLimits,
+    classify_utilization,
 )
 
 
@@ -60,11 +66,22 @@ def _validate_inputs(
     return segment
 
 
+def _broken_ratio(
+    profile: CriteriaProfile, user_limits: Optional[UtilizationLimits]
+) -> float:
+    """Helper: broken_ratio efetivo do perfil corrente (para mensagens)."""
+    if profile == CriteriaProfile.USER_DEFINED and user_limits is not None:
+        return user_limits.broken_ratio
+    return PROFILE_LIMITS[profile].broken_ratio
+
+
 def solve(
     line_segments: Sequence[LineSegment],
     boundary: BoundaryConditions,
     seabed: SeabedConfig | None = None,
     config: SolverConfig | None = None,
+    criteria_profile: CriteriaProfile = CriteriaProfile.MVP_PRELIMINARY,
+    user_limits: Optional[UtilizationLimits] = None,
 ) -> SolverResult:
     """
     Executa o solver completo para uma linha isolada.
@@ -73,14 +90,17 @@ def solve(
     ----------
     line_segments : lista com UM LineSegment (MVP v1 é homogêneo).
     boundary : condições de contorno (h, modo, input_value).
-    seabed : configuração do seabed (μ, profundidade). Default μ=0.
+    seabed : configuração do seabed (μ). Default μ=0.
     config : tolerâncias e max iter. Default SolverConfig().
+    criteria_profile : perfil de classificação T_fl/MBL (Seção 5 Documento A).
+                       Default MVP_Preliminary (0.50 yellow / 0.60 red / 1.00 broken).
+    user_limits : obrigatório se criteria_profile == USER_DEFINED.
 
     Retorna
     -------
     SolverResult — todos os campos da Seção 6 do MVP v2, incluindo
-    status de convergência, geometria discretizada, tensões, comprimentos
-    e ângulos.
+    status de convergência, geometria, tensões, ângulos, utilization
+    e `alert_level` (ok | yellow | red | broken).
 
     Em caso de erro de validação ou caso fisicamente impossível, captura
     a exceção e devolve um SolverResult com status=INVALID_CASE e mensagem
@@ -123,39 +143,52 @@ def solve(
             message=f"Erro numérico: {exc}",
         )
 
-    # Pós-classificação (Camada 7): detecta casos ill-conditioned onde o
-    # solver convergiu mas o resultado é sensível a pequenas variações.
+    # Pós-classificação (Camada 7 + alert_level da Seção 5 Documento A).
     if result.status == ConvergenceStatus.CONVERGED:
-        # Check 1: linha rompida (T_fl > MBL). Matemáticamente converge,
-        # mas é um caso engenheiramente inválido (Seção 5 do Documento A).
-        if result.utilization > 1.0:
+        try:
+            alert = classify_utilization(
+                result.utilization, criteria_profile, user_limits,
+            )
+        except ValueError as exc:
+            # Configuração inválida do perfil (ex.: USER_DEFINED sem user_limits).
             return SolverResult(
                 **{
                     **result.model_dump(),
                     "status": ConvergenceStatus.INVALID_CASE,
+                    "message": f"Perfil de critério mal configurado: {exc}",
+                }
+            )
+
+        # Check 1: linha rompida (utilization >= broken_ratio do perfil ativo).
+        # Matemáticamente converge, mas é engenheiramente inválido.
+        if alert == AlertLevel.BROKEN:
+            return SolverResult(
+                **{
+                    **result.model_dump(),
+                    "status": ConvergenceStatus.INVALID_CASE,
+                    "alert_level": AlertLevel.BROKEN,
                     "message": (
-                        f"Linha rompida: T_fl/MBL = {result.utilization:.2f} > 1.0. "
+                        f"Linha rompida: T_fl/MBL = {result.utilization:.2f} "
+                        f"(perfil {criteria_profile.value}, broken_ratio="
+                        f"{_broken_ratio(criteria_profile, user_limits):.2f}). "
                         "Caso fisicamente inviável. "
                         "Verifique comprimento, geometria ou tipo de linha."
                     ),
                 }
             )
 
+        # Check 2: ill-conditioned (linha muito taut, sensibilidade extrema).
         L_stretched = result.stretched_length
         X = result.total_horz_distance
         h = boundary.h
         L_taut = math.sqrt(X * X + h * h)
         taut_margin = L_stretched / L_taut if L_taut > 0 else float("inf")
-        # Linha dentro de 0,01% do taut → sensibilidade extrema.
-        # Threshold conservador: casos operacionais normais frequentemente
-        # ficam dentro de 0,1% ou 0,5% do taut sem serem mal-condicionados
-        # em sentido estrito; apenas a aproximação MUITO apertada
-        # (dT/dL → ∞ no limite exato) caracteriza ill_conditioned.
         if 1.0 < taut_margin < 1.0001:
             return SolverResult(
                 **{
                     **result.model_dump(),
                     "status": ConvergenceStatus.ILL_CONDITIONED,
+                    "alert_level": alert,
                     "message": (
                         f"Convergiu mas caso mal condicionado: linha a "
                         f"{(taut_margin - 1) * 100:.3f}% do taut, alta sensibilidade. "
@@ -164,6 +197,11 @@ def solve(
                     ),
                 }
             )
+
+        # Caso normal convergido: injeta alert_level.
+        return SolverResult(
+            **{**result.model_dump(), "alert_level": alert}
+        )
 
     return result
 
