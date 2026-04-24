@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.api.db import session as db_session_module
 from backend.api.db.migrations import run_migrations
+from backend.api.db.models import LineTypeRecord
 from backend.api.main import app
 
 
@@ -48,3 +49,50 @@ def client(tmp_db: Path) -> Iterator[TestClient]:
     del tmp_db
     with TestClient(app) as c:
         yield c
+
+
+@pytest.fixture()
+def seeded_catalog(tmp_db: Path) -> Iterator[list[int]]:
+    """
+    Popula o banco temporário com algumas entradas de catálogo (mix
+    legacy_qmoor e user_input). Retorna a lista de ids criados.
+
+    Usado pelos testes que precisam validar o catálogo (F2.5, F2.6).
+    """
+    del tmp_db
+    seeds = [
+        dict(
+            legacy_id=1, line_type="IWRCEIPS", category="Wire",
+            base_unit_system="imperial",
+            diameter=0.0254, dry_weight=27.0, wet_weight=22.4,
+            break_strength=459_946.0, modulus=6.76e10,
+            qmoor_ea=3.42e7, gmoor_ea=4.96e7,
+            seabed_friction_cf=0.6, data_source="legacy_qmoor",
+        ),
+        dict(
+            legacy_id=2, line_type="IWRCEIPS", category="Wire",
+            base_unit_system="imperial",
+            diameter=0.02858, dry_weight=34.2, wet_weight=28.3,
+            break_strength=578_268.0, modulus=6.76e10,
+            qmoor_ea=4.33e7, gmoor_ea=6.28e7,
+            seabed_friction_cf=0.6, data_source="legacy_qmoor",
+        ),
+        dict(
+            legacy_id=100, line_type="R4Studless", category="StudlessChain",
+            base_unit_system="imperial",
+            diameter=0.0762, dry_weight=1240.0, wet_weight=1058.0,
+            break_strength=6_001_000.0, modulus=1.28e11,
+            qmoor_ea=8.2e7, gmoor_ea=7.18e7,
+            seabed_friction_cf=1.0, data_source="legacy_qmoor",
+        ),
+    ]
+    from backend.api.db import session as ds
+    ids: list[int] = []
+    with ds.SessionLocal() as db:
+        for s in seeds:
+            rec = LineTypeRecord(**s)
+            db.add(rec)
+            db.commit()
+            db.refresh(rec)
+            ids.append(rec.id)
+    yield ids
