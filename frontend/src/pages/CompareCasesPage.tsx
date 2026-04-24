@@ -26,15 +26,28 @@ import { cn, fmtForceKN, fmtMeters, fmtPercent } from '@/lib/utils'
 import { useThemeStore, resolveTheme } from '@/store/theme'
 
 /** Ver CatenaryPlot.tsx — interop Vite+React 19+react-plotly.js. */
+function resolveDefault<T>(mod: unknown): T {
+  let cur: unknown = mod
+  for (let i = 0; i < 3; i += 1) {
+    if (typeof cur === 'function') return cur as T
+    if (cur && typeof cur === 'object' && 'default' in cur) {
+      cur = (cur as { default: unknown }).default
+    } else break
+  }
+  return cur as T
+}
+
 const Plot = lazy(async () => {
   const [plotlyMod, factoryMod] = await Promise.all([
     import('plotly.js-dist-min'),
     import('react-plotly.js/factory'),
   ])
-  const Plotly =
-    ((plotlyMod as unknown) as { default?: unknown }).default ?? plotlyMod
-  const factory = (factoryMod as unknown) as { default: (p: unknown) => unknown }
-  const Comp = factory.default(Plotly)
+  const Plotly = resolveDefault<unknown>(plotlyMod)
+  const factory = resolveDefault<(p: unknown) => unknown>(factoryMod)
+  if (typeof factory !== 'function') {
+    throw new Error('react-plotly.js/factory não é função após interop')
+  }
+  const Comp = factory(Plotly)
   return { default: Comp as unknown as React.ComponentType<Record<string, unknown>> }
 })
 
