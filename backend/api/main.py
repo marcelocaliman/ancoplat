@@ -24,7 +24,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from backend.api.db import session as db_session
 from backend.api.db.migrations import run_migrations
-from backend.api.routers import cases, health, line_types, solve
+from backend.api.routers import cases, health, line_types, moor_io, solve
 from backend.api.schemas.errors import ErrorDetail, ErrorResponse
 
 logger = logging.getLogger("qmoor.api")
@@ -93,6 +93,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(cases.router, prefix="/api/v1")
     app.include_router(solve.router, prefix="/api/v1")
     app.include_router(line_types.router, prefix="/api/v1")
+    app.include_router(moor_io.router, prefix="/api/v1")
 
 
 def _register_exception_handlers(app: FastAPI) -> None:
