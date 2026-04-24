@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic
+numpy
+scipy
+pint
+openpyxl
+pandas
+sqlalchemy
+pytest
+python-multipart
