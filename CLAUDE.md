@@ -82,8 +82,8 @@ A Seção 6.2 do Documento A listava BC-02/07/08/09 com "entradas a definir". Al
 ### Fallback de bisseção NÃO implementado (divergência vs Documento A)
 A Seção 3.5.1 do Documento A menciona "Fallback: bisseção pura se Brent não convergir em 50 iterações" e `SolverConfig.max_bisection_iter=200`. O código usa **apenas brentq** (que internamente já é um método híbrido Brent-Dekker com fallback de bisseção nativo). Como brentq nunca falhou em nenhum dos 45 testes, o fallback manual seria redundante. `max_bisection_iter` foi removido do schema.
 
-### Documento A será atualizado (v2.3 planejada)
-As 3 decisões acima serão propagadas para uma versão futura do Documento A. Até lá, este CLAUDE.md é a fonte autoritativa.
+### Documento A — changelog v2.3 consolidado
+As correções das decisões acima estão consolidadas em [`docs/Documento_A_v2_3_changelog.md`](docs/Documento_A_v2_3_changelog.md) para eventual geração de um novo `.docx`. Até que isso aconteça, o changelog + este CLAUDE.md são as fontes autoritativas das divergências em relação ao v2.2.
 
 ## Decisões de projeto — Fase 2 (API e persistência)
 
