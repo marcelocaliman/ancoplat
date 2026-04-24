@@ -8,5 +8,6 @@ openpyxl
 pandas
 sqlalchemy
 pytest
+pytest-cov
 python-multipart
 moorpy
