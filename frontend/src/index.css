@@ -1,0 +1,152 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --sidebar: 240 14% 96%;
+    --sidebar-foreground: 215 19% 35%;
+    --muted: 214 32% 91%;
+    --muted-foreground: 215 20% 55%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 215 53% 25%;
+    --primary: 215 53% 25%;
+    --primary-hover: 215 55% 18%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --accent: 215 53% 25%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 74% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 160 84% 31%;
+    --warning: 32 95% 44%;
+    --danger: 0 74% 42%;
+    --info: 201 96% 33%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 96%;
+    --card: 217 33% 17%;
+    --card-foreground: 210 40% 96%;
+    --sidebar: 229 84% 5%;
+    --sidebar-foreground: 213 27% 84%;
+    --muted: 217 19% 27%;
+    --muted-foreground: 215 20% 65%;
+    --border: 215 28% 27%;
+    --input: 215 28% 27%;
+    --ring: 214 95% 69%;
+    --primary: 214 95% 69%;
+    --primary-hover: 212 96% 78%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 22%;
+    --secondary-foreground: 210 40% 96%;
+    --accent: 214 95% 69%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 91% 71%;
+    --destructive-foreground: 222 47% 11%;
+    --success: 158 64% 52%;
+    --warning: 43 96% 56%;
+    --danger: 0 91% 71%;
+    --info: 199 89% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+}
+
+@layer utilities {
+  .custom-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scroll::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  .custom-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+
+  .animate-in {
+    animation-duration: 150ms;
+    animation-timing-function: ease-out;
+  }
+  .animate-out {
+    animation-duration: 120ms;
+    animation-timing-function: ease-in;
+  }
+  .fade-in-0 {
+    animation-name: fade-in-0;
+  }
+  .fade-out-0 {
+    animation-name: fade-out-0;
+  }
+  .zoom-in-95 {
+    animation-name: zoom-in-95;
+  }
+  .zoom-out-95 {
+    animation-name: zoom-out-95;
+  }
+  @keyframes fade-in-0 {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes fade-out-0 {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes zoom-in-95 {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes zoom-out-95 {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+}
