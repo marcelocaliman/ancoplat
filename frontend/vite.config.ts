@@ -27,7 +27,8 @@ export default defineConfig({
       output: {
         manualChunks(id: string) {
           if (id.includes('node_modules')) {
-            if (id.includes('plotly')) return 'plotly-vendor'
+            if (id.includes('plotly.js') || id.includes('react-plotly'))
+              return 'plotly-vendor'
             if (id.includes('@radix-ui')) return 'radix-vendor'
             if (
               id.includes('react-hook-form') ||

@@ -3,8 +3,25 @@ import type { SolverResult } from '@/api/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useThemeStore, resolveTheme } from '@/store/theme'
 
-// Plotly é pesado — lazy-load no client-side.
-const Plot = lazy(() => import('react-plotly.js'))
+/**
+ * Plotly é pesado — lazy-load no client-side.
+ *
+ * Vite + React 19 + react-plotly.js (CJS) tem um interop ruim com
+ * `lazy(() => import('react-plotly.js'))` direto: o `default` vem como
+ * um Module Namespace Object em vez de React component. Usamos o
+ * factory explícito para construir o componente a partir de `plotly.js`.
+ */
+const Plot = lazy(async () => {
+  const [plotlyMod, factoryMod] = await Promise.all([
+    import('plotly.js-dist-min'),
+    import('react-plotly.js/factory'),
+  ])
+  const Plotly =
+    ((plotlyMod as unknown) as { default?: unknown }).default ?? plotlyMod
+  const factory = (factoryMod as unknown) as { default: (p: unknown) => unknown }
+  const Comp = factory.default(Plotly)
+  return { default: Comp as unknown as React.ComponentType<Record<string, unknown>> }
+})
 
 export interface CatenaryPlotProps {
   result: SolverResult

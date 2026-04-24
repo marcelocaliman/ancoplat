@@ -25,7 +25,18 @@ import {
 import { cn, fmtForceKN, fmtMeters, fmtPercent } from '@/lib/utils'
 import { useThemeStore, resolveTheme } from '@/store/theme'
 
-const Plot = lazy(() => import('react-plotly.js'))
+/** Ver CatenaryPlot.tsx — interop Vite+React 19+react-plotly.js. */
+const Plot = lazy(async () => {
+  const [plotlyMod, factoryMod] = await Promise.all([
+    import('plotly.js-dist-min'),
+    import('react-plotly.js/factory'),
+  ])
+  const Plotly =
+    ((plotlyMod as unknown) as { default?: unknown }).default ?? plotlyMod
+  const factory = (factoryMod as unknown) as { default: (p: unknown) => unknown }
+  const Comp = factory.default(Plotly)
+  return { default: Comp as unknown as React.ComponentType<Record<string, unknown>> }
+})
 
 const COLORS = ['#1E3A5F', '#B91C1C', '#059669']
 const COLORS_DARK = ['#60A5FA', '#F87171', '#34D399']
