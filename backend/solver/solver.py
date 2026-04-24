@@ -110,7 +110,6 @@ def solve(
             mu=seabed.mu,
             MBL=segment.MBL,
         )
-        return result
     except ValueError as exc:
         return SolverResult(
             status=ConvergenceStatus.INVALID_CASE,
@@ -122,6 +121,52 @@ def solve(
             status=ConvergenceStatus.NUMERICAL_ERROR,
             message=f"Erro numérico: {exc}",
         )
+
+    # Pós-classificação (Camada 7): detecta casos ill-conditioned onde o
+    # solver convergiu mas o resultado é sensível a pequenas variações.
+    import math
+
+    if result.status == ConvergenceStatus.CONVERGED:
+        # Check 1: linha rompida (T_fl > MBL). Matemáticamente converge,
+        # mas é um caso engenheiramente inválido (Seção 5 do Documento A).
+        if result.utilization > 1.0:
+            return SolverResult(
+                **{
+                    **result.model_dump(),
+                    "status": ConvergenceStatus.INVALID_CASE,
+                    "message": (
+                        f"Linha rompida: T_fl/MBL = {result.utilization:.2f} > 1.0. "
+                        "Caso fisicamente inviável. "
+                        "Verifique comprimento, geometria ou tipo de linha."
+                    ),
+                }
+            )
+
+        L_stretched = result.stretched_length
+        X = result.total_horz_distance
+        h = boundary.h
+        L_taut = math.sqrt(X * X + h * h)
+        taut_margin = L_stretched / L_taut if L_taut > 0 else float("inf")
+        # Linha dentro de 0,01% do taut → sensibilidade extrema.
+        # Threshold conservador: casos operacionais normais frequentemente
+        # ficam dentro de 0,1% ou 0,5% do taut sem serem mal-condicionados
+        # em sentido estrito; apenas a aproximação MUITO apertada
+        # (dT/dL → ∞ no limite exato) caracteriza ill_conditioned.
+        if 1.0 < taut_margin < 1.0001:
+            return SolverResult(
+                **{
+                    **result.model_dump(),
+                    "status": ConvergenceStatus.ILL_CONDITIONED,
+                    "message": (
+                        f"Convergiu mas caso mal condicionado: linha a "
+                        f"{(taut_margin - 1) * 100:.3f}% do taut, alta sensibilidade. "
+                        "Resultado deve ser usado com cautela. "
+                        f"({result.message})"
+                    ),
+                }
+            )
+
+    return result
 
 
 __all__ = ["solve"]
