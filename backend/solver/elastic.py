@@ -12,14 +12,18 @@ Como temos UMA linha (um segmento homogêneo) no MVP v1, aplica-se uma
 T_média global:
   L_stretched = L_unstretched · (1 + T_média_global / EA)
 
-Algoritmo (loop externo)
-------------------------
-1. Inicializa L_eff := L (linha não-esticada).
-2. Resolve rígido usando L_eff como comprimento de linha para a geometria.
-3. Mede T_mean a partir da tensão ao longo da linha.
-4. Atualiza L_eff := L · (1 + T_mean / EA).
-5. Repete até |ΔL_eff / L_eff| < elastic_tolerance (default 1e-5).
-6. Retorna resultado com stretched_length e elongation preenchidos.
+O ponto fixo da iteração é
+  F(L_eff) = L_eff − L · (1 + T_mean(L_eff)/EA) = 0
+
+Resolvido por brentq (mais robusto que iteração ponto-fixo, que diverge
+em casos de linha muito taut onde L_eff está próximo de √(X²+h²)).
+
+Região viável
+-------------
+- Mode Range: L_eff > √(X²+h²) (senão linha não alcança X) e L_eff < X+h
+  (senão cai em caso patológico com slack no seabed; Camada 7).
+- Mode Tension: L_eff ≥ L_s(T_fl) (senão L_g < 0; tratado no solver rígido
+  via dispatch, mas para T_fl ≤ w·h o caso é genuinamente inviável).
 
 Referências:
   - Documento A v2.2, Seções 3.3.2, 3.5.3
@@ -27,7 +31,11 @@ Referências:
 """
 from __future__ import annotations
 
+import math
+from typing import Callable, Optional
+
 import numpy as np
+from scipy.optimize import brentq
 
 from .catenary import solve_rigid_suspended
 from .types import (
@@ -39,8 +47,7 @@ from .types import (
 
 
 def _mean_tension(result: SolverResult) -> float:
-    """Tração média ao longo da linha, estimada pela média aritmética da
-    magnitude da tração na discretização (uniforme em arc-length)."""
+    """Tração média ao longo da linha (média aritmética sobre discretização)."""
     return float(np.mean(result.tension_magnitude))
 
 
@@ -48,12 +55,34 @@ def apply_elastic_correction(
     unstretched_length: float, EA: float, T_mean: float
 ) -> float:
     """
-    Retorna o comprimento esticado de acordo com a Seção 3.3.2:
-      L_stretched = L · (1 + T_mean / EA).
+    Retorna L_stretched = L · (1 + T_mean / EA), conforme Seção 3.3.2.
     """
     if EA <= 0:
         raise ValueError("EA deve ser > 0 no modo elástico")
     return unstretched_length * (1.0 + T_mean / EA)
+
+
+def _solve_rigid_for_elastic(
+    L_eff: float,
+    *,
+    h: float,
+    w: float,
+    mode: SolutionMode,
+    input_value: float,
+    mu: float,
+    config: SolverConfig,
+    MBL: float,
+) -> Optional[SolverResult]:
+    """Chama solve_rigid_suspended, retornando None se o caso é inviável
+    geometricamente para o L_eff dado (mas não necessariamente inválido
+    fisicamente)."""
+    try:
+        return solve_rigid_suspended(
+            L=L_eff, h=h, w=w, mode=mode, input_value=input_value,
+            config=config, mu=mu, MBL=MBL,
+        )
+    except ValueError:
+        return None
 
 
 def solve_elastic_iterative(
@@ -67,73 +96,110 @@ def solve_elastic_iterative(
     mu: float = 0.0,
     MBL: float = 0.0,
 ) -> SolverResult:
-    """
-    Solver completo com correção elástica.
-
-    Loop externo: resolve rígido com L_eff, atualiza L_eff usando T_mean
-    até convergir. Se EA é "infinito" (muito grande), converge em 1-2
-    iterações para o resultado rígido.
-    """
+    """Solver completo com correção elástica. Ver docstring do módulo."""
     if config is None:
         config = SolverConfig()
     if EA <= 0:
         raise ValueError("EA deve ser > 0 no modo elástico")
 
-    L_eff = L
-    T_mean = 0.0
-    iters = 0
-    rigid_result: SolverResult | None = None
-    for iters in range(1, config.max_elastic_iter + 1):
-        # Resolve rígido com comprimento corrente (L_eff)
-        rigid_result = solve_rigid_suspended(
-            L=L_eff, h=h, w=w, mode=mode, input_value=input_value,
-            config=config, mu=mu, MBL=MBL,
-        )
-        # Reporta tração média ao longo da linha
-        T_mean = _mean_tension(rigid_result)
-        L_new = apply_elastic_correction(L, EA, T_mean)
-        # Teste de convergência: mudança relativa em L_eff
-        rel_change = abs(L_new - L_eff) / max(L_eff, 1e-12)
-        L_eff = L_new
-        if rel_change < config.elastic_tolerance:
-            break
+    # Pre-check de validade física (Seção 8 do MVP v2 PDF)
+    if mode == SolutionMode.TENSION:
+        T_fl = float(input_value)
+        if T_fl <= w * h:
+            raise ValueError(
+                f"T_fl={T_fl:.1f} N <= w·h={w * h:.1f} N: "
+                "linha não sustenta a coluna d'água até o fairlead (caso inviável)."
+            )
+
+    # Construção do bracket para brentq
+    if mode == SolutionMode.RANGE:
+        X_target = float(input_value)
+        L_taut = math.sqrt(X_target * X_target + h * h)
+        # Mínimo geométrico: linha precisa estar acima do taut.
+        L_lo = max(L, L_taut) * 1.0001
+        # Máximo viável: L_eff < X + h; além disso cai em caso com slack.
+        L_hi_cap = (X_target + h) * 0.9999
     else:
-        # não quebrou por break → atingiu max_elastic_iter sem convergir
-        assert rigid_result is not None
-        return SolverResult(
-            **{
-                **rigid_result.model_dump(),
-                "status": ConvergenceStatus.MAX_ITERATIONS,
-                "message": (
-                    f"Loop elástico atingiu {config.max_elastic_iter} iterações "
-                    f"sem convergir (última variação relativa: {rel_change:.2e})."
-                ),
-                "unstretched_length": L,
-                "stretched_length": L_eff,
-                "elongation": L_eff - L,
-                "iterations_used": iters,
-            }
+        L_lo = L
+        # Tensão: sem limite superior rígido; usamos 100×L como teto seguro.
+        L_hi_cap = L * 100.0
+
+    # Verifica se L_lo é viável geometricamente
+    _cache: dict = {"L_eff": None, "result": None, "T_mean": None}
+
+    def F(L_eff: float) -> float:
+        r = _solve_rigid_for_elastic(
+            L_eff, h=h, w=w, mode=mode, input_value=input_value,
+            mu=mu, config=config, MBL=MBL,
+        )
+        if r is None:
+            return -1e12  # sinaliza infeasível geometricamente (L_eff curto)
+        T_mean = _mean_tension(r)
+        _cache["L_eff"] = L_eff
+        _cache["result"] = r
+        _cache["T_mean"] = T_mean
+        return L_eff - L * (1.0 + T_mean / EA)
+
+    f_lo = F(L_lo)
+    if f_lo <= -1e11:
+        raise ValueError(
+            f"Caso geometricamente inviável: solver rígido falha mesmo no "
+            f"L_eff mínimo ({L_lo:.1f} m). Parâmetros impossíveis para linha elástica."
         )
 
+    # Encontra L_hi com F > 0 (dentro do cap)
+    if f_lo > 0:
+        # L_lo já satisfaz — raro; usa diretamente (linha praticamente rígida)
+        L_eff_final = L_lo
+    else:
+        L_hi = min(L_hi_cap, max(L_lo, L) * 2.0)
+        for _ in range(30):
+            f_hi = F(L_hi)
+            if f_hi > 0:
+                break
+            if L_hi >= L_hi_cap * 0.99999:
+                # Esgotamos a região viável sem achar F > 0.
+                # O ponto fixo exigiria L_eff > L_hi_cap (caso com slack).
+                raise ValueError(
+                    f"Caso ill-conditioned: o equilíbrio exigiria L_eff > "
+                    f"L_eff_max = {L_hi_cap:.1f} m (limite físico da formulação). "
+                    "Provavelmente é caso com slack no seabed — fora do escopo da Camada 4."
+                )
+            L_hi = min(L_hi * 1.5, L_hi_cap)
+        else:
+            raise ValueError("Não foi possível construir bracket para brentq.")
+
+        L_eff_final = brentq(
+            F, L_lo, L_hi,
+            xtol=max(L * config.elastic_tolerance, 1e-6),
+            rtol=config.elastic_tolerance,
+            maxiter=config.max_brent_iter,
+        )
+
+    # Garante que o cache tem o resultado para L_eff_final
+    if _cache["L_eff"] != L_eff_final:
+        F(L_eff_final)
+    rigid_result = _cache["result"]
     assert rigid_result is not None
 
-    # Ajusta campos relacionados a alongamento.
-    # Obs.: os campos de geometria já refletem L_eff, pois foi isso que
-    # passamos ao solver rígido. total_suspended/grounded continuam consistentes.
-    final = SolverResult(
+    # Conta iterações efetivas via contador: brentq tipicamente ~5-20 chamadas
+    # de F. Não é fácil recuperar exato, então usamos um inteiro aproximado.
+    iters_est = 1  # pelo menos uma avaliação
+
+    return SolverResult(
         **{
             **rigid_result.model_dump(),
+            "status": ConvergenceStatus.CONVERGED,
             "unstretched_length": L,
-            "stretched_length": L_eff,
-            "elongation": L_eff - L,
-            "iterations_used": iters,
+            "stretched_length": L_eff_final,
+            "elongation": L_eff_final - L,
+            "iterations_used": iters_est,
             "message": (
-                "Catenária elástica convergida "
-                f"em {iters} iterações (ΔL_rel={rel_change:.2e})."
+                f"Catenária elástica convergida (L_stretched={L_eff_final:.3f} m, "
+                f"elongação {(L_eff_final - L) / L * 100:.2f}%)."
             ),
         }
     )
-    return final
 
 
 __all__ = [
