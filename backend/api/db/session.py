@@ -1,9 +1,13 @@
 """
-Sessão SQLAlchemy para o banco SQLite da QMoor Web.
+Sessão SQLAlchemy para o banco SQLite da AncoPlat.
 
-Usa o mesmo arquivo de banco que o seed_catalog.py (backend/data/qmoor.db).
+Usa o mesmo arquivo de banco que o seed_catalog.py (backend/data/ancoplat.db).
 Se o banco ainda não existir, a primeira execução do servidor cria o
 arquivo vazio e chama as migrations iniciais.
+
+Migração transparente: se um banco antigo `qmoor.db` existir e
+`ancoplat.db` ainda não, renomeia automaticamente preservando dados
+locais do usuário sem exigir intervenção manual.
 """
 from __future__ import annotations
 
@@ -16,7 +20,18 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 # Mesma pasta do seed_catalog.py
 _ROOT = Path(__file__).resolve().parents[3]
-DB_PATH = _ROOT / "backend" / "data" / "qmoor.db"
+_DATA_DIR = _ROOT / "backend" / "data"
+DB_PATH = _DATA_DIR / "ancoplat.db"
+# Compat: se DB legado `qmoor.db` existir e o novo `ancoplat.db` ainda
+# não, renomeia automaticamente. Usuários existentes não perdem dados.
+_LEGACY_DB = _DATA_DIR / "qmoor.db"
+if _LEGACY_DB.exists() and not DB_PATH.exists():
+    try:
+        _LEGACY_DB.rename(DB_PATH)
+    except OSError:
+        # Se rename falhar (permissions, etc), continua e o usuário
+        # pode renomear manualmente. Não trava o startup.
+        pass
 
 # check_same_thread=False é necessário para uso concorrente do FastAPI com SQLite.
 # SQLite é rápido o suficiente para app local; não há contention real.

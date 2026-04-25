@@ -1,4 +1,9 @@
-# QMoor Web — Briefing para Claude Code
+# AncoPlat — Briefing para Claude Code
+
+> **Convenção de nomes:**
+> - **AncoPlat** — este app, em desenvolvimento. (Antes chamado "QMoor Web"; renomeado em 2026 por questão de marca/registro.)
+> - **QMoor 0.8.5** / **QMoor original** / **QMoor legacy** — software comercial de origem do qual o catálogo veio e contra o qual validamos numericamente. NÃO confundir com o app que estamos construindo.
+> - Identificadores de dados que mantêm o nome "qmoor" (`qmoor_ea`, `qmoor_database_inventory.xlsx`, `data_source: legacy_qmoor`) são referências ao software legado e ficam como rastreabilidade — não devem ser renomeados.
 
 ## Contexto
 
@@ -17,7 +22,7 @@ Este é um projeto de aplicação web pessoal para análise estática de linhas 
 ## Estado atual
 
 - ✅ F0 — Setup do ambiente (concluído)
-- ✅ F1a — Importação do catálogo QMoor para SQLite (concluída, 522 entradas)
+- ✅ F1a — Importação do catálogo QMoor (legacy) para SQLite (concluída, 522 entradas)
 - ✅ F1b — Implementação do solver (concluída, 45 testes, 96% cobertura, BC-01..09 validados contra MoorPy)
 - ✅ F2 — API FastAPI (concluída; ver `docs/relatorio_F2.md`)
 - ✅ F3 — Frontend React (concluída; ver `docs/relatorio_F3.md`)
@@ -99,7 +104,7 @@ Estabelecidas durante a auditoria estratégica pré-F2. Detalhes em [docs/plano_
 ### Autenticação: zero
 Aplicação local (localhost). Firewall do macOS protege. Nada de tokens, cookies, basic auth. Se o projeto virar multiusuário, revisitar.
 
-### Formato `.moor` = JSON próprio QMoor-Web
+### Formato `.moor` = JSON próprio do AncoPlat
 O `.moor` original do QMoor 0.8.5 estava em binário proprietário (`.pyd` do módulo `cppmoor`). Impossível replicar. `.moor` exportado daqui é JSON com schema compatível com a Seção 5.2 do MVP v2 PDF.
 
 ### Persistência de execuções

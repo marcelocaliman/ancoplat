@@ -1,4 +1,4 @@
-"""Fixtures de teste para a API QMoor Web."""
+"""Fixtures de teste para a API AncoPlat."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,10 +21,10 @@ def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     Isola cada teste em um banco SQLite temporário.
 
     Faz monkey-patch no engine/SessionLocal do módulo db.session para
-    apontar para `tmp_path/qmoor_test.db`. A dependency get_db continua
+    apontar para `tmp_path/ancoplat_test.db`. A dependency get_db continua
     funcionando pois lê SessionLocal dinamicamente.
     """
-    db_path = tmp_path / "qmoor_test.db"
+    db_path = tmp_path / "ancoplat_test.db"
     url = f"sqlite:///{db_path}"
     engine = create_engine(url, connect_args={"check_same_thread": False})
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

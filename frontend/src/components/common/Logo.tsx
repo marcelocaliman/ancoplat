@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
 /**
- * Wordmark QMoor + ícone SVG de curva de catenária estilizada.
+ * Wordmark AncoPlat + ícone SVG de curva de catenária estilizada.
  * `compact` = mostra apenas o ícone (para sidebar colapsada).
  */
 export function Logo({
@@ -17,7 +17,7 @@ export function Logo({
         'inline-flex items-center gap-2 text-primary',
         className,
       )}
-      aria-label="QMoor Web"
+      aria-label="AncoPlat"
     >
       <svg
         width="22"
@@ -50,8 +50,8 @@ export function Logo({
       </svg>
       {!compact && (
         <span className="inline-flex items-baseline whitespace-nowrap text-base leading-none tracking-tight">
-          <span className="font-bold">QMoor</span>
-          <span className="ml-1 font-light opacity-80">Web</span>
+          <span className="font-bold">Anco</span>
+          <span className="font-light opacity-90">Plat</span>
         </span>
       )}
     </div>

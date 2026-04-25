@@ -1,4 +1,4 @@
-# QMoor Web Frontend
+# AncoPlat Frontend
 
 Console técnico para análise estática de linhas de ancoragem. Consome a
 API REST em `backend/api`. Stack: React 19 + Vite + TypeScript strict +

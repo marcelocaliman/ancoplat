@@ -1,5 +1,5 @@
 """
-Estruturas de dados base do solver QMoor.
+Estruturas de dados base do solver AncoPlat.
 
 Todas as grandezas físicas em SI (m, N, Pa, N/m). Conversões só nas bordas
 do sistema (UI, importação/exportação).

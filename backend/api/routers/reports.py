@@ -49,7 +49,7 @@ def export_pdf(case_id: int, db: Session = Depends(get_db)) -> Response:
         )
     latest = rec.executions[0] if rec.executions else None
     pdf_bytes = build_pdf(rec, latest)
-    filename = f"qmoor_caso_{case_id}.pdf"
+    filename = f"ancoplat_caso_{case_id}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

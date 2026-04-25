@@ -27,6 +27,6 @@ export const useUnitsStore = create<UnitsState>()(
       setSystem: (s) => set({ system: s }),
       toggle: () => set({ system: get().system === 'metric' ? 'si' : 'metric' }),
     }),
-    { name: 'qmoor-units' },
+    { name: 'ancoplat-units' },
   ),
 )

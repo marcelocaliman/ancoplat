@@ -19,7 +19,7 @@ from sqlalchemy.engine import Engine
 from backend.api.db import models  # noqa: F401  (side-effect: registra modelos)
 from backend.api.db.session import Base
 
-logger = logging.getLogger("qmoor.api.migrations")
+logger = logging.getLogger("ancoplat.api.migrations")
 
 
 def run_migrations(engine: Engine) -> list[str]:

@@ -1,5 +1,5 @@
 """
-Modelos SQLAlchemy da API QMoor Web.
+Modelos SQLAlchemy da API AncoPlat.
 
 Reflete o schema definido na Seção 2 do docs/plano_F2_api.md. Uso
 declarativo (Base = declarative_base). Todos os modelos moram aqui para

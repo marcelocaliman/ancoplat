@@ -1,7 +1,7 @@
 """
 Parser e exporter do formato `.moor` (F2.6).
 
-Decisão Q2 da auditoria pré-F2: `.moor` é **JSON próprio QMoor-Web**
+Decisão Q2 da auditoria pré-F2: `.moor` é **JSON próprio do AncoPlat**
 compatível com o schema da Seção 5.2 do MVP v2 PDF (o formato binário
 original do QMoor 0.8.5 estava em `.pyd` e é inacessível).
 

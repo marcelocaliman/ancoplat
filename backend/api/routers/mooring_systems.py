@@ -236,7 +236,7 @@ def export_mooring_system_json(
         c if (c.isascii() and (c.isalnum() or c in ("-", "_"))) else "_"
         for c in rec.name
     )[:50] or f"mooring_system_{msys_id}"
-    filename = f"qmoor_msys_{safe_name}.json"
+    filename = f"ancoplat_msys_{safe_name}.json"
     return JSONResponse(
         content=out.model_dump(mode="json"),
         headers={
@@ -276,7 +276,7 @@ def export_mooring_system_pdf(
         c if (c.isascii() and (c.isalnum() or c in ("-", "_"))) else "_"
         for c in rec.name
     )[:50] or f"mooring_system_{msys_id}"
-    filename = f"qmoor_msys_{safe_name}.pdf"
+    filename = f"ancoplat_msys_{safe_name}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

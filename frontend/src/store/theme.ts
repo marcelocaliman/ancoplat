@@ -42,7 +42,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: 'qmoor-theme',
+      name: 'ancoplat-theme',
       onRehydrateStorage: () => (state) => {
         if (state) applyTheme(state.theme)
       },

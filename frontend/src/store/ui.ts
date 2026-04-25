@@ -20,6 +20,6 @@ export const useUIStore = create<UIState>()(
       unitSystem: 'metric',
       setUnitSystem: (u) => set({ unitSystem: u }),
     }),
-    { name: 'qmoor-ui' },
+    { name: 'ancoplat-ui' },
   ),
 )

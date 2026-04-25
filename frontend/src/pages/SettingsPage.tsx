@@ -156,7 +156,7 @@ export function SettingsPage() {
                 </div>
               </dl>
               <p className="border-t border-border pt-3 text-xs text-muted-foreground">
-                QMoor Web — análise estática de linhas de ancoragem offshore.
+                AncoPlat — análise estática de linhas de ancoragem offshore.
                 Solver de catenária elástica validado contra MoorPy
                 (&lt;1% em força, &lt;0,5% em geometria) em 9 casos de benchmark.
               </p>
@@ -170,7 +170,7 @@ export function SettingsPage() {
                   API Docs (Swagger) <ExternalLink className="h-3 w-3" />
                 </a>
                 <a
-                  href="https://github.com/marcelocaliman/qmoor"
+                  href="https://github.com/marcelocaliman/ancoplat"
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 text-primary hover:underline"

@@ -2,6 +2,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from 'sonner'
+// IMPORTANTE: migração de chaves legadas (qmoor-* → ancoplat-*) precisa
+// rodar ANTES de qualquer store zustand-persist ser importado. O módulo
+// `storageMigration` executa a migração como side-effect no top-level,
+// e ESM garante essa ordem de execução pra imports listados em sequência.
+import '@/lib/storageMigration'
 import { ErrorBoundary } from '@/components/common/ErrorBoundary'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { applyTheme, useThemeStore } from '@/store/theme'

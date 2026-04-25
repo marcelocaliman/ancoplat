@@ -1,5 +1,5 @@
 """
-Entrypoint FastAPI da QMoor Web API.
+Entrypoint FastAPI da AncoPlat API.
 
 Sobe uma aplicação ASGI em `localhost:8000` (padrão uvicorn). Sem
 autenticação — uso local conforme Seção 1 do docs/plano_F2_api.md.
@@ -43,7 +43,7 @@ from backend.api.schemas.errors import ErrorDetail, ErrorResponse
 # Logging estruturado: console + arquivo rotativo. Configurado uma única
 # vez no import do módulo (idempotente).
 configure_logging()
-logger = logging.getLogger("qmoor.api")
+logger = logging.getLogger("ancoplat.api")
 
 # Rate limit global: 100 req/min por IP. Mesmo em localhost a barreira é
 # útil para detectar loops acidentais (ex.: useEffect mal configurado no
@@ -119,7 +119,7 @@ TAGS_METADATA = [
 def _create_app() -> FastAPI:
     """Factory: cria e configura a app FastAPI (facilita testes)."""
     app = FastAPI(
-        title="QMoor Web API",
+        title="AncoPlat API",
         description=(
             "API REST para análise estática de linhas de ancoragem offshore.\n\n"
             "Solver de **catenária elástica** com contato com seabed e "

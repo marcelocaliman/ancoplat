@@ -1,4 +1,4 @@
-# QMoor Web API
+# AncoPlat API
 
 REST API built with FastAPI on top of the solver from `backend/solver/`.
 Uso local, sem autenticação; servidor em `localhost:8000`.
@@ -62,7 +62,7 @@ Prefixo: `/api/v1/`.
 | Versionamento | Prefixo `/api/v1/` em todas as rotas |
 | Erros | Envelope `{error: {code, message, detail?}}`; sem stack trace |
 | Validação | Pydantic no request + validação física no solver |
-| Persistência | SQLite em `backend/data/qmoor.db`; 4 tabelas |
+| Persistência | SQLite em `backend/data/ancoplat.db`; 4 tabelas |
 | Retenção execs | Últimas 10 por caso (trunca em POST /solve) |
 | Upload .moor | JSON body (multipart adiado para F3) |
 | PDF | reportlab A4, disclaimer Seção 10 Documento A v2.2 |

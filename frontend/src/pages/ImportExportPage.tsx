@@ -122,7 +122,7 @@ function ImportPanel() {
         <CardHeader>
           <CardTitle>Importar arquivo .moor</CardTitle>
           <CardDescription>
-            Arraste um arquivo JSON no formato QMoor Web (Seção 5.2 do MVP v2)
+            Arraste um arquivo JSON no formato AncoPlat (Seção 5.2 do MVP v2)
             ou clique para selecionar. Campos quantitativos podem vir como
             strings com unidade (ex: "450 ft") ou números no sistema indicado.
           </CardDescription>

@@ -1,4 +1,4 @@
-"""Solver de catenária elástica para linhas de ancoragem offshore (QMoor)."""
+"""Solver de catenária elástica para linhas de ancoragem offshore (AncoPlat)."""
 
 # Versão do solver — incrementada quando há mudança de comportamento
 # numérico ou estrutural que muda os resultados. Persistida em

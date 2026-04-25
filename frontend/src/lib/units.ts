@@ -31,7 +31,7 @@ export type Unit = 'N' | 'kN' | 'te' | 'N/m' | 'kgf/m'
 
 /**
  * Decide a unidade canônica para um par (quantidade, sistema). No metric,
- * forças usam **te** sempre (convenção QMoor) e força por metro usa **kgf/m**.
+ * forças usam **te** sempre (convenção offshore BR) e força por metro usa **kgf/m**.
  * No SI, ambos ficam em **N** ou **N/m**, sem otimização automática para kN
  * (mantém uma única unidade simples e previsível).
  */

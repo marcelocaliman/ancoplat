@@ -45,11 +45,11 @@ export function Sidebar() {
       <div className="flex h-14 shrink-0 items-center justify-center border-b border-border">
         <Tooltip>
           <TooltipTrigger asChild>
-            <NavLink to="/" aria-label="QMoor Web — Início">
+            <NavLink to="/" aria-label="AncoPlat — Início">
               <Logo compact />
             </NavLink>
           </TooltipTrigger>
-          <TooltipContent side="right">QMoor Web</TooltipContent>
+          <TooltipContent side="right">AncoPlat</TooltipContent>
         </Tooltip>
       </div>
 

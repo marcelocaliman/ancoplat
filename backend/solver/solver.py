@@ -1,5 +1,5 @@
 """
-Camada 5/6 — Fachada pública do solver QMoor.
+Camada 5/6 — Fachada pública do solver AncoPlat.
 
 Unifica todas as camadas anteriores (catenária rígida, seabed no-friction,
 atrito de Coulomb, correção elástica) em uma única função de entrada que

@@ -1,9 +1,13 @@
 """
-seed_catalog.py — Importa o catálogo QMoor para SQLite.
+seed_catalog.py — Importa o catálogo QMoor (legacy) para SQLite.
 
 Lê docs/QMoor_database_inventory.xlsx (aba 'All Lines') e popula a tabela
-line_types em backend/data/qmoor.db. Todos os valores imperiais do catálogo
+line_types em backend/data/ancoplat.db. Todos os valores imperiais do catálogo
 são convertidos para SI via Pint no momento da inserção.
+
+Nota sobre nomenclatura: "QMoor" aqui se refere ao software LEGADO 0.8.5 do
+qual o catálogo foi exportado (xlsx é arquivo de terceiros). O app que
+estamos construindo se chama AncoPlat — não confundir.
 
 Unidades armazenadas (SI):
   diameter           → m
@@ -38,7 +42,7 @@ from pint import UnitRegistry
 
 ROOT = Path(__file__).resolve().parents[2]
 XLSX_PATH = ROOT / "docs" / "QMoor_database_inventory.xlsx"
-DB_PATH = ROOT / "backend" / "data" / "qmoor.db"
+DB_PATH = ROOT / "backend" / "data" / "ancoplat.db"
 
 _ureg = UnitRegistry()
 IN_TO_M: float = (1 * _ureg.inch).to("meter").magnitude
@@ -148,7 +152,7 @@ def main() -> int:
         print(f"ERRO: catálogo não encontrado em {XLSX_PATH}", file=sys.stderr)
         return 1
 
-    print("=== QMoor — Seed do catálogo ===")
+    print("=== AncoPlat — Seed do catálogo (QMoor legacy xlsx) ===")
     print(f"Origem:  {XLSX_PATH.relative_to(ROOT)}")
     print(f"Destino: {DB_PATH.relative_to(ROOT)}")
     print()

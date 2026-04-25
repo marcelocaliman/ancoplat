@@ -118,7 +118,7 @@ function UnitSystemToggle() {
         role="radio"
         aria-checked={system === 'metric'}
         onClick={() => setSystem('metric')}
-        title="Metric: te, kgf/m, kN — convenção QMoor / offshore brasileira"
+        title="Metric: te, kgf/m, kN — convenção offshore brasileira"
         className={cn(
           'rounded px-2 py-1 transition-colors',
           system === 'metric'

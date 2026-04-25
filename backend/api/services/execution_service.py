@@ -20,7 +20,7 @@ from backend.api.services.case_service import CaseNotFound, get_case
 from backend.solver.solver import solve as solver_solve
 from backend.solver.types import ConvergenceStatus, SolverResult
 
-logger = logging.getLogger("qmoor.api.execution")
+logger = logging.getLogger("ancoplat.api.execution")
 
 # Número máximo de execuções mantidas por caso
 RETENTION_LIMIT = 10

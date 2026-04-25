@@ -1,12 +1,12 @@
-# Manual do Usuário — QMoor Web
+# Manual do Usuário — AncoPlat
 
 > Versão do app: 0.1.0 (F4) · Última atualização: 25 de abril de 2026
 
 ---
 
-## 1. O que é o QMoor Web
+## 1. O que é o AncoPlat
 
-QMoor Web é um aplicativo local de **análise estática de linhas de
+AncoPlat é um aplicativo local de **análise estática de linhas de
 ancoragem offshore**. Você descreve um cabo (geometria, propriedades,
 critério de utilização), o app resolve a equação da catenária elástica
 com contato no seabed e atrito de Coulomb, e devolve tração no fairlead,
@@ -262,7 +262,7 @@ Na página `/catalog`, botão **Novo tipo de linha**. As entradas com
 
 ### 6.9. Onde ficam os logs do solver?
 
-`backend/data/logs/qmoor.log` (rotação de 1 MB × 5 arquivos). Cada
+`backend/data/logs/ancoplat.log` (rotação de 1 MB × 5 arquivos). Cada
 execução grava uma linha:
 `case_id=N status=converged alert=ok iterations=14 elapsed_ms=42.3`
 

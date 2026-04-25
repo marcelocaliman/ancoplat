@@ -40,7 +40,7 @@ from backend.solver.types import (
 # Política de retenção de execuções (mesmo número de cases.executions).
 EXECUTION_RETENTION = 10
 
-logger = logging.getLogger("qmoor.api.mooring_systems")
+logger = logging.getLogger("ancoplat.api.mooring_systems")
 
 
 # ==============================================================================

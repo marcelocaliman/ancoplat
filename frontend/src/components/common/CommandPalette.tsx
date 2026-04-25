@@ -247,7 +247,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             </kbd>
             fechar
           </span>
-          <span>QMoor Web</span>
+          <span>AncoPlat</span>
         </div>
       </Command>
     </div>

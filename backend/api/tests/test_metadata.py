@@ -65,7 +65,7 @@ def test_docs_openapi_acessivel(client: TestClient) -> None:
     resp = client.get("/api/v1/openapi.json")
     assert resp.status_code == 200
     spec = resp.json()
-    assert spec["info"]["title"] == "QMoor Web API"
+    assert spec["info"]["title"] == "AncoPlat API"
     # Endpoints devem aparecer no spec
     paths = spec["paths"]
     assert "/api/v1/health" in paths

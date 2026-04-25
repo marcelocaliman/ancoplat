@@ -119,7 +119,7 @@ Quatro pilares:
    - `strain > 5 %` → cita unidade provável errada (kgf vs N)
    - linha rompida → cita T_fl atual vs MBL e sugere troca
    - X < L em laid_line → "compressão axial impossível"
-4. **Log estruturado rotativo** em `<DB_PATH>/logs/qmoor.log` (1 MB ×
+4. **Log estruturado rotativo** em `<DB_PATH>/logs/ancoplat.log` (1 MB ×
    5 arquivos). Linha por execução grep-friendly:
    `case_id=N status=converged alert=ok iterations=14 elapsed_ms=42.3`
 
@@ -175,7 +175,7 @@ nomes reais da UI.
 | Endpoints com rate limit | 0 | todos (100 req/min/IP) |
 | Mensagens INVALID_CASE | técnicas | com sugestão de correção |
 | Versão do solver auditável | não | `1.1.0` em todo SolverResult |
-| Arquivo de log rotativo | não | `qmoor.log` 5 × 1 MB |
+| Arquivo de log rotativo | não | `ancoplat.log` 5 × 1 MB |
 | Página de detalhe | 4 abas + sliders | **+ análise de sensibilidade ao vivo** |
 | Atalho global de busca | só `g + letra` | `Cmd+K` + `g + letra` |
 | Fallback para erro de render | tela branca | ErrorBoundary com recuperação |

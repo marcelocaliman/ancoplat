@@ -793,14 +793,14 @@ def build_pdf(
         buf, pagesize=A4,
         leftMargin=2 * cm, rightMargin=2 * cm,
         topMargin=1.5 * cm, bottomMargin=1.5 * cm,
-        title=f"QMoor — {case_input.name}",
+        title=f"AncoPlat — {case_input.name}",
     )
     styles = _build_styles()
     story: list = []
 
     # --- Header + Disclaimer ---
     story.extend(_header_block(
-        "QMoor Web — Relatório de análise estática",
+        "AncoPlat — Relatório de análise estática",
         f"Caso: <b>{case_input.name}</b>",
         case_rec.id, styles,
     ))
@@ -1218,14 +1218,14 @@ def build_mooring_system_pdf(
         buf, pagesize=A4,
         leftMargin=2 * cm, rightMargin=2 * cm,
         topMargin=1.5 * cm, bottomMargin=1.5 * cm,
-        title=f"QMoor — {msys_input.name}",
+        title=f"AncoPlat — {msys_input.name}",
     )
     styles = _build_styles()
     story: list = []
 
     # --- Header + Disclaimer ---
     story.extend(_header_block(
-        "QMoor Web — Relatório de mooring system",
+        "AncoPlat — Relatório de mooring system",
         f"Sistema: <b>{msys_input.name}</b>",
         msys_rec.id, styles,
     ))

@@ -131,16 +131,16 @@ def test_execucao_corrompida_e_pulada_sem_derrubar(client: TestClient) -> None:
 def test_log_arquivo_rotativo_existe(tmp_path: Path, monkeypatch) -> None:
     """
     Reconfigurar logging com DB_PATH apontando para tmp e gerar uma linha
-    deve escrever em logs/qmoor.log.
+    deve escrever em logs/ancoplat.log.
     """
     # Reset interno do flag idempotente para forçar reconfiguração no diretório novo.
     monkeypatch.setattr(logging_config, "_CONFIGURED", False)
     monkeypatch.setattr(
-        "backend.api.logging_config.DB_PATH", str(tmp_path / "qmoor.db"),
+        "backend.api.logging_config.DB_PATH", str(tmp_path / "ancoplat.db"),
     )
     logging_config.configure_logging()
 
-    log_file = tmp_path / "logs" / "qmoor.log"
+    log_file = tmp_path / "logs" / "ancoplat.log"
     logging_config.log_solver_execution(
         case_id=42, status="converged", iterations=14, elapsed_ms=33.0,
         alert_level="ok", message="Catenária elástica convergida.",

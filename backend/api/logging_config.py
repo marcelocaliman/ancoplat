@@ -1,15 +1,15 @@
 """
-Configuração de logging para a API QMoor Web.
+Configuração de logging para a API AncoPlat.
 
-Logger raiz `qmoor` recebe dois handlers:
+Logger raiz `ancoplat` recebe dois handlers:
   - StreamHandler para console (DEBUG/INFO durante dev).
-  - RotatingFileHandler para `backend/data/logs/qmoor.log` — 5 arquivos
+  - RotatingFileHandler para `backend/data/logs/ancoplat.log` — 5 arquivos
     de até 1 MB cada (5 MB total), com formato estruturado pronto para
     grep/awk.
 
 Loggers principais usados pela aplicação:
-  - `qmoor.api` — middlewares, lifespan, exceções.
-  - `qmoor.api.solve` — uma linha por execução do solver com case_id,
+  - `ancoplat.api` — middlewares, lifespan, exceções.
+  - `ancoplat.api.solve` — uma linha por execução do solver com case_id,
     status, iterações, tempo (ms). Útil para auditoria pós-fato.
 
 A configuração é idempotente: chamar `configure_logging()` mais de uma
@@ -27,21 +27,21 @@ _CONFIGURED = False
 
 
 def configure_logging() -> None:
-    """Configura logger raiz `qmoor`. Idempotente."""
+    """Configura logger raiz `ancoplat`. Idempotente."""
     global _CONFIGURED
     if _CONFIGURED:
         return
 
     log_dir = Path(DB_PATH).parent / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "qmoor.log"
+    log_file = log_dir / "ancoplat.log"
 
     fmt = logging.Formatter(
         fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S%z",
     )
 
-    root = logging.getLogger("qmoor")
+    root = logging.getLogger("ancoplat")
     root.setLevel(logging.INFO)
     # Limpa handlers herdados (evita duplicação em testes/reload).
     root.handlers.clear()
@@ -82,7 +82,7 @@ def log_solver_execution(
     Formato fixo, em uma única linha, fácil de grep:
         case_id=123 status=converged alert=ok iterations=14 elapsed_ms=42.3
     """
-    logger = logging.getLogger("qmoor.api.solve")
+    logger = logging.getLogger("ancoplat.api.solve")
     parts = [
         f"case_id={case_id}",
         f"status={status}",

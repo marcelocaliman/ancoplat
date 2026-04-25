@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.api.db.models import CaseRecord, ExecutionRecord
 
-logger = logging.getLogger("qmoor.api.cases")
+logger = logging.getLogger("ancoplat.api.cases")
 from backend.api.schemas.cases import (
     CaseInput,
     CaseOutput,

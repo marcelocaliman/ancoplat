@@ -19,7 +19,7 @@ def test_exportar_pdf_retorna_200_application_pdf(client: TestClient) -> None:
     resp = client.get(f"/api/v1/cases/{case_id}/export/pdf")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
-    assert "qmoor_caso_" in resp.headers["content-disposition"]
+    assert "ancoplat_caso_" in resp.headers["content-disposition"]
     # Primeiro bytes do PDF devem ser magic number
     assert resp.content[:4] == b"%PDF"
     # PDF razoável de tamanho — pelo menos 5 KB

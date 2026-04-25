@@ -1,4 +1,4 @@
-# QMoor Web
+# AncoPlat
 
 Ferramenta pessoal para análise estática de linhas de ancoragem offshore.
 
@@ -23,7 +23,7 @@ Desenvolvido como ferramenta de apoio à engenharia de ancoragem, sem fins comer
 | Fase | Descrição | Estado |
 |------|-----------|:------:|
 | F0 | Setup do ambiente | ✅ |
-| F1a | Importação do catálogo QMoor (522 entradas em SQLite) | ✅ |
+| F1a | Importação do catálogo QMoor (legacy, 522 entradas em SQLite) | ✅ |
 | F1b | Solver isolado (catenária + seabed + atrito + elástico) | ✅ |
 | F2 | API FastAPI | ⏳ **em planejamento** |
 | F3 | Frontend React + Vite + TypeScript | ⬜ |
