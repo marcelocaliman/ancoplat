@@ -990,17 +990,17 @@ function SectionTable({
 }) {
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="space-y-0 px-3 pb-1 pt-2">
-        <CardTitle className="text-[12px] font-semibold leading-tight">
+      <CardHeader className="space-y-0.5 px-3 pb-1.5 pt-2.5">
+        <CardTitle className="text-[13px] font-semibold leading-snug">
           {title}
         </CardTitle>
         {subtitle && (
-          <p className="text-[10px] leading-tight text-muted-foreground">
+          <p className="text-[10.5px] leading-snug text-muted-foreground">
             {subtitle}
           </p>
         )}
       </CardHeader>
-      <CardContent className="px-2 pb-2">{children}</CardContent>
+      <CardContent className="px-2 pb-2.5">{children}</CardContent>
     </Card>
   )
 }
@@ -1011,10 +1011,10 @@ function KeyValueTable({ rows }: { rows: Array<[string, string]> }) {
       <TableBody>
         {rows.map(([k, v]) => (
           <TableRow key={k} className="border-border/40">
-            <TableCell className="py-0.5 text-[10.5px] leading-tight text-muted-foreground">
+            <TableCell className="py-1 text-[11.5px] leading-relaxed tracking-[0.01em] text-muted-foreground">
               {k}
             </TableCell>
-            <TableCell className="py-0.5 text-right font-mono text-[10.5px] font-medium leading-tight tabular-nums">
+            <TableCell className="py-1 text-right font-mono text-[11.5px] font-medium leading-relaxed tracking-[0.01em] tabular-nums">
               {v}
             </TableCell>
           </TableRow>
