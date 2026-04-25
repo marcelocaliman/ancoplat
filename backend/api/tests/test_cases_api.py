@@ -24,10 +24,20 @@ def test_criar_caso_201(client: TestClient) -> None:
     assert "created_at" in body and "updated_at" in body
 
 
-def test_criar_caso_com_multi_segmento_422(client: TestClient) -> None:
-    """MVP v1 rejeita 2+ segmentos pelo schema (max_length=1)."""
+def test_criar_caso_com_multi_segmento_aceito(client: TestClient) -> None:
+    """F5.1: schema agora aceita até 10 segmentos por linha."""
     payload = deepcopy(BC01_LIKE_INPUT)
-    payload["segments"].append(payload["segments"][0])
+    payload["segments"].append(payload["segments"][0])  # 2 segmentos idênticos
+    resp = client.post("/api/v1/cases", json=payload)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert len(body["input"]["segments"]) == 2
+
+
+def test_criar_caso_com_mais_de_10_segmentos_422(client: TestClient) -> None:
+    """Limite superior de 10 segmentos preserva sanidade do MVP."""
+    payload = deepcopy(BC01_LIKE_INPUT)
+    payload["segments"] = [payload["segments"][0] for _ in range(11)]
     resp = client.post("/api/v1/cases", json=payload)
     assert resp.status_code == 422
     body = resp.json()

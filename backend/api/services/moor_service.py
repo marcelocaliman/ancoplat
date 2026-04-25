@@ -180,38 +180,53 @@ def parse_moor_payload(payload: dict[str, Any]) -> CaseInput:
             raise MoorFormatError("campo 'name' obrigatório")
 
         segments_raw = ml.get("segments") or []
-        if len(segments_raw) != 1:
+        if not segments_raw:
+            raise MoorFormatError("mooringLine.segments está vazio")
+        if len(segments_raw) > 10:
             raise MoorFormatError(
-                f"v1 espera exatamente 1 segmento; recebidos {len(segments_raw)}"
+                f"Suporte atual é até 10 segmentos por linha; recebidos {len(segments_raw)}."
             )
-        seg_raw = segments_raw[0]
-        props = seg_raw.get("lineProps") or {}
 
-        # Metadados opcionais — transportam informação do catálogo original para
-        # o CaseOutput e memoriais, mesmo que o solver não precise deles.
-        diameter_m: Optional[float] = None
-        if "diameter" in props and props["diameter"] is not None:
-            diameter_m = _parse_quantity(props["diameter"], "diameter", unit_system)
-        dry_weight_si: Optional[float] = None
-        if "dryWeight" in props and props["dryWeight"] is not None:
-            dry_weight_si = _parse_quantity(
-                props["dryWeight"], "weight_per_length", unit_system,
+        # F5.1: parse de cada segmento da lista. Convenção do .moor é a mesma
+        # do nosso schema interno — primeiro segmento é o mais próximo da
+        # âncora.
+        segments: list[LineSegment] = []
+        for seg_raw in segments_raw:
+            props = seg_raw.get("lineProps") or {}
+            diameter_m: Optional[float] = None
+            if "diameter" in props and props["diameter"] is not None:
+                diameter_m = _parse_quantity(
+                    props["diameter"], "diameter", unit_system,
+                )
+            dry_weight_si: Optional[float] = None
+            if "dryWeight" in props and props["dryWeight"] is not None:
+                dry_weight_si = _parse_quantity(
+                    props["dryWeight"], "weight_per_length", unit_system,
+                )
+            modulus_pa: Optional[float] = None
+            if "modulus" in props and props["modulus"] is not None:
+                modulus_pa = _parse_quantity(
+                    props["modulus"], "modulus", unit_system,
+                )
+            segments.append(
+                LineSegment(
+                    length=_parse_quantity(seg_raw["length"], "length", unit_system),
+                    w=_parse_quantity(
+                        props["wetWeight"], "weight_per_length", unit_system,
+                    ),
+                    EA=_parse_ea(props, unit_system),
+                    MBL=_parse_quantity(
+                        props["breakStrength"], "force", unit_system,
+                    ),
+                    category=_parse_category(
+                        seg_raw.get("category") or props.get("category"),
+                    ),
+                    line_type=props.get("lineType"),
+                    diameter=diameter_m,
+                    dry_weight=dry_weight_si,
+                    modulus=modulus_pa,
+                )
             )
-        modulus_pa: Optional[float] = None
-        if "modulus" in props and props["modulus"] is not None:
-            modulus_pa = _parse_quantity(props["modulus"], "modulus", unit_system)
-
-        segment = LineSegment(
-            length=_parse_quantity(seg_raw["length"], "length", unit_system),
-            w=_parse_quantity(props["wetWeight"], "weight_per_length", unit_system),
-            EA=_parse_ea(props, unit_system),
-            MBL=_parse_quantity(props["breakStrength"], "force", unit_system),
-            category=_parse_category(seg_raw.get("category") or props.get("category")),
-            line_type=props.get("lineType"),
-            diameter=diameter_m,
-            dry_weight=dry_weight_si,
-            modulus=modulus_pa,
-        )
 
         boundary_raw = ml.get("boundary") or {}
         h = _parse_quantity(
@@ -247,14 +262,18 @@ def parse_moor_payload(payload: dict[str, Any]) -> CaseInput:
             endpoint_grounded=bool(boundary_raw.get("endpointGrounded", True)),
         )
 
+        # μ do seabed: usa o do PRIMEIRO segmento (mais próximo da âncora) —
+        # convenção offshore, é ele que toca o fundo. Se ausente em todos,
+        # cai para 0.
+        first_props = (segments_raw[0].get("lineProps") or {})
         seabed = SeabedConfig(
-            mu=float(props.get("seabedFrictionCF", 0.0)),
+            mu=float(first_props.get("seabedFrictionCF", 0.0)),
         )
 
         return CaseInput(
             name=name,
             description=payload.get("description"),
-            segments=[segment],
+            segments=segments,
             boundary=boundary,
             seabed=seabed,
             criteria_profile=CriteriaProfile(
@@ -312,7 +331,6 @@ def export_case_as_moor(
         raise MoorFormatError(f"unitSystem inválido: {unit_system}")
 
     case_input = CaseInput.model_validate_json(record.input_json)
-    segment = case_input.segments[0]
 
     solution: dict[str, Any] = {"inputParam": case_input.boundary.mode.value}
     if case_input.boundary.mode == SolutionMode.TENSION:
@@ -324,6 +342,41 @@ def export_case_as_moor(
             case_input.boundary.input_value, "length", unit_system
         )
 
+    # F5.1: serializa N segmentos. seabedFrictionCF aparece no primeiro
+    # segmento (que toca o fundo), demais ficam null.
+    seg_dicts: list[dict[str, Any]] = []
+    for idx, segment in enumerate(case_input.segments):
+        line_props: dict[str, Any] = {
+            "lineType": segment.line_type,
+            "wetWeight": _format_quantity(
+                segment.w, "weight_per_length", unit_system
+            ),
+            "breakStrength": _format_quantity(
+                segment.MBL, "force", unit_system
+            ),
+            "qmoorEA": _format_quantity(segment.EA, "force", unit_system),
+            "seabedFrictionCF": case_input.seabed.mu if idx == 0 else None,
+        }
+        if segment.diameter:
+            line_props["diameter"] = _format_quantity(
+                segment.diameter, "diameter", unit_system,
+            )
+        if segment.dry_weight:
+            line_props["dryWeight"] = _format_quantity(
+                segment.dry_weight, "weight_per_length", unit_system,
+            )
+        if segment.modulus:
+            line_props["modulus"] = _format_quantity(
+                segment.modulus, "modulus", unit_system,
+            )
+        seg_dicts.append(
+            {
+                "category": segment.category,
+                "length": _format_quantity(segment.length, "length", unit_system),
+                "lineProps": line_props,
+            }
+        )
+
     return {
         "name": case_input.name,
         "description": case_input.description,
@@ -332,23 +385,7 @@ def export_case_as_moor(
         "mooringLine": {
             "name": case_input.name,
             "rigidityType": "qmoor",
-            "segments": [
-                {
-                    "category": segment.category,
-                    "length": _format_quantity(segment.length, "length", unit_system),
-                    "lineProps": {
-                        "lineType": segment.line_type,
-                        "wetWeight": _format_quantity(
-                            segment.w, "weight_per_length", unit_system
-                        ),
-                        "breakStrength": _format_quantity(
-                            segment.MBL, "force", unit_system
-                        ),
-                        "qmoorEA": _format_quantity(segment.EA, "force", unit_system),
-                        "seabedFrictionCF": case_input.seabed.mu,
-                    },
-                }
-            ],
+            "segments": seg_dicts,
             "boundary": {
                 "startpointDepth": _format_quantity(
                     case_input.boundary.startpoint_depth, "length", unit_system

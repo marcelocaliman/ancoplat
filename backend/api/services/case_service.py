@@ -97,16 +97,24 @@ class CaseNotFound(Exception):
 
 
 def create_case(db: Session, case_input: CaseInput) -> CaseRecord:
-    """Persiste um novo caso e retorna o registro com id/timestamps."""
-    segment = case_input.segments[0]  # MVP v1: único segmento
+    """Persiste um novo caso e retorna o registro com id/timestamps.
+
+    F5.1: linha pode ter múltiplos segmentos. As colunas denormalizadas
+    `line_type` e `line_length` da tabela `cases` (usadas em listagens
+    e busca) ganham:
+      - line_type = primeiro line_type não-nulo (ou junção 'A+B+C' para
+        listagens) — adotamos o primeiro pra manter compatibilidade.
+      - line_length = soma dos comprimentos.
+    """
+    first = case_input.segments[0]
     rec = CaseRecord(
         name=case_input.name,
         description=case_input.description,
         input_json=case_input.model_dump_json(),
-        line_type=segment.line_type,
+        line_type=first.line_type,
         mode=case_input.boundary.mode.value,
         water_depth=case_input.boundary.h,
-        line_length=segment.length,
+        line_length=sum(s.length for s in case_input.segments),
         criteria_profile=case_input.criteria_profile.value,
     )
     db.add(rec)
@@ -128,14 +136,14 @@ def update_case(
 ) -> CaseRecord:
     """Atualiza campos do caso (substitui input_json integralmente)."""
     rec = get_case(db, case_id)
-    segment = case_input.segments[0]
+    first = case_input.segments[0]
     rec.name = case_input.name
     rec.description = case_input.description
     rec.input_json = case_input.model_dump_json()
-    rec.line_type = segment.line_type
+    rec.line_type = first.line_type
     rec.mode = case_input.boundary.mode.value
     rec.water_depth = case_input.boundary.h
-    rec.line_length = segment.length
+    rec.line_length = sum(s.length for s in case_input.segments)
     rec.criteria_profile = case_input.criteria_profile.value
     # updated_at é atualizado automaticamente pelo SQLAlchemy via `onupdate`
     db.commit()

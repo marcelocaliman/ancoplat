@@ -75,8 +75,13 @@ class CaseInput(BaseModel):
     segments: list[LineSegment] = Field(
         ...,
         min_length=1,
-        max_length=1,
-        description="Lista com UM segmento (MVP v1). Multi-segmento em v2.1.",
+        max_length=10,
+        description=(
+            "Lista de segmentos (1 ou mais, F5.1). Para uma linha composta "
+            "típica use 3 segmentos (chain pendant inferior + wire + chain "
+            "pendant superior). Ordem do segmento 0 (mais próximo da âncora) "
+            "ao último (mais próximo do fairlead)."
+        ),
     )
     boundary: BoundaryConditions
     seabed: SeabedConfig = Field(default_factory=SeabedConfig)

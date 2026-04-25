@@ -123,9 +123,21 @@ def test_import_moor_mode_invalido_400(client: TestClient) -> None:
     assert resp.status_code == 400
 
 
-def test_import_moor_multi_segmento_400(client: TestClient) -> None:
+def test_import_moor_multi_segmento_aceito(client: TestClient) -> None:
+    """F5.1: parser aceita .moor com múltiplos segmentos por linha."""
     payload = deepcopy(_MOOR_JSON_IMPERIAL)
     payload["mooringLine"]["segments"].append(payload["mooringLine"]["segments"][0])
+    resp = client.post("/api/v1/import/moor", json=payload)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert len(body["input"]["segments"]) == 2
+
+
+def test_import_moor_acima_de_10_segmentos_400(client: TestClient) -> None:
+    payload = deepcopy(_MOOR_JSON_IMPERIAL)
+    payload["mooringLine"]["segments"] = [
+        payload["mooringLine"]["segments"][0] for _ in range(11)
+    ]
     resp = client.post("/api/v1/import/moor", json=payload)
     assert resp.status_code == 400
 
