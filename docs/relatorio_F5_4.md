@@ -21,7 +21,7 @@ Faseamento adotado:
 | F5.4.5a  | Multi-segmento + attachments por linha (reuso de SegmentEditor)     | ✅ |
 | F5.4.5b  | Animações + export JSON + Δ vs execução anterior                    | ✅ |
 | F5.4.5c  | PDF report (com plan view + tabela de linhas + agregados)           | ✅ |
-| F5.4.5d  | Comparação multi-sistema (overlay)                                  | ⬜ |
+| F5.4.5d  | Comparação multi-sistema (overlay + tabela)                         | ✅ |
 
 ---
 
@@ -506,9 +506,63 @@ relatórios em PDF), mantive junto.
 
 ---
 
-## Próximo passo (opcional): F5.4.5d
+---
 
-1. Comparação multi-sistema (overlay de plan views de 2-3 sistemas
-   diferentes com legendas).
-2. Página de comparação tipo `/mooring-systems/compare?ids=1,2,3`
-   reaproveitando o pattern do `CompareCasesPage`.
+## F5.4.5d — entrega (comparação multi-sistema)
+
+### Componente Overlay
+
+[`MooringSystemsOverlayView.tsx`](../frontend/src/components/common/MooringSystemsOverlayView.tsx):
+SVG nativo que aceita `OverlaySystem[]` (cada item = `{ id, name,
+color, input, result? }`) e desenha todos os sistemas na mesma plan
+view. Cada sistema usa sua cor própria para linhas/fairleads/anchors;
+plataforma de referência usa o **maior** raio entre os sistemas.
+Linhas inválidas (`status !== 'converged'`) ficam pontilhadas com
+opacidade reduzida. Sem vetor resultante (cada sistema teria o seu —
+informação vai pra tabela comparativa).
+
+### Página
+
+[`MooringSystemsComparePage.tsx`](../frontend/src/pages/MooringSystemsComparePage.tsx)
+(rota `/mooring-systems/compare?ids=1,2,3`):
+
+- Lê IDs do query string, máximo 3 (deduped, validados).
+- `useQueries` paraleliza os GETs.
+- Layout 2-col: overlay plan view à esquerda, legenda + nº de linhas à
+  direita. Cada nome na legenda é link para o detail individual.
+- Tabela comparativa abaixo com 8 métricas: raio plataforma, nº linhas,
+  resolvido, resultante kN, direção, convergiram, máx. utilização,
+  pior alerta. Cabeçalho da tabela traz o swatch de cor + nome de cada
+  sistema.
+
+Quando `< 2 ids` no query string, mostra `EmptyState` com instrução
+para voltar à listagem e selecionar.
+
+### Lista com seleção
+
+[`MooringSystemsListPage.tsx`](../frontend/src/pages/MooringSystemsListPage.tsx)
+ganhou:
+
+- Coluna nova com `<Checkbox>` por linha; clique não navega para o
+  detail (stopPropagation).
+- Estado `selected: Set<number>` com toggle. Limite 3 (toast warning
+  se excedido).
+- Botão **Comparar N** no topbar quando `selected.size >= 2`, navega
+  para `/mooring-systems/compare?ids=...`.
+
+Mesmo padrão de seleção do [`CasesListPage`](../frontend/src/pages/CasesListPage.tsx),
+que já tinha esse comportamento desde F3.
+
+### Validação
+
+- `tsc -b --force` ✅
+- `npm run build` ✅ (1.55s)
+- `pytest backend/` ✅ (226 testes — comparação é frontend-only)
+
+---
+
+## F5.4 — encerrada
+
+Todos os slices entregues. Próximo passo no roadmap macro: F5.5
+(polimento + exportações finais), F6 (validação dinâmica futura),
+ou requisitos novos.

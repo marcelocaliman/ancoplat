@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
+  GitCompare,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -21,6 +22,7 @@ import type { MooringSystemSummary } from '@/api/types'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Topbar } from '@/components/layout/Topbar'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -60,6 +62,23 @@ export function MooringSystemsListPage() {
   const debounced = useDebounce(search, 300)
   const [page, setPage] = useState(1)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+
+  function toggleSelected(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        if (next.size >= 3) {
+          toast.warning('Máx 3 sistemas na comparação')
+          return prev
+        }
+        next.add(id)
+      }
+      return next
+    })
+  }
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['mooring-systems', page, debounced],
@@ -90,6 +109,20 @@ export function MooringSystemsListPage() {
 
   const actions = (
     <>
+      {selected.size >= 2 && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            navigate(
+              `/mooring-systems/compare?ids=${Array.from(selected).join(',')}`,
+            )
+          }
+        >
+          <GitCompare className="h-4 w-4" />
+          Comparar {selected.size}
+        </Button>
+      )}
       <Button
         variant="outline"
         size="sm"
@@ -197,6 +230,7 @@ export function MooringSystemsListPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10" />
                   <TableHead className="w-[40%]">Nome</TableHead>
                   <TableHead className="text-right">Linhas</TableHead>
                   <TableHead className="text-right">Raio plataforma</TableHead>
@@ -211,6 +245,13 @@ export function MooringSystemsListPage() {
                     className="cursor-pointer"
                     onClick={() => navigate(`/mooring-systems/${row.id}`)}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selected.has(row.id)}
+                        onCheckedChange={() => toggleSelected(row.id)}
+                        aria-label={`Selecionar ${row.name} para comparação`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-medium text-foreground">

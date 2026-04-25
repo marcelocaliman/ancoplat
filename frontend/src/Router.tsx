@@ -55,6 +55,11 @@ const MooringSystemFormPage = lazy(() =>
     default: m.MooringSystemFormPage,
   })),
 )
+const MooringSystemsComparePage = lazy(() =>
+  import('@/pages/MooringSystemsComparePage').then((m) => ({
+    default: m.MooringSystemsComparePage,
+  })),
+)
 const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
 )
@@ -86,6 +91,7 @@ const router = createBrowserRouter([
       { path: 'cases/:id/edit', element: wrap(<CaseFormPage />) },
       { path: 'mooring-systems', element: wrap(<MooringSystemsListPage />) },
       { path: 'mooring-systems/new', element: wrap(<MooringSystemFormPage />) },
+      { path: 'mooring-systems/compare', element: wrap(<MooringSystemsComparePage />) },
       { path: 'mooring-systems/:id', element: wrap(<MooringSystemDetailPage />) },
       { path: 'mooring-systems/:id/edit', element: wrap(<MooringSystemFormPage />) },
       { path: 'catalog', element: wrap(<CatalogPage />) },
