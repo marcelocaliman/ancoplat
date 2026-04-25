@@ -433,6 +433,262 @@ def _solve_rigid_multi(
         raise ValueError(f"modo inválido: {mode}")
 
 
+def _integrate_segments_with_grounded(
+    segments: Sequence[LineSegment],
+    L_effs: Sequence[float],
+    H: float,
+    L_g_0: float,
+    slope_rad: float,
+    mu: float,
+    n_points_per_segment: int = 50,
+) -> dict:
+    """
+    Multi-segmento com trecho grounded em rampa (F5.3 + F5.1).
+
+    Trecho grounded: parte do segmento 0 (comprimento L_g_0) apoiada no
+    seabed inclinado de inclinação `slope_rad`. Trecho suspenso: resto
+    do segmento 0 (L_0 − L_g_0) + segmentos 1..N-1 inteiros, todos
+    integrados como catenárias compostas (H constante).
+
+    Tangência no touchdown: catenária do segmento 0 entra no touchdown
+    com inclinação local = slope_rad (encaixe suave na rampa).
+    """
+    if H <= 0:
+        raise ValueError(f"H={H} deve ser > 0")
+    if L_g_0 < 0 or L_g_0 > L_effs[0] + 1e-6:
+        raise ValueError(
+            f"L_g_0={L_g_0:.2f} fora do range [0, L_0={L_effs[0]:.2f}]"
+        )
+
+    m = math.tan(slope_rad)
+    u = math.asinh(m)
+    sqrt_1pm2 = math.sqrt(1.0 + m * m)
+    L_g_0 = max(0.0, L_g_0)
+    x_td = L_g_0 / sqrt_1pm2 if sqrt_1pm2 > 0 else 0.0
+    y_td = m * x_td
+
+    coords_x: list[float] = []
+    coords_y: list[float] = []
+    tension_mag: list[float] = []
+    tension_x: list[float] = []
+    tension_y: list[float] = []
+    boundaries: list[int] = [0]
+    t_mean_per_seg: list[float] = []
+
+    # Trecho grounded (parte do segmento 0)
+    if L_g_0 > 0:
+        n_g = max(2, int(round(n_points_per_segment * L_g_0 / L_effs[0])))
+        x_g = np.linspace(0.0, x_td, n_g)
+        y_g = m * x_g
+        # Tração: T_anchor → T_touchdown linear ao longo da rampa
+        T_td = math.sqrt(H * H + (H * m) ** 2)  # = H·sqrt(1+m²)
+        T_anc = max(
+            0.0,
+            T_td - mu * segments[0].w * math.cos(slope_rad) * L_g_0
+            - segments[0].w * math.sin(slope_rad) * L_g_0,
+        )
+        T_g_arr = np.linspace(T_anc, T_td, n_g)
+        Tx_g = T_g_arr * math.cos(slope_rad)
+        Ty_g = T_g_arr * math.sin(slope_rad)
+        coords_x.extend(x_g.tolist())
+        coords_y.extend(y_g.tolist())
+        tension_mag.extend(T_g_arr.tolist())
+        tension_x.extend(Tx_g.tolist())
+        tension_y.extend(Ty_g.tolist())
+        # T_mean do trecho grounded (parte do segmento 0)
+        t_mean_grounded = (T_anc + T_td) / 2.0
+
+    # Trecho suspenso: começa no touchdown (ou no anchor se L_g_0=0).
+    # Entrada do segmento 0 suspenso:
+    x_acc = x_td
+    y_acc = y_td
+    # V_local no início do trecho suspenso do segmento 0
+    if L_g_0 > 0:
+        # Touchdown: V_local = H·m (tangente m, sinh(asinh(m))=m)
+        V_local = H * m
+    else:
+        # Sem grounded: entrada do segmento 0 = anchor com algum V_anchor
+        # No multi sem touchdown a função de fora calcula V_anchor; mas
+        # aqui assumimos touchdown imminente: V_anchor = 0 (caso slope=0)
+        # ou V_anchor = H·m (slope ≠ 0, vértice virtual no anchor).
+        # Para o caller chamando com L_g_0 = 0 e slope ≠ 0, o vértice
+        # está EXATAMENTE no anchor (touchdown coincide com anchor).
+        V_local = H * m
+
+    L_0_suspended = L_effs[0] - L_g_0
+
+    for i, (seg, L_i_full) in enumerate(zip(segments, L_effs)):
+        # Para o segmento 0, usamos apenas L_0_suspended (resto após grounded)
+        L_eff_seg = L_0_suspended if i == 0 else L_i_full
+        if L_eff_seg < 1e-9:
+            # Segmento 0 inteiramente grounded — pula
+            boundaries.append(len(coords_x) - 1)
+            t_mean_per_seg.append(
+                t_mean_grounded if i == 0 and L_g_0 > 0 else 0.0
+            )
+            continue
+        w_i = seg.w
+        a_i = H / w_i
+        s_start = V_local / w_i
+        s_end = (V_local + w_i * L_eff_seg) / w_i
+
+        n = max(2, n_points_per_segment)
+        s_phys = np.linspace(0.0, L_eff_seg, n)
+        s_local = s_start + s_phys
+        # Coordenadas locais relativas ao vértice virtual do segmento i.
+        # asinh(s/a) − asinh(s_start/a) gives x relativo; idem para y.
+        x_local = a_i * (np.arcsinh(s_local / a_i) - math.asinh(s_start / a_i))
+        y_local = (
+            np.sqrt(a_i * a_i + s_local * s_local)
+            - math.sqrt(a_i * a_i + s_start * s_start)
+        )
+        seg_x = x_acc + x_local
+        seg_y = y_acc + y_local
+
+        T_seg = w_i * np.sqrt(a_i * a_i + s_local * s_local)
+        Tx_seg = np.full_like(T_seg, H)
+        Ty_seg = w_i * s_local
+
+        # Concatena: o primeiro ponto suspenso coincide com o fim do trecho
+        # anterior (touchdown ou junção). Pulamos para evitar duplicação.
+        if len(coords_x) > 0 and i == 0 and L_g_0 > 0:
+            coords_x.extend(seg_x[1:].tolist())
+            coords_y.extend(seg_y[1:].tolist())
+            tension_mag.extend(T_seg[1:].tolist())
+            tension_x.extend(Tx_seg[1:].tolist())
+            tension_y.extend(Ty_seg[1:].tolist())
+        elif i == 0 and L_g_0 == 0:
+            coords_x.extend(seg_x.tolist())
+            coords_y.extend(seg_y.tolist())
+            tension_mag.extend(T_seg.tolist())
+            tension_x.extend(Tx_seg.tolist())
+            tension_y.extend(Ty_seg.tolist())
+        else:
+            # Junção entre segmentos i-1 e i
+            coords_x.extend(seg_x[1:].tolist())
+            coords_y.extend(seg_y[1:].tolist())
+            tension_mag.extend(T_seg[1:].tolist())
+            tension_x.extend(Tx_seg[1:].tolist())
+            tension_y.extend(Ty_seg[1:].tolist())
+
+        boundaries.append(len(coords_x) - 1)
+
+        # Tração média no segmento i (na parte suspensa, para correção elástica)
+        T_st = w_i * math.sqrt(a_i * a_i + s_start * s_start)
+        T_en = w_i * math.sqrt(a_i * a_i + s_end * s_end)
+        if i == 0 and L_g_0 > 0:
+            # Média ponderada: grounded (linear) e suspended
+            T_mean_susp = (T_st + T_en) / 2.0
+            t_mean_per_seg.append(
+                (t_mean_grounded * L_g_0 + T_mean_susp * L_eff_seg) / L_effs[0]
+            )
+        else:
+            t_mean_per_seg.append((T_st + T_en) / 2.0)
+
+        x_acc = float(seg_x[-1])
+        y_acc = float(seg_y[-1])
+        V_local = V_local + w_i * L_eff_seg
+
+    X_total = x_acc
+    h_total = y_acc
+    V_fairlead = V_local
+    T_fairlead = math.sqrt(H * H + V_fairlead * V_fairlead)
+    if L_g_0 > 0:
+        T_anchor = max(
+            0.0,
+            math.sqrt(H * H + (H * m) ** 2)
+            - mu * segments[0].w * math.cos(slope_rad) * L_g_0
+            - segments[0].w * math.sin(slope_rad) * L_g_0,
+        )
+        V_anchor = 0.0  # entra no grounded; tração total na rampa é T_anchor (vetorial)
+    else:
+        T_anchor = math.sqrt(H * H + (H * m) ** 2)
+        V_anchor = H * m
+
+    return {
+        "X_total": X_total,
+        "h_total": h_total,
+        "V_anchor": V_anchor,
+        "V_fairlead": V_fairlead,
+        "T_fairlead": T_fairlead,
+        "T_anchor": T_anchor,
+        "H": H,
+        "L_g_0": L_g_0,
+        "x_td": x_td,
+        "y_td": y_td,
+        "coords_x": coords_x,
+        "coords_y": coords_y,
+        "tension_magnitude": tension_mag,
+        "tension_x": tension_x,
+        "tension_y": tension_y,
+        "boundaries": boundaries,
+        "T_mean_per_segment": t_mean_per_seg,
+    }
+
+
+def _solve_multi_sloped(
+    segments: Sequence[LineSegment],
+    L_effs: Sequence[float],
+    h: float,
+    mode: SolutionMode,
+    input_value: float,
+    mu: float,
+    slope_rad: float,
+    config: SolverConfig,
+) -> dict:
+    """
+    Multi-segmento com touchdown na rampa: fsolve 2D sobre (H, L_g_0).
+
+    Modo Tension: 2 equações
+      - T_fl_calc = T_fl_target
+      - h_total = h
+    Modo Range: 2 equações
+      - X_total = X_target
+      - h_total = h
+    """
+    L_0 = L_effs[0]
+    sum_wL_higher = sum(s.w * L for s, L in zip(segments[1:], L_effs[1:]))
+    m = math.tan(slope_rad)
+
+    def F(vars: np.ndarray) -> np.ndarray:
+        H, L_g_0 = vars
+        if H <= 0 or L_g_0 < 0 or L_g_0 > L_0 - 1e-6:
+            return np.array([1e9, 1e9])
+        try:
+            res = _integrate_segments_with_grounded(
+                segments, L_effs, H, L_g_0, slope_rad, mu,
+            )
+        except ValueError:
+            return np.array([1e9, 1e9])
+        if mode == SolutionMode.TENSION:
+            return np.array([res["T_fairlead"] - float(input_value), res["h_total"] - h])
+        else:
+            return np.array([res["X_total"] - float(input_value), res["h_total"] - h])
+
+    # Chute inicial: assume L_g_0 ≈ 30% do segmento 0; H estimado da
+    # solução horizontal análoga.
+    L_g_init = 0.3 * L_0
+    if mode == SolutionMode.TENSION:
+        H_init = max(1.0, float(input_value) - segments[0].w * h)
+    else:
+        # Para Range, estima H a partir de geometria simples
+        H_init = max(1.0, segments[0].w * (float(input_value) ** 2 + h * h) / (2 * h) / 5)
+
+    sol, _info, ier, _ = fsolve(
+        F, np.array([H_init, L_g_init]),
+        full_output=True, xtol=1e-9, maxfev=300,
+    )
+    if ier != 1:
+        raise ValueError(
+            "fsolve não convergiu para multi-segmento + slope com touchdown. "
+            "Verifique se a configuração tem touchdown viável no segmento 0."
+        )
+    H_sol, L_g_sol = sol
+    return _integrate_segments_with_grounded(
+        segments, L_effs, H_sol, L_g_sol, slope_rad, mu,
+    )
+
+
 def solve_multi_segment(
     segments: Sequence[LineSegment],
     h: float,
@@ -441,6 +697,7 @@ def solve_multi_segment(
     mu: float = 0.0,
     config: SolverConfig | None = None,
     attachments: Sequence[LineAttachment] = (),
+    slope_rad: float = 0.0,
 ) -> SolverResult:
     """
     Solver multi-segmento (F5.1). Ver docstring do módulo.
@@ -470,11 +727,50 @@ def solve_multi_segment(
     iters_used = 0
     tol = max(s.length for s in segments) * config.elastic_tolerance
 
+    use_sloped = abs(slope_rad) > 1e-9
+    has_grounded = False  # detectado na primeira iteração
+
     for it in range(config.max_elastic_iter):
         iters_used = it + 1
-        rigid = _solve_rigid_multi(
-            segments, L_effs, h, mode, input_value, config, attachments,
-        )
+        if use_sloped:
+            # F5.3.x P2: multi-segmento + slope. Detecta se há touchdown
+            # tentando primeiro o solver fully-suspended (mais barato).
+            # Se V_anchor < 0, despacha para o solver com grounded.
+            if not has_grounded:
+                try:
+                    rigid_susp = _solve_rigid_multi(
+                        segments, L_effs, h, mode, input_value, config, attachments,
+                    )
+                    # Se converge com V_anchor >= 0, fully suspended OK
+                    if rigid_susp.get("V_anchor", 0.0) >= 0:
+                        rigid = rigid_susp
+                    else:
+                        has_grounded = True
+                        rigid = _solve_multi_sloped(
+                            segments, L_effs, h, mode, input_value,
+                            mu, slope_rad, config,
+                        )
+                except ValueError:
+                    has_grounded = True
+                    rigid = _solve_multi_sloped(
+                        segments, L_effs, h, mode, input_value,
+                        mu, slope_rad, config,
+                    )
+            else:
+                rigid = _solve_multi_sloped(
+                    segments, L_effs, h, mode, input_value,
+                    mu, slope_rad, config,
+                )
+            if attachments:
+                # F5.3.x: combinação multi + slope + attachments fica para
+                # próxima evolução (rejeitada na fachada solver.py).
+                raise ValueError(
+                    "Multi-segmento + slope + attachments ainda não suportado."
+                )
+        else:
+            rigid = _solve_rigid_multi(
+                segments, L_effs, h, mode, input_value, config, attachments,
+            )
         last_rigid = rigid
         new_L_effs = [
             L_unstretched[i] * (1.0 + rigid["T_mean_per_segment"][i] / segments[i].EA)
@@ -511,18 +807,33 @@ def solve_multi_segment(
 
     # Ângulos no fairlead e na âncora — atan2(V, H)
     angle_h_fl = math.atan2(rigid["V_fairlead"], rigid["H"])
-    angle_h_an = math.atan2(rigid["V_anchor"], rigid["H"])
+    if has_grounded:
+        # Com touchdown na rampa, o ângulo no anchor segue o slope
+        angle_h_an = slope_rad
+    else:
+        angle_h_an = math.atan2(rigid["V_anchor"], rigid["H"])
+
+    # F5.3.x: separa grounded (no segmento 0) do suspended para o resultado
+    L_g_total = rigid.get("L_g_0", 0.0)
+    L_susp_total = sum_L_eff - L_g_total
 
     # Mensagem inclui per-segment strain para auditoria
     strains = [(L_effs[i] - segments[i].length) / segments[i].length for i in range(len(segments))]
     strain_str = ", ".join(f"{s * 100:.3f}%" for s in strains)
 
+    msg_parts = [
+        f"Multi-segmento ({len(segments)} segs) convergido em {iters_used} "
+        f"iterações elásticas. Strains por segmento: [{strain_str}]."
+    ]
+    if has_grounded and L_g_total > 0:
+        msg_parts.append(
+            f"Touchdown na rampa de {math.degrees(slope_rad):.2f}°: "
+            f"L_g={L_g_total:.2f} m apoiado no segmento 0."
+        )
+
     return SolverResult(
         status=ConvergenceStatus.CONVERGED,
-        message=(
-            f"Multi-segmento ({len(segments)} segs) convergido em {iters_used} "
-            f"iterações elásticas. Strains por segmento: [{strain_str}]."
-        ),
+        message=" ".join(msg_parts),
         coords_x=rigid["coords_x"],
         coords_y=rigid["coords_y"],
         tension_x=rigid["tension_x"],
@@ -535,9 +846,9 @@ def solve_multi_segment(
         unstretched_length=sum_L,
         stretched_length=sum_L_eff,
         elongation=elongation,
-        total_suspended_length=sum_L_eff,  # F5.1 inicial: assume suspenso
-        total_grounded_length=0.0,
-        dist_to_first_td=None,
+        total_suspended_length=L_susp_total,
+        total_grounded_length=L_g_total,
+        dist_to_first_td=rigid.get("x_td") if has_grounded else None,
         angle_wrt_horz_fairlead=angle_h_fl,
         angle_wrt_vert_fairlead=math.pi / 2.0 - angle_h_fl,
         angle_wrt_horz_anchor=angle_h_an,
