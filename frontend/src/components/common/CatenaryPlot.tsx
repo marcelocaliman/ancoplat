@@ -212,10 +212,12 @@ export function CatenaryPlot({
       plotX.push(Xtotal - sx)
       plotY.push(sy - waterDepth)
       tensions.push(ts[i]!)
-      // grounded se: (a) caso degenerado horizontal; ou (b) ponto no seabed
-      // antes do touchdown na catenária com apoio.
+      // grounded se: (a) caso degenerado horizontal (laid line); ou
+      // (b) ponto antes do touchdown no frame solver. F5.3.x: removemos
+      // o filtro `sy < 0.01` (que assumia seabed horizontal) — em rampa
+      // os pontos grounded estão sobre y_solver = m·sx, não em y=0.
       onGround.push(
-        allGrounded || (td > 0 && sx <= td + 1e-6 && sy < 0.01),
+        allGrounded || (td > 0 && sx <= td + 1e-6),
       )
     }
     plotX.reverse()
@@ -406,37 +408,31 @@ export function CatenaryPlot({
       }
     }
 
-    // ── Marker do fairlead (em x=0) ──
+    // ── Hover invisível em fairlead/âncora ──
+    // Os ícones SVG ficam por cima via layout.images. Aqui só deixamos
+    // markers transparentes para o hover funcionar (Plotly não captura
+    // hover em images). showlegend=false: a legenda usa os SVGs num
+    // componente HTML separado, não os markers Plotly.
     traces.push({
       type: 'scatter',
       mode: 'markers',
       x: [0],
       y: [fairleadY],
-      marker: {
-        symbol: 'circle',
-        size: 14,
-        color: palette.fairlead,
-        line: { color: '#FFFFFF', width: 2 },
-      },
+      marker: { size: 22, color: 'rgba(0,0,0,0)' },
       name: 'Fairlead',
+      showlegend: false,
       hovertemplate:
         `Fairlead<br>x = 0<br>y = ${fairleadY.toFixed(2)} m<br>` +
         `T_fl = ${(result.fairlead_tension / 1000).toFixed(1)} kN<extra></extra>`,
     })
-
-    // ── Marker da âncora (em x=Xtotal, y=-water_depth) ──
     traces.push({
       type: 'scatter',
       mode: 'markers',
       x: [Xtotal],
       y: [anchorY],
-      marker: {
-        symbol: 'triangle-up',
-        size: 14,
-        color: palette.anchor,
-        line: { color: '#FFFFFF', width: 1.5 },
-      },
+      marker: { size: 22, color: 'rgba(0,0,0,0)' },
       name: 'Âncora',
+      showlegend: false,
       hovertemplate:
         `Âncora<br>x = ${Xtotal.toFixed(2)} m<br>y = ${anchorY.toFixed(2)} m<br>` +
         `T_anc = ${(result.anchor_tension / 1000).toFixed(1)} kN<extra></extra>`,
@@ -671,14 +667,10 @@ export function CatenaryPlot({
         },
         align: 'left',
       },
-      showlegend: true,
-      legend: {
-        orientation: 'h' as const,
-        yanchor: 'bottom' as const,
-        y: 1.02,
-        xanchor: 'center' as const,
-        x: 0.5,
-      },
+      // Legenda Plotly desabilitada — usamos legenda HTML customizada por
+      // cima (ver <CatenaryLegend /> abaixo). Permite usar SVGs inline para
+      // fairlead/âncora, o que não é possível na legenda nativa do Plotly.
+      showlegend: false,
       images,
       annotations,
     }
@@ -697,15 +689,109 @@ export function CatenaryPlot({
     [],
   )
 
+  // Composição da legenda HTML: detecta quais traces da linha aparecem
+  // no plot atual. SVGs de fairlead e âncora estão sempre presentes
+  // (ícones via layout.images). Touchdown só quando td > 0.5.
+  const legendItems = useMemo<LegendItem[]>(() => {
+    const items: LegendItem[] = []
+    const segBounds = result.segment_boundaries ?? []
+    const isMulti = segBounds.length > 2
+    const hasGrounded = (result.total_grounded_length ?? 0) > 0
+    const hasSuspended = (result.total_suspended_length ?? 0) > 0
+    const hasTouchdown = (result.dist_to_first_td ?? 0) > 0.5
+
+    if (isMulti) {
+      const segPaletteLight = ['#1E3A5F', '#D97706', '#047857', '#7C3AED', '#BE185D']
+      const segPaletteDark = ['#60A5FA', '#FBBF24', '#34D399', '#A78BFA', '#F472B6']
+      const segPalette = theme === 'dark' ? segPaletteDark : segPaletteLight
+      for (let s = 0; s < segBounds.length - 1; s += 1) {
+        items.push({
+          kind: 'line',
+          color: segPalette[s % segPalette.length]!,
+          label: `Segmento ${s + 1}`,
+        })
+      }
+    } else {
+      if (hasSuspended) {
+        items.push({ kind: 'line', color: palette.suspended, label: 'Trecho suspenso' })
+      }
+      if (hasGrounded) {
+        items.push({ kind: 'line', color: palette.grounded, label: 'Trecho apoiado' })
+      }
+    }
+    items.push({
+      kind: 'svg',
+      svg: fairleadSvg(palette.iconColor),
+      label: 'Fairlead',
+    })
+    items.push({
+      kind: 'svg',
+      svg: anchorSvg(palette.anchorIconColor),
+      label: 'Âncora',
+    })
+    if (hasTouchdown) {
+      items.push({
+        kind: 'diamond',
+        color: palette.grounded,
+        label: 'Touchdown',
+      })
+    }
+    return items
+  }, [result, palette, theme])
+
   return (
-    <Suspense fallback={<Skeleton style={plotStyle} />}>
-      <Plot
-        data={data}
-        layout={layout}
-        config={config}
-        style={plotStyle}
-        useResizeHandler
-      />
-    </Suspense>
+    <div className="relative h-full w-full">
+      {/* Legenda HTML flutuante no topo do plot, com SVGs inline para
+          fairlead e âncora — algo que a legenda nativa do Plotly não suporta. */}
+      <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center px-2">
+        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-md border border-border/40 bg-background/70 px-3 py-1 text-[11px] backdrop-blur-sm">
+          {legendItems.map((item, i) => (
+            <LegendChip key={i} item={item} />
+          ))}
+        </div>
+      </div>
+      <Suspense fallback={<Skeleton style={plotStyle} />}>
+        <Plot
+          data={data}
+          layout={layout}
+          config={config}
+          style={plotStyle}
+          useResizeHandler
+        />
+      </Suspense>
+    </div>
+  )
+}
+
+interface LegendItem {
+  kind: 'line' | 'svg' | 'diamond'
+  label: string
+  color?: string
+  svg?: string
+}
+
+function LegendChip({ item }: { item: LegendItem }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      {item.kind === 'line' && (
+        <span
+          className="inline-block h-[3px] w-5 rounded-full"
+          style={{ backgroundColor: item.color }}
+        />
+      )}
+      {item.kind === 'diamond' && (
+        <span
+          className="inline-block h-2.5 w-2.5 rotate-45 rounded-[1px] border border-white"
+          style={{ backgroundColor: item.color }}
+        />
+      )}
+      {item.kind === 'svg' && item.svg && (
+        <span
+          className="inline-block h-4 w-4"
+          dangerouslySetInnerHTML={{ __html: item.svg }}
+        />
+      )}
+      <span className="text-foreground">{item.label}</span>
+    </span>
   )
 }
