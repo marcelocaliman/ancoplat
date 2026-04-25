@@ -182,4 +182,40 @@ def solve_mooring_system(
     )
 
 
+@router.get(
+    "/{msys_id}/export/json",
+    response_model=MooringSystemOutput,
+    summary="Exportar mooring system como JSON normalizado",
+    description=(
+        "Retorna o `MooringSystemOutput` completo (input + últimas execuções). "
+        "Equivalente ao GET, com header `Content-Disposition: attachment` para "
+        "download direto pelo browser."
+    ),
+    responses={404: {"model": ErrorResponse}},
+)
+def export_mooring_system_json(
+    msys_id: int, db: Session = Depends(get_db)
+):
+    rec = mooring_system_service.get_mooring_system(db, msys_id)
+    if rec is None:
+        raise _msys_not_found(msys_id)
+    out = mooring_system_service.mooring_system_record_to_output(rec)
+    from fastapi.responses import JSONResponse
+
+    # Filename precisa ser ASCII puro: o header Content-Disposition é
+    # Latin-1 por padrão e não aceita caracteres acentuados / símbolos
+    # (×, é, etc.) que aparecem em nomes de sistemas em pt-BR.
+    safe_name = "".join(
+        c if (c.isascii() and (c.isalnum() or c in ("-", "_"))) else "_"
+        for c in rec.name
+    )[:50] or f"mooring_system_{msys_id}"
+    filename = f"qmoor_msys_{safe_name}.json"
+    return JSONResponse(
+        content=out.model_dump(mode="json"),
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
 __all__ = ["router"]

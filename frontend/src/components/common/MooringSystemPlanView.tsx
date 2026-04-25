@@ -149,12 +149,14 @@ export function MooringSystemPlanView({
         stroke="currentColor"
         strokeOpacity={0.5}
         strokeWidth={1.5}
+        className="msys-animated"
       />
       {/* Marca da proa */}
       <polygon
         points={`${cx + platformRadius * scale},${cy} ${cx + platformRadius * scale - 12},${cy - 6} ${cx + platformRadius * scale - 12},${cy + 6}`}
         fill="currentColor"
         fillOpacity={0.6}
+        className="msys-animated"
       />
 
       {/* ── Linhas (se houver resultado) ── */}
@@ -186,6 +188,7 @@ export function MooringSystemPlanView({
                 strokeOpacity={0.4}
                 strokeWidth={2}
                 strokeDasharray="6 4"
+                className="msys-animated"
               />
               <circle
                 cx={fSvgX}
@@ -193,12 +196,13 @@ export function MooringSystemPlanView({
                 r={4}
                 fill="currentColor"
                 fillOpacity={0.6}
+                className="msys-animated"
               />
               <text
                 x={(fSvgX + aSvgX) / 2}
                 y={(fSvgY + aSvgY) / 2 - 6}
                 textAnchor="middle"
-                className="msys-line-label"
+                className="msys-line-label msys-animated"
               >
                 {p.name}
               </text>
@@ -231,6 +235,26 @@ export function MooringSystemPlanView({
           font-size: 11px;
           font-family: ui-sans-serif, system-ui, sans-serif;
           font-weight: 500;
+        }
+        /* Animação suave ao trocar parâmetros do form (live preview).
+           Atributos x1/y1/x2/y2/cx/cy de SVG transicionam via CSS em
+           Chrome/Edge/Firefox modernos; Safari pré-17 não suporta —
+           ainda assim a UI permanece correta, só sem animação. */
+        .msys-animated {
+          transition:
+            cx 250ms ease-out,
+            cy 250ms ease-out,
+            x1 250ms ease-out,
+            y1 250ms ease-out,
+            x2 250ms ease-out,
+            y2 250ms ease-out,
+            r 250ms ease-out,
+            transform 250ms ease-out,
+            x 200ms ease-out,
+            y 200ms ease-out,
+            stroke 250ms ease-out,
+            fill 250ms ease-out,
+            opacity 200ms ease-out;
         }
       `}</style>
     </svg>
@@ -277,16 +301,29 @@ function LineSegment({
         strokeOpacity={isInvalid ? 0.6 : 0.85}
         strokeDasharray={isInvalid ? '5 4' : undefined}
         strokeLinecap="round"
+        className="msys-animated"
       />
       {/* Fairlead (no casco) */}
-      <circle cx={fSvgX} cy={fSvgY} r={4} fill={color} />
+      <circle
+        cx={fSvgX}
+        cy={fSvgY}
+        r={4}
+        fill={color}
+        className="msys-animated"
+      />
       {/* Âncora */}
       <polygon
         points={`${aSvgX},${aSvgY - 6} ${aSvgX + 5},${aSvgY + 4} ${aSvgX - 5},${aSvgY + 4}`}
         fill={color}
         opacity={0.9}
+        className="msys-animated"
       />
-      <text x={lx} y={ly - 6} textAnchor="middle" className="msys-line-label">
+      <text
+        x={lx}
+        y={ly - 6}
+        textAnchor="middle"
+        className="msys-line-label msys-animated"
+      >
         {lineResult.line_name}
       </text>
     </g>
@@ -333,11 +370,13 @@ function ResultantArrow({
         stroke="#EC4899"
         strokeWidth={2.5}
         strokeOpacity={0.9}
+        className="msys-animated"
       />
       <polygon
         points={`${tipX},${tipY} ${ax1},${ay1} ${ax2},${ay2}`}
         fill="#EC4899"
         opacity={0.9}
+        className="msys-animated"
       />
     </g>
   )

@@ -162,6 +162,10 @@ export const previewSolveMooringSystem = (input: MooringSystemInput) =>
     .post<MooringSystemResult>('/mooring-systems/preview-solve', input)
     .then((r) => r.data)
 
+/** URL absoluta para download direto via window.open / <a href>. */
+export const exportMooringSystemJsonUrl = (msysId: number) =>
+  `/api/v1/mooring-systems/${msysId}/export/json`
+
 // ─────────────────────────────── import/export ─────────────────────────────
 export const importMoor = (payload: Record<string, unknown>) =>
   apiClient.post<CaseOutput>('/import/moor', payload).then((r) => r.data)

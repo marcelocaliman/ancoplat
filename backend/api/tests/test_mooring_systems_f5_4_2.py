@@ -318,3 +318,27 @@ def test_delete_remove_sistema_e_executions(client) -> None:  # type: ignore[no-
 
     # Idempotente: segunda chamada → 404
     assert client.delete(f"/api/v1/mooring-systems/{msys_id}").status_code == 404
+
+
+def test_export_json_retorna_payload_e_attachment_header(client) -> None:  # type: ignore[no-untyped-def]
+    """GET /export/json retorna o output completo + Content-Disposition."""
+    msys = _symmetric_spread_4x().model_dump()
+    create = client.post("/api/v1/mooring-systems", json=msys).json()
+    msys_id = create["id"]
+    client.post(f"/api/v1/mooring-systems/{msys_id}/solve")
+
+    resp = client.get(f"/api/v1/mooring-systems/{msys_id}/export/json")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == msys_id
+    assert body["input"]["name"] == "Spread 4× simétrico"
+    assert len(body["latest_executions"]) == 1
+
+    cd = resp.headers.get("content-disposition")
+    assert cd is not None and cd.startswith("attachment;")
+    assert ".json" in cd
+
+
+def test_export_json_id_inexistente_retorna_404(client) -> None:  # type: ignore[no-untyped-def]
+    resp = client.get("/api/v1/mooring-systems/9999/export/json")
+    assert resp.status_code == 404

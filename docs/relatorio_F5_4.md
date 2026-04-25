@@ -19,7 +19,8 @@ Faseamento adotado:
 | F5.4.3   | BCs de validação adicionais (simetria/equilíbrio, asymm extremos)   | ⬜ |
 | F5.4.4   | Frontend: lista + edição + detalhe + plan view polar                | ✅ |
 | F5.4.5a  | Multi-segmento + attachments por linha (reuso de SegmentEditor)     | ✅ |
-| F5.4.5b  | Animações + comparação multi-execução                               | ⬜ |
+| F5.4.5b  | Animações + export JSON + Δ vs execução anterior                    | ✅ |
+| F5.4.5c  | PDF report + comparação multi-sistema                               | ⬜ |
 
 ---
 
@@ -382,12 +383,63 @@ continuam totalmente tipados via `<T extends FieldValues>`.
 
 ---
 
-## Próximo passo: F5.4.5b — Refinamentos finais
+---
 
-1. Animação suave do plan view ao trocar parâmetros (transitions CSS
-   nas posições xy de fairleads/anchors via React Spring ou framer).
-2. Painel de comparação multi-execução: overlay de plan views ou
-   tabela de deltas entre runs.
-3. Export do mooring system (formato `.moor` estendido ou JSON
-   próprio).
-4. PDF report do sistema (reaproveitando `pdf_report.py`).
+## F5.4.5b — entrega (animações + export + comparativo)
+
+### Animação do plan view
+
+[`MooringSystemPlanView.tsx`](../frontend/src/components/common/MooringSystemPlanView.tsx)
+ganhou classe CSS `msys-animated` aplicada aos elementos que se
+movem (linha, fairlead, âncora, label, plataforma, vetor resultante).
+Transição: `cx/cy/x1/y1/x2/y2/r/transform 250ms ease-out`. Quando o
+usuário ajusta azimuth/raio/T_fl no form ou roda solve, os elementos
+deslizam suavemente em vez de "saltar". Sem dependências novas — CSS
+puro; navegadores modernos animam atributos SVG geométricos. Safari
+pré-17 cai no comportamento antigo (sem animação) sem quebrar nada.
+
+### Export JSON
+
+Backend ([`backend/api/routers/mooring_systems.py`](../backend/api/routers/mooring_systems.py)):
+
+`GET /mooring-systems/{id}/export/json` retorna `MooringSystemOutput`
+com `Content-Disposition: attachment` para download direto. Filename
+sanitizado para ASCII (`isascii() and isalnum()`) — nomes em pt-BR com
+acentos/símbolos (`×`, `é`, etc.) seriam rejeitados pelo header
+Latin-1 do HTTP. 2 testes cobrem o feliz path e o 404.
+
+Frontend ([`MooringSystemDetailPage.tsx`](../frontend/src/pages/MooringSystemDetailPage.tsx)):
+botão "Exportar JSON" com ícone `Download` no topbar do detail; abre o
+endpoint em nova aba (browser baixa via Content-Disposition).
+
+### Δ vs execução anterior
+
+A tabela de histórico ganhou coluna **Δ vs anterior** mostrando a
+variação do resultante em kN entre execuções consecutivas. Helper
+`<DeltaCell>`:
+
+- `+X` em amarelo com `ArrowUp` quando aumenta (sistema mais carregado)
+- `−X` em verde com `ArrowDown` quando diminui (mais relaxado)
+- Threshold `< 0.05 kN` mostra `Minus` (estável)
+- Última linha (mais antiga, sem anterior) mostra `—`
+
+Útil para auditar evoluções entre runs após o usuário ajustar μ,
+boia, etc.
+
+### Validação
+
+- `tsc -b --force` ✅
+- `npm run build` ✅ (1.61s)
+- `vitest run` ✅ (8 testes)
+- `pytest backend/` ✅ (223 testes — +2 da F5.4.2 com export)
+
+---
+
+## Próximo passo: F5.4.5c (opcional)
+
+1. PDF report do sistema (reaproveitar `pdf_report.py`): plan view do
+   matplotlib + tabela de linhas + agregados.
+2. Comparação multi-sistema (overlay de plan views de 2-3 sistemas
+   diferentes com legendas).
+3. Animação do vetor resultante mais sofisticada (pulse/glow quando
+   convergência muda).

@@ -3,16 +3,24 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
+  Download,
   Edit3,
   Loader2,
+  Minus,
   Zap,
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
-import { getMooringSystem, solveMooringSystem } from '@/api/endpoints'
+import {
+  exportMooringSystemJsonUrl,
+  getMooringSystem,
+  solveMooringSystem,
+} from '@/api/endpoints'
 import type { MooringSystemResult } from '@/api/types'
 import { MooringSystemPlanView } from '@/components/common/MooringSystemPlanView'
 import { Topbar } from '@/components/layout/Topbar'
@@ -82,6 +90,16 @@ export function MooringSystemDetailPage() {
 
   const actions = (
     <>
+      <Button asChild variant="outline" size="sm">
+        <a
+          href={exportMooringSystemJsonUrl(msysId)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <Download className="h-4 w-4" />
+          Exportar JSON
+        </a>
+      </Button>
       <Button asChild variant="outline" size="sm">
         <Link to={`/mooring-systems/${msysId}/edit`}>
           <Edit3 className="h-4 w-4" />
@@ -238,14 +256,18 @@ export function MooringSystemDetailPage() {
                 <TableRow>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Resultante</TableHead>
+                  <TableHead className="text-right">Δ vs anterior</TableHead>
                   <TableHead className="text-right">Direção</TableHead>
                   <TableHead className="text-right">Convergiram</TableHead>
                   <TableHead>Pior alerta</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.latest_executions.map((ex) => {
+                {data.latest_executions.map((ex, idx, arr) => {
                   const r = ex.result
+                  // Lista vem mais-recente-primeiro; "anterior" é o
+                  // próximo índice na lista (mais antigo).
+                  const prev = arr[idx + 1]?.result
                   return (
                     <TableRow key={ex.id}>
                       <TableCell className="text-xs text-muted-foreground">
@@ -257,6 +279,15 @@ export function MooringSystemDetailPage() {
                       </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
                         {(r.aggregate_force_magnitude / 1000).toFixed(1)} kN
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">
+                        <DeltaCell
+                          current={r.aggregate_force_magnitude}
+                          previous={prev?.aggregate_force_magnitude}
+                          unit="kN"
+                          divisor={1000}
+                          digits={1}
+                        />
                       </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
                         {r.aggregate_force_magnitude > 0
@@ -386,6 +417,45 @@ function StatusChip({
     )
   }
   return <AlertChip level={alertLevel ?? 'ok'} />
+}
+
+function DeltaCell({
+  current,
+  previous,
+  unit,
+  divisor = 1,
+  digits = 1,
+}: {
+  current: number
+  previous: number | undefined
+  unit: string
+  divisor?: number
+  digits?: number
+}) {
+  if (previous == null) {
+    return <span className="text-muted-foreground">—</span>
+  }
+  const delta = (current - previous) / divisor
+  // Threshold: variação menor que 0.05 unidade é "estável" (Minus).
+  const epsilon = 0.05
+  if (Math.abs(delta) < epsilon) {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-muted-foreground">
+        <Minus className="h-3 w-3" />
+        0,0 {unit}
+      </span>
+    )
+  }
+  const sign = delta > 0 ? '+' : ''
+  const Icon = delta > 0 ? ArrowUp : ArrowDown
+  const color = delta > 0 ? 'text-warning' : 'text-success'
+  return (
+    <span className={`inline-flex items-center gap-0.5 ${color}`}>
+      <Icon className="h-3 w-3" />
+      {sign}
+      {delta.toFixed(digits)} {unit}
+    </span>
+  )
 }
 
 function AlertChip({ level }: { level: string | null | undefined }) {
