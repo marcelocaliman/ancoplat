@@ -26,6 +26,7 @@ Este é um projeto de aplicação web pessoal para análise estática de linhas 
 - ✅ F5.2 — Attachments (boias e clumps)
 - ✅ F5.3 — Seabed inclinado + batimetria (concluída)
 - ✅ F5.4 — Sistema multi-linha (mooring system) — encerrada. Schema + solver dispatcher + frontend completo (lista/detail/form/plan view) + PDF report + comparação multi-sistema. Ver `docs/relatorio_F5_4.md`.
+- ✅ F5.5 — Equilíbrio de plataforma sob carga ambiental — encerrada. Solver `solve_platform_equilibrium` (fsolve outer + per-line Range), endpoints REST, painel UI com plan view deslocado e setas de offset/carga. **Motor estático fechado em termos físicos.** Ver `docs/relatorio_F5_5.md`.
 
 ### Documentação de referência (ordem de leitura recomendada)
 
