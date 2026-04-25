@@ -32,13 +32,7 @@ import { UtilizationGauge } from '@/components/common/UtilizationGauge'
 import { Topbar } from '@/components/layout/Topbar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -48,8 +42,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
@@ -62,13 +54,23 @@ import {
   caseInputSchema,
   type CaseFormValues,
 } from '@/lib/caseSchema'
-import { cn, fmtForceKN, fmtMeters, fmtNumber, fmtPercent } from '@/lib/utils'
+import {
+  cn,
+  fmtForceKN,
+  fmtMeters,
+  fmtNumber,
+  fmtPercent,
+  fmtTonfNumber,
+} from '@/lib/utils'
 
 /**
- * Tela de criação/edição com PREVIEW AO VIVO: formulário à esquerda,
- * gráfico + cards à direita. Cada mudança de input dispara, após 400ms
- * de debounce, um `POST /solve/preview` (não persiste) e atualiza a
- * visualização.
+ * Tela de criação/edição com PREVIEW AO VIVO em layout split.
+ *
+ * Sem scroll vertical no container principal — form e preview ocupam
+ * a viewport inteira, reorganizando-se dentro. Cada mudança de input
+ * dispara `POST /solve/preview` (não persiste) após 600ms de debounce.
+ * Casos fisicamente inválidos (broken) ainda exibem o gráfico, pois
+ * o solver retorna geometria completa; apenas o badge sinaliza.
  */
 export function CaseFormPage() {
   const { id } = useParams()
@@ -121,30 +123,25 @@ export function CaseFormPage() {
   const mode = values.boundary.mode
   const criteriaProfile = values.criteria_profile
 
-  // Debounce os valores para não martelar o backend a cada tecla
-  const debouncedValues = useDebounce(values, 400)
-
+  const debouncedValues = useDebounce(values, 600)
   const previewKey = useMemo(
-    () => JSON.stringify({
-      s: debouncedValues.segments,
-      b: debouncedValues.boundary,
-      se: debouncedValues.seabed,
-      cp: debouncedValues.criteria_profile,
-      u: debouncedValues.user_defined_limits,
-    }),
+    () =>
+      JSON.stringify({
+        s: debouncedValues.segments,
+        b: debouncedValues.boundary,
+        se: debouncedValues.seabed,
+        cp: debouncedValues.criteria_profile,
+        u: debouncedValues.user_defined_limits,
+      }),
     [debouncedValues],
   )
 
   const previewQuery = useQuery<SolverResult, ApiError>({
     queryKey: ['solve-preview', previewKey],
-    queryFn: async () => {
-      // Validação rápida: se algum campo mínimo do solver é inválido,
-      // não chama o backend (evita 422 óbvio).
-      if (!isValid) throw new ApiError('form_invalid', 'Formulário com erros.', 0)
+    queryFn: () => {
       const payload = {
         ...debouncedValues,
-        description:
-          debouncedValues.description?.trim() || null,
+        description: debouncedValues.description?.trim() || null,
       }
       return previewSolve(payload as never)
     },
@@ -208,12 +205,18 @@ export function CaseFormPage() {
       lt.category as CaseFormValues['segments'][number]['category'],
       { shouldValidate: true },
     )
-    setValue('segments.0.w', lt.wet_weight, { shouldValidate: true })
-    setValue('segments.0.EA', lt.qmoor_ea ?? lt.gmoor_ea ?? 0, {
+    // Arredonda para UX: evita mostrar 22.408937960... Mantém precisão
+    // suficiente para que o solver retorne resultado idêntico.
+    setValue('segments.0.w', roundTo(lt.wet_weight, 2), { shouldValidate: true })
+    setValue('segments.0.EA', roundTo(lt.qmoor_ea ?? lt.gmoor_ea ?? 0, 0), {
       shouldValidate: true,
     })
-    setValue('segments.0.MBL', lt.break_strength, { shouldValidate: true })
-    toast.success(`Propriedades de ${lt.line_type} aplicadas.`)
+    setValue('segments.0.MBL', roundTo(lt.break_strength, 0), {
+      shouldValidate: true,
+    })
+    toast.success(`Propriedades de ${lt.line_type} aplicadas.`, {
+      description: `Ø ${fmtNumber(lt.diameter, 4)} m · MBL ${fmtNumber(lt.break_strength / 1000, 0)} kN`,
+    })
   }
 
   if (isEdit && loadingExisting) {
@@ -232,11 +235,12 @@ export function CaseFormPage() {
 
   const actions = (
     <>
-      <Button variant="outline" asChild>
+      <Button variant="outline" size="sm" asChild>
         <Link to={isEdit ? `/cases/${id}` : '/cases'}>Cancelar</Link>
       </Button>
       <Button
         variant="outline"
+        size="sm"
         onClick={handleSubmit(onSubmit)}
         disabled={isSubmitting || saveMutation.isPending || !isValid}
       >
@@ -244,6 +248,7 @@ export function CaseFormPage() {
         Salvar
       </Button>
       <Button
+        size="sm"
         onClick={handleSubmit(onSubmitAndSolve)}
         disabled={isSubmitting || saveMutation.isPending || !isValid}
       >
@@ -256,61 +261,36 @@ export function CaseFormPage() {
   return (
     <>
       <Topbar breadcrumbs={breadcrumbs} actions={actions} />
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* COLUNA ESQUERDA — Formulário */}
+      <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[minmax(420px,440px)_1fr]">
+        {/* ── COLUNA ESQUERDA — Formulário ─────────────────────────── */}
         <form
           onSubmit={handleSubmit(onSubmit)}
-          className="flex w-full max-w-[560px] shrink-0 flex-col overflow-y-auto custom-scroll border-r border-border bg-sidebar/40 p-5"
+          className="flex min-h-0 flex-col overflow-y-auto custom-scroll border-r border-border bg-sidebar/30"
           noValidate
         >
-          <div className="space-y-4">
-            {/* Identificação */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Identificação</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label htmlFor="name" className="text-xs">
-                    Nome <span className="text-danger">*</span>
-                  </Label>
+          <div className="space-y-3 p-4">
+            <Section title="Identificação">
+              <div className="space-y-2">
+                <InlineField label="Nome" required error={errors.name?.message}>
                   <Input
-                    id="name"
                     {...register('name')}
-                    aria-invalid={!!errors.name}
-                    className="mt-1 h-8"
-                    placeholder="ex.: BC-01 — catenária suspensa"
+                    placeholder="ex.: BC-01 suspenso"
+                    className="h-8"
                   />
-                  {errors.name && (
-                    <p className="mt-1 text-xs text-danger">
-                      {errors.name.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label htmlFor="description" className="text-xs">
-                    Descrição
-                  </Label>
+                </InlineField>
+                <InlineField label="Descrição">
                   <Textarea
-                    id="description"
                     {...register('description')}
-                    className="mt-1"
                     rows={2}
-                    placeholder="Notas sobre o caso…"
+                    placeholder="Notas (opcional)"
+                    className="resize-none"
                   />
-                </div>
-              </CardContent>
-            </Card>
+                </InlineField>
+              </div>
+            </Section>
 
-            {/* Segmento */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Segmento de linha</CardTitle>
-                <CardDescription className="text-[11px]">
-                  Escolha do catálogo ou digite manualmente.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
+            <Section title="Segmento de linha">
+              <div className="space-y-2">
                 <Controller
                   control={control}
                   name="segments.0.line_type"
@@ -335,17 +315,16 @@ export function CaseFormPage() {
                     />
                   )}
                 />
-                <Separator />
-                <div className="grid grid-cols-2 gap-2">
-                  <CompactField label="Comprimento (m)">
+                <div className="grid grid-cols-2 gap-x-2 gap-y-2">
+                  <InlineField label="Comprimento" unit="m">
                     <Input
                       type="number"
-                      step="0.01"
+                      step="1"
                       {...register('segments.0.length', { valueAsNumber: true })}
                       className="h-8 font-mono"
                     />
-                  </CompactField>
-                  <CompactField label="Categoria">
+                  </InlineField>
+                  <InlineField label="Categoria">
                     <Controller
                       control={control}
                       name="segments.0.category"
@@ -366,415 +345,500 @@ export function CaseFormPage() {
                         </Select>
                       )}
                     />
-                  </CompactField>
-                  <CompactField label="Peso submerso (N/m)">
+                  </InlineField>
+                  <InlineField label="Peso subm." unit="N/m">
                     <Input
                       type="number"
                       step="0.01"
                       {...register('segments.0.w', { valueAsNumber: true })}
                       className="h-8 font-mono"
                     />
-                  </CompactField>
-                  <CompactField label="EA (N)">
+                  </InlineField>
+                  <InlineField label="EA" unit="N">
                     <Input
                       type="number"
-                      step="1e5"
+                      step="100000"
                       {...register('segments.0.EA', { valueAsNumber: true })}
                       className="h-8 font-mono"
                     />
-                  </CompactField>
-                  <CompactField label="MBL (N)" className="col-span-2">
+                  </InlineField>
+                  <InlineField label="MBL" unit="N" className="col-span-2">
                     <Input
                       type="number"
                       step="1000"
                       {...register('segments.0.MBL', { valueAsNumber: true })}
                       className="h-8 font-mono"
                     />
-                  </CompactField>
+                  </InlineField>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </Section>
 
-            {/* Boundary */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Condições de contorno</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <CompactField label="Lâmina d'água (m)">
-                    <Input
-                      type="number"
-                      step="0.1"
-                      {...register('boundary.h', { valueAsNumber: true })}
-                      className="h-8 font-mono"
-                    />
-                  </CompactField>
-                  <CompactField label="Modo">
-                    <Controller
-                      control={control}
-                      name="boundary.mode"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="h-8">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Tension">Tension</SelectItem>
-                            <SelectItem value="Range">Range</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </CompactField>
-                  <CompactField
-                    label={mode === 'Tension' ? 'T_fl (N)' : 'X total (m)'}
-                    className="col-span-2"
-                  >
-                    <Input
-                      type="number"
-                      step="any"
-                      {...register('boundary.input_value', {
-                        valueAsNumber: true,
-                      })}
-                      className="h-8 font-mono"
-                    />
-                  </CompactField>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Seabed */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-1.5 text-sm">
-                  Seabed
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Info className="h-3 w-3 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="max-w-xs text-xs">
-                      Atrito axial de Coulomb. Valores típicos: wire 0,3,
-                      corrente 0,7, poliéster 0,25.
-                    </TooltipContent>
-                  </Tooltip>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <CompactField label="μ (atrito)">
+            <Section title="Condições de contorno">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-2">
+                <InlineField label="Lâmina d'água" unit="m">
                   <Input
                     type="number"
-                    step="0.05"
-                    min="0"
-                    {...register('seabed.mu', { valueAsNumber: true })}
+                    step="1"
+                    {...register('boundary.h', { valueAsNumber: true })}
                     className="h-8 font-mono"
                   />
-                </CompactField>
-              </CardContent>
-            </Card>
-
-            {/* Critério */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Critério de utilização</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Controller
-                  control={control}
-                  name="criteria_profile"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {profiles?.map((p) => (
-                          <SelectItem key={p.name} value={p.name}>
-                            <div className="flex flex-col">
-                              <span>{p.name}</span>
-                              <span className="text-[10px] text-muted-foreground">
-                                y {fmtNumber(p.yellow_ratio, 2)} · r{' '}
-                                {fmtNumber(p.red_ratio, 2)} · b{' '}
-                                {fmtNumber(p.broken_ratio, 2)}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                {criteriaProfile === 'UserDefined' && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['yellow_ratio', 'red_ratio', 'broken_ratio'] as const).map(
-                      (k) => (
-                        <CompactField key={k} label={k.replace('_ratio', '')}>
-                          <Input
-                            type="number"
-                            step="0.05"
-                            defaultValue={
-                              watch(`user_defined_limits.${k}`) ??
-                              (k === 'yellow_ratio'
-                                ? 0.5
-                                : k === 'red_ratio'
-                                  ? 0.6
-                                  : 1.0)
-                            }
-                            onChange={(e) =>
-                              setValue(
-                                `user_defined_limits.${k}`,
-                                parseFloat(e.target.value),
-                                { shouldValidate: true },
-                              )
-                            }
-                            className="h-8 font-mono"
-                          />
-                        </CompactField>
-                      ),
+                </InlineField>
+                <InlineField label="Modo">
+                  <Controller
+                    control={control}
+                    name="boundary.mode"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Tension">Tension</SelectItem>
+                          <SelectItem value="Range">Range</SelectItem>
+                        </SelectContent>
+                      </Select>
                     )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  />
+                </InlineField>
+                <InlineField
+                  label={mode === 'Tension' ? 'T_fl' : 'X total'}
+                  unit={mode === 'Tension' ? 'N' : 'm'}
+                  className="col-span-2"
+                >
+                  <Input
+                    type="number"
+                    step="any"
+                    {...register('boundary.input_value', {
+                      valueAsNumber: true,
+                    })}
+                    className="h-8 font-mono"
+                  />
+                </InlineField>
+              </div>
+            </Section>
 
-            {/* Restrições v1 */}
-            <div className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-info" />
-              <span>
-                <strong className="text-foreground">MVP v1:</strong>{' '}
-                fairlead na superfície, âncora no seabed, linha homogênea.
-              </span>
-              <Switch checked disabled className="ml-auto" />
-            </div>
+            <Section
+              title="Seabed"
+              tooltip="Atrito axial de Coulomb. Wire ~0,3 · Corrente ~0,7 · Poliéster ~0,25."
+            >
+              <InlineField label="μ (atrito)">
+                <Input
+                  type="number"
+                  step="0.05"
+                  min="0"
+                  {...register('seabed.mu', { valueAsNumber: true })}
+                  className="h-8 font-mono"
+                />
+              </InlineField>
+            </Section>
+
+            <Section title="Critério de utilização">
+              <Controller
+                control={control}
+                name="criteria_profile"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {profiles?.map((p) => (
+                        <SelectItem key={p.name} value={p.name}>
+                          <span className="flex items-center gap-2">
+                            <span>{p.name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              y{fmtNumber(p.yellow_ratio, 2)} · r
+                              {fmtNumber(p.red_ratio, 2)} · b
+                              {fmtNumber(p.broken_ratio, 2)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {criteriaProfile === 'UserDefined' && (
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {(['yellow_ratio', 'red_ratio', 'broken_ratio'] as const).map(
+                    (k) => (
+                      <InlineField key={k} label={k.replace('_ratio', '')}>
+                        <Input
+                          type="number"
+                          step="0.05"
+                          defaultValue={
+                            watch(`user_defined_limits.${k}`) ??
+                            (k === 'yellow_ratio'
+                              ? 0.5
+                              : k === 'red_ratio'
+                                ? 0.6
+                                : 1.0)
+                          }
+                          onChange={(e) =>
+                            setValue(
+                              `user_defined_limits.${k}`,
+                              parseFloat(e.target.value),
+                              { shouldValidate: true },
+                            )
+                          }
+                          className="h-8 font-mono"
+                        />
+                      </InlineField>
+                    ),
+                  )}
+                </div>
+              )}
+            </Section>
           </div>
         </form>
 
-        {/* COLUNA DIREITA — Preview live */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
-          <div className="flex flex-1 flex-col overflow-y-auto custom-scroll p-5">
-            <PreviewHeader queryState={previewQuery} />
-            <div className="mt-4 flex flex-1 flex-col gap-4">
-              <Card className="min-h-[380px]">
-                <CardContent className="p-2">
-                  {previewQuery.data ? (
-                    <CatenaryPlot result={previewQuery.data} height={400} />
-                  ) : previewQuery.isLoading ? (
-                    <PlotPlaceholder state="loading" />
-                  ) : previewQuery.isError ? (
-                    <PlotPlaceholder
-                      state="error"
-                      message={previewQuery.error?.message}
-                    />
-                  ) : (
-                    <PlotPlaceholder state="idle" />
-                  )}
+        {/* ── COLUNA DIREITA — Preview live ─────────────────────────── */}
+        <section className="flex min-h-0 flex-col overflow-hidden bg-background">
+          <div className="flex h-full flex-col p-4">
+            <PreviewHeader
+              isFetching={previewQuery.isFetching}
+              result={previewQuery.data}
+              formInvalid={!isValid}
+            />
+            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3">
+              <Card className="flex-1 overflow-hidden">
+                <CardContent className="h-full p-1">
+                  <PlotArea
+                    isFetching={previewQuery.isFetching}
+                    result={previewQuery.data}
+                    formInvalid={!isValid}
+                  />
                 </CardContent>
               </Card>
-
-              {previewQuery.data && (
-                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                  <MetricCard
-                    label="Tração no fairlead"
-                    value={`${fmtNumber(previewQuery.data.fairlead_tension / 1000, 1)} kN`}
-                    extra={
-                      <UtilizationGauge
-                        value={previewQuery.data.utilization}
-                        alertLevel={previewQuery.data.alert_level}
-                      />
-                    }
-                    footer={`T/MBL = ${fmtPercent(previewQuery.data.utilization, 1)}`}
-                  />
-                  <MetricCard
-                    label="Geometria"
-                    rows={[
-                      ['X total', fmtMeters(previewQuery.data.total_horz_distance, 1)],
-                      ['Suspenso', fmtMeters(previewQuery.data.total_suspended_length, 1)],
-                      ['Apoiado', fmtMeters(previewQuery.data.total_grounded_length, 1)],
-                      ...(previewQuery.data.dist_to_first_td != null && previewQuery.data.dist_to_first_td > 0
-                        ? [['Touchdown', fmtMeters(previewQuery.data.dist_to_first_td, 1)] as [string, string]]
-                        : []),
-                    ]}
-                  />
-                  <MetricCard
-                    label="Forças"
-                    rows={[
-                      ['H', fmtForceKN(previewQuery.data.H, 1)],
-                      ['T âncora', fmtForceKN(previewQuery.data.anchor_tension, 1)],
-                      ['ΔL', fmtMeters(previewQuery.data.elongation, 3)],
-                    ]}
-                  />
-                  <MetricCard
-                    label="Status"
-                    extra={
-                      <div className="space-y-1.5">
-                        <div className="flex gap-1.5">
-                          <StatusBadge status={previewQuery.data.status} />
-                          <AlertBadge level={previewQuery.data.alert_level} />
-                        </div>
-                        <p className="font-mono text-[10px] text-muted-foreground">
-                          {previewQuery.data.iterations_used} iter
-                        </p>
-                      </div>
-                    }
-                  />
-                </div>
-              )}
+              <MetricsRow result={previewQuery.data} formInvalid={!isValid} />
             </div>
           </div>
-        </div>
+        </section>
       </div>
     </>
   )
 }
 
-function CompactField({
-  label,
+/* ───────────────────────── Helpers visuais ─────────────────────────── */
+
+function Section({
+  title,
   children,
-  className,
+  tooltip,
 }: {
-  label: string
+  title: string
   children: React.ReactNode
-  className?: string
+  tooltip?: string
 }) {
   return (
-    <div className={cn('flex flex-col gap-1', className)}>
-      <Label className="text-[11px] text-muted-foreground">{label}</Label>
+    <Card className="overflow-hidden">
+      <div className="flex items-center gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-1.5">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {title}
+        </span>
+        {tooltip && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-3 w-3 text-muted-foreground" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs">
+              {tooltip}
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+      <CardContent className="p-3">{children}</CardContent>
+    </Card>
+  )
+}
+
+function InlineField({
+  label,
+  unit,
+  required,
+  error,
+  className,
+  children,
+}: {
+  label: string
+  unit?: string
+  required?: boolean
+  error?: string
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className={cn('flex flex-col gap-0.5', className)}>
+      <Label className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+        <span>
+          {label}
+          {required && <span className="ml-0.5 text-danger">*</span>}
+        </span>
+        {unit && (
+          <span className="font-mono text-[10px] font-normal">{unit}</span>
+        )}
+      </Label>
       {children}
+      {error && <p className="text-[10px] text-danger">{error}</p>}
     </div>
   )
 }
 
 function PreviewHeader({
-  queryState,
+  isFetching,
+  result,
+  formInvalid,
 }: {
-  queryState: ReturnType<typeof useQuery<SolverResult, ApiError>>
+  isFetching: boolean
+  result?: SolverResult
+  formInvalid: boolean
 }) {
-  const status: 'idle' | 'loading' | 'success' | 'error' =
-    queryState.isFetching
-      ? 'loading'
-      : queryState.isError
-        ? 'error'
-        : queryState.data
-          ? 'success'
-          : 'idle'
+  let badge: {
+    variant: 'success' | 'warning' | 'danger' | 'secondary'
+    icon: React.ReactNode
+    label: string
+  } = { variant: 'secondary', icon: null, label: 'Aguardando' }
+
+  if (formInvalid) {
+    badge = {
+      variant: 'secondary',
+      icon: <Info className="mr-1 h-3 w-3" />,
+      label: 'Preencha os campos',
+    }
+  } else if (isFetching) {
+    badge = {
+      variant: 'warning',
+      icon: <Loader2 className="mr-1 h-3 w-3 animate-spin" />,
+      label: 'Calculando',
+    }
+  } else if (result) {
+    if (result.alert_level === 'broken' || result.status === 'invalid_case') {
+      badge = {
+        variant: 'danger',
+        icon: <AlertCircle className="mr-1 h-3 w-3" />,
+        label: 'Inviável',
+      }
+    } else if (
+      result.alert_level === 'red' ||
+      result.status === 'ill_conditioned'
+    ) {
+      badge = {
+        variant: 'warning',
+        icon: <AlertCircle className="mr-1 h-3 w-3" />,
+        label: 'Atenção',
+      }
+    } else {
+      badge = {
+        variant: 'success',
+        icon: <CheckCircle2 className="mr-1 h-3 w-3" />,
+        label: 'Convergiu',
+      }
+    }
+  }
+
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex items-baseline justify-between gap-3">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight">Preview ao vivo</h2>
-        <p className="text-xs text-muted-foreground">
-          Recalculado automaticamente a cada ajuste no formulário.
-          Não persiste — use "Salvar e calcular" para guardar a execução.
+        <h2 className="text-base font-semibold leading-none tracking-tight">
+          Preview ao vivo
+        </h2>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Recalcula automaticamente. Use "Salvar e calcular" para persistir.
         </p>
       </div>
-      <Badge
-        variant={
-          status === 'loading'
-            ? 'warning'
-            : status === 'error'
-              ? 'danger'
-              : status === 'success'
-                ? 'success'
-                : 'secondary'
-        }
-        className="shrink-0"
-      >
-        {status === 'loading' && (
-          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-        )}
-        {status === 'success' && <CheckCircle2 className="mr-1 h-3 w-3" />}
-        {status === 'error' && <AlertCircle className="mr-1 h-3 w-3" />}
-        {status === 'loading'
-          ? 'Calculando'
-          : status === 'error'
-            ? 'Inviável'
-            : status === 'success'
-              ? 'Convergiu'
-              : 'Aguardando'}
+      <Badge variant={badge.variant} className="shrink-0">
+        {badge.icon}
+        {badge.label}
       </Badge>
     </div>
   )
 }
 
-function PlotPlaceholder({
-  state,
-  message,
+function PlotArea({
+  isFetching,
+  result,
+  formInvalid,
 }: {
-  state: 'idle' | 'loading' | 'error'
-  message?: string
+  isFetching: boolean
+  result?: SolverResult
+  formInvalid: boolean
 }) {
+  if (formInvalid && !result) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+        <Info className="h-5 w-5 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">
+          Preencha os campos à esquerda para ver o perfil calculado.
+        </p>
+      </div>
+    )
+  }
+  if (!result && isFetching) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Calculando preview…</p>
+      </div>
+    )
+  }
+  if (!result) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-sm text-muted-foreground">Aguardando dados</p>
+      </div>
+    )
+  }
+  // Sempre renderiza gráfico quando há geometria (broken/ill_conditioned incluídos)
+  const hasGeom = (result.coords_x?.length ?? 0) > 1
+  if (!hasGeom) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+        <AlertCircle className="h-5 w-5 text-danger" />
+        <p className="text-sm font-medium text-danger">Sem geometria calculada</p>
+        {result.message && (
+          <p className="max-w-md text-xs text-muted-foreground">
+            {result.message}
+          </p>
+        )}
+      </div>
+    )
+  }
+  return <CatenaryPlot result={result} height={undefined as unknown as number} />
+}
+
+function MetricsRow({
+  result,
+  formInvalid,
+}: {
+  result?: SolverResult
+  formInvalid: boolean
+}) {
+  if (formInvalid || !result) {
+    return (
+      <div className="grid shrink-0 grid-cols-4 gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i} className="bg-muted/20">
+            <CardContent className="flex h-[88px] flex-col justify-center gap-1 p-3">
+              <div className="h-3 w-16 rounded bg-muted/50" />
+              <div className="h-5 w-24 rounded bg-muted/40" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )
+  }
+
   return (
-    <div className="flex h-[400px] flex-col items-center justify-center gap-3 rounded-md bg-muted/20 text-center text-sm">
-      {state === 'loading' && (
-        <>
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          <p className="text-muted-foreground">Calculando preview…</p>
-        </>
-      )}
-      {state === 'error' && (
-        <>
-          <AlertCircle className="h-6 w-6 text-danger" />
-          <p className="font-medium text-danger">Caso inviável</p>
-          {message && (
-            <p className="max-w-md text-xs text-muted-foreground">{message}</p>
-          )}
-          <p className="text-[11px] text-muted-foreground">
-            Ajuste os inputs e o gráfico atualiza.
-          </p>
-        </>
-      )}
-      {state === 'idle' && (
-        <>
-          <Info className="h-6 w-6 text-muted-foreground" />
-          <p className="text-muted-foreground">
-            Preencha os campos à esquerda para ver o perfil calculado.
-          </p>
-        </>
-      )}
+    <div className="grid shrink-0 grid-cols-4 gap-2">
+      {/* Tração */}
+      <MetricCard
+        label="Tração fairlead"
+        primary={fmtForceKN(result.fairlead_tension, 1)}
+        secondary={`≈ ${fmtTonfNumber(result.fairlead_tension, 1)} tf`}
+        extra={
+          <UtilizationGauge
+            value={result.utilization}
+            alertLevel={result.alert_level}
+            className="mt-1"
+          />
+        }
+      />
+      {/* Geometria */}
+      <MetricCard
+        label="Geometria"
+        rows={[
+          ['X total', fmtMeters(result.total_horz_distance, 1)],
+          ['Suspenso', fmtMeters(result.total_suspended_length, 1)],
+          ['Apoiado', fmtMeters(result.total_grounded_length, 1)],
+        ]}
+      />
+      {/* Forças */}
+      <MetricCard
+        label="Forças"
+        rows={[
+          [
+            'H (horiz.)',
+            `${fmtForceKN(result.H, 1)} · ${fmtTonfNumber(result.H, 1)} tf`,
+          ],
+          [
+            'T âncora',
+            `${fmtForceKN(result.anchor_tension, 1)} · ${fmtTonfNumber(result.anchor_tension, 1)} tf`,
+          ],
+          ['ΔL', fmtMeters(result.elongation, 3)],
+        ]}
+      />
+      {/* Status */}
+      <MetricCard
+        label="Status"
+        extra={
+          <div className="flex flex-wrap gap-1.5">
+            <StatusBadge status={result.status} />
+            <AlertBadge level={result.alert_level} />
+          </div>
+        }
+        footer={`${result.iterations_used} iter · ${fmtPercent(result.utilization, 1)} MBL`}
+      />
     </div>
   )
 }
 
 function MetricCard({
   label,
-  value,
+  primary,
+  secondary,
   rows,
   extra,
   footer,
 }: {
   label: string
-  value?: string
+  primary?: string
+  secondary?: string
   rows?: Array<[string, string]>
   extra?: React.ReactNode
   footer?: string
 }) {
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-[11px] font-medium text-muted-foreground">
+      <CardContent className="flex h-full flex-col gap-1 p-3">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1.5 font-mono text-xs tabular-nums">
-        {value && (
-          <div className="text-lg font-semibold tracking-tight text-foreground">
-            {value}
+        </p>
+        {primary && (
+          <div className="flex items-baseline gap-1.5 font-mono tabular-nums">
+            <span className="text-lg font-semibold tracking-tight">
+              {primary}
+            </span>
+            {secondary && (
+              <span className="text-[10px] font-normal text-muted-foreground">
+                {secondary}
+              </span>
+            )}
           </div>
         )}
-        {extra}
         {rows && (
-          <div className="space-y-0.5">
+          <div className="space-y-0 font-mono text-[11px] tabular-nums">
             {rows.map(([k, v]) => (
-              <div key={k} className="flex justify-between gap-2">
-                <span className="text-muted-foreground">{k}</span>
-                <span className="font-medium text-foreground">{v}</span>
+              <div key={k} className="flex items-baseline justify-between gap-2">
+                <span className="truncate text-muted-foreground">{k}</span>
+                <span className="shrink-0 font-medium text-foreground">{v}</span>
               </div>
             ))}
           </div>
         )}
+        {extra}
         {footer && (
-          <p className="text-[10px] text-muted-foreground">{footer}</p>
+          <p className="mt-auto font-mono text-[10px] text-muted-foreground">
+            {footer}
+          </p>
         )}
       </CardContent>
     </Card>
   )
+}
+
+/** Arredonda para N casas decimais (N=0 vira inteiro). */
+function roundTo(value: number, digits: number): number {
+  const f = 10 ** digits
+  return Math.round(value * f) / f
 }

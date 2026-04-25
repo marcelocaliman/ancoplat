@@ -41,56 +41,55 @@ export function Sidebar() {
       aria-label="Navegação principal"
       className={cn(
         'flex h-screen shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out',
-        sidebarCollapsed ? 'w-16' : 'w-60',
+        sidebarCollapsed ? 'w-16' : 'w-56',
       )}
     >
-      {/* Topo: logo + toggle */}
+      {/* Topo: logo + toggle — altura fixa 56px (mesma do topbar) */}
       <div
         className={cn(
-          'flex h-14 items-center border-b border-border px-3',
-          sidebarCollapsed ? 'justify-center' : 'justify-between',
+          'flex h-14 shrink-0 items-center border-b border-border',
+          sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-3',
         )}
       >
         <Logo compact={sidebarCollapsed} />
-        {!sidebarCollapsed && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Colapsar sidebar"
-                onClick={toggleSidebar}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <ChevronsLeft className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Colapsar (Cmd+B)</TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={sidebarCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+              onClick={toggleSidebar}
+              className={cn(
+                'h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground',
+                sidebarCollapsed && 'hidden',
+              )}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Colapsar (Cmd+B)</TooltipContent>
+        </Tooltip>
       </div>
 
       {sidebarCollapsed && (
-        <div className="flex justify-center py-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Expandir sidebar"
-                onClick={toggleSidebar}
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Expandir</TooltipContent>
-          </Tooltip>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label="Expandir sidebar"
+              className="mx-2 my-2 inline-flex h-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">Expandir</TooltipContent>
+        </Tooltip>
       )}
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto custom-scroll px-2 py-3">
-        <ul className="space-y-1">
+      {/* Navegação */}
+      <nav className="flex-1 overflow-y-auto custom-scroll px-2 py-2">
+        <ul className="space-y-0.5">
           {NAV_ITEMS.map(({ label, to, icon: Icon }) => (
             <li key={to}>
               <Tooltip>
@@ -99,14 +98,15 @@ export function Sidebar() {
                     to={to}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                        'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         isActive
                           ? 'bg-primary/10 text-primary'
                           : 'text-sidebar-foreground hover:bg-muted/60 hover:text-foreground',
-                        sidebarCollapsed && 'justify-center',
+                        sidebarCollapsed && 'justify-center px-0',
                       )
                     }
+                    end={to === '/cases'}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
                     {!sidebarCollapsed && <span>{label}</span>}
@@ -123,17 +123,15 @@ export function Sidebar() {
 
       <Separator />
 
-      {/* Rodapé: status API + tema */}
+      {/* Rodapé: status API + toggle de tema */}
       <div
         className={cn(
-          'flex items-center gap-1 p-2',
-          sidebarCollapsed && 'flex-col',
+          'flex shrink-0 items-center gap-1 px-2 py-2',
+          sidebarCollapsed ? 'flex-col' : 'justify-between',
         )}
       >
         <ApiStatusIndicator compact={sidebarCollapsed} />
-        <div className={cn('ml-auto', sidebarCollapsed && 'ml-0')}>
-          <ThemeToggle compact={sidebarCollapsed} />
-        </div>
+        <ThemeToggle compact={sidebarCollapsed} />
       </div>
     </aside>
   )

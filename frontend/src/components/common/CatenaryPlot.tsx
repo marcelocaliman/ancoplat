@@ -59,6 +59,10 @@ function niceDtick(range: number, targetTicks = 8): number {
 
 export interface CatenaryPlotProps {
   result: SolverResult
+  /**
+   * Altura em pixels. Se omitida, preenche 100% do container (o pai
+   * deve ter altura explícita). Útil para layouts responsivos.
+   */
   height?: number
   /** Força aspect ratio 1:1 (representação geométrica fiel). Default: false. */
   equalAspect?: boolean
@@ -76,9 +80,13 @@ export interface CatenaryPlotProps {
  */
 export function CatenaryPlot({
   result,
-  height = 360,
+  height,
   equalAspect = false,
 }: CatenaryPlotProps) {
+  const fillContainer = height == null
+  const plotStyle: React.CSSProperties = fillContainer
+    ? { width: '100%', height: '100%' }
+    : { width: '100%', height }
   const theme = resolveTheme(useThemeStore((s) => s.theme))
 
   const xs = useMemo(() => result.coords_x ?? [], [result.coords_x])
@@ -121,7 +129,7 @@ export function CatenaryPlot({
 
     return {
       autosize: true,
-      height,
+      ...(height != null ? { height } : {}),
       margin: { t: 18, r: 18, b: 48, l: 60 },
       paper_bgcolor: 'transparent',
       plot_bgcolor: 'transparent',
@@ -301,12 +309,12 @@ export function CatenaryPlot({
   )
 
   return (
-    <Suspense fallback={<Skeleton style={{ width: '100%', height }} />}>
+    <Suspense fallback={<Skeleton style={plotStyle} />}>
       <Plot
         data={data}
         layout={layout}
         config={config}
-        style={{ width: '100%', height }}
+        style={plotStyle}
         useResizeHandler
       />
     </Suspense>

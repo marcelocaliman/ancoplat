@@ -53,9 +53,39 @@ export const deleteCase = (id: number) =>
 export const solveCase = (id: number) =>
   apiClient.post(`/cases/${id}/solve`).then((r) => r.data)
 
-/** Dry-run: não persiste. Usa para análise paramétrica ao vivo. */
-export const previewSolve = (input: CaseInput) =>
-  apiClient.post<import('./types').SolverResult>('/solve/preview', input).then((r) => r.data)
+/**
+ * Dry-run: não persiste. Usa para análise paramétrica ao vivo.
+ *
+ * Quando o solver retorna invalid_case/numerical_error (HTTP 422), a API
+ * inclui o SolverResult completo em `error.detail.detail`. Para o preview
+ * live queremos mostrar o gráfico mesmo nesses casos — a UI exibe o
+ * alerta apropriado sem apagar a visualização.
+ */
+export const previewSolve = async (
+  input: CaseInput,
+): Promise<import('./types').SolverResult> => {
+  try {
+    const res = await apiClient.post<import('./types').SolverResult>(
+      '/solve/preview',
+      input,
+    )
+    return res.data
+  } catch (err) {
+    // ApiError com detail que é SolverResult: extrair
+    if (
+      err &&
+      typeof err === 'object' &&
+      'detail' in err &&
+      err.detail &&
+      typeof err.detail === 'object' &&
+      'status' in err.detail &&
+      'alert_level' in err.detail
+    ) {
+      return err.detail as unknown as import('./types').SolverResult
+    }
+    throw err
+  }
+}
 
 // ─────────────────────────────── catalog ───────────────────────────────────
 export interface ListLineTypesParams {
