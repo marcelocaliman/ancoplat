@@ -259,7 +259,14 @@ class SolverConfig(BaseModel):
     elastic_tolerance: float = Field(default=1e-5, gt=0, description="Tolerância loop elástico")
     max_brent_iter: int = Field(default=100, gt=0)
     max_elastic_iter: int = Field(default=30, gt=0)
-    n_plot_points: int = Field(default=101, ge=3, description="Pontos discretos da geometria")
+    n_plot_points: int = Field(
+        default=5000, ge=3,
+        description=(
+            "Pontos discretos da geometria (âncora → fairlead). Default 5000 "
+            "entrega curva visualmente lisa em plots zoom-in; pode ser "
+            "reduzido para benchmarks ou export compacto."
+        ),
+    )
     # Obs.: a Seção 3.5.1 do Documento A v2.2 mencionava um fallback manual
     # de bisseção (`max_bisection_iter`). Como scipy.optimize.brentq já é
     # um método híbrido Brent-Dekker com fallback de bisseção nativo e
