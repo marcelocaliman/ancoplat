@@ -195,6 +195,48 @@ class LineSegment(BaseModel):
         return v
 
 
+AttachmentKind = Literal["clump_weight", "buoy"]
+
+
+class LineAttachment(BaseModel):
+    """
+    Elemento pontual ao longo da linha — boia (empuxo líquido) ou clump
+    weight (peso adicional). F5.2.
+
+    Convenção: attachments são posicionados em **junções entre segmentos**
+    (não no meio de um segmento). Para colocar uma boia no meio de uma
+    linha homogênea, divida em 2 segmentos idênticos e ponha a boia entre
+    eles.
+
+    `submerged_force` é magnitude positiva (N). A direção física é
+    determinada pelo `kind`:
+      - `clump_weight`: tende a puxar a linha para BAIXO → V += force
+      - `buoy`:         tende a empurrar a linha para CIMA  → V −= force
+
+    `position_index` é zero-based: 0 = junção entre segmento 0 e 1.
+    Range válido: 0 .. len(segments) − 2.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: AttachmentKind
+    submerged_force: float = Field(
+        ..., gt=0,
+        description="Força submersa líquida em N (sempre positiva)",
+    )
+    position_index: int = Field(
+        ..., ge=0,
+        description=(
+            "Índice da junção (0 = entre segmento 0 e 1). Deve ser < N-1 "
+            "onde N é o número de segmentos."
+        ),
+    )
+    name: Optional[str] = Field(
+        default=None, max_length=80,
+        description="Identificador legível para relatórios (ex.: 'Boia A')",
+    )
+
+
 class BoundaryConditions(BaseModel):
     """
     Condições de contorno físicas do problema.
@@ -353,9 +395,11 @@ class SolverResult(BaseModel):
 
 __all__ = [
     "AlertLevel",
+    "AttachmentKind",
     "BoundaryConditions",
     "ConvergenceStatus",
     "CriteriaProfile",
+    "LineAttachment",
     "LineCategory",
     "LineSegment",
     "PROFILE_LIMITS",

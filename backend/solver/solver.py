@@ -29,6 +29,7 @@ from .types import (
     BoundaryConditions,
     ConvergenceStatus,
     CriteriaProfile,
+    LineAttachment,
     LineSegment,
     SeabedConfig,
     SolutionMode,
@@ -101,6 +102,7 @@ def solve(
     config: SolverConfig | None = None,
     criteria_profile: CriteriaProfile = CriteriaProfile.MVP_PRELIMINARY,
     user_limits: Optional[UtilizationLimits] = None,
+    attachments: Sequence[LineAttachment] = (),
 ) -> SolverResult:
     """
     Executa o solver completo para uma linha isolada.
@@ -148,10 +150,18 @@ def solve(
 
     try:
         n_segments = len(line_segments)
-        if n_segments > 1:
-            # Linha composta heterogênea (F5.1). Caminho de código separado
-            # para preservar o solver single-segmento original em todas as
-            # suas otimizações e testes.
+        if n_segments > 1 or attachments:
+            # Linha composta heterogênea (F5.1) ou com attachments (F5.2).
+            # Caminho de código separado preserva o solver single-segmento
+            # original em todas as suas otimizações e testes. Attachments
+            # com 1 segmento só fazem sentido se forem em "junções" — não
+            # existe junção para 1 segmento, então rejeitamos com mensagem.
+            if attachments and n_segments < 2:
+                raise ValueError(
+                    "Attachments (boias/clumps) precisam de pelo menos 2 "
+                    "segmentos para se posicionarem nas junções. Divida o "
+                    "segmento atual em dois com mesmas propriedades."
+                )
             result = solve_multi_segment(
                 segments=list(line_segments),
                 h=h_drop,
@@ -159,6 +169,7 @@ def solve(
                 input_value=boundary.input_value,
                 mu=seabed.mu,
                 config=config,
+                attachments=attachments,
             )
         elif h_drop <= 1e-6:
             # Caso degenerado: fairlead e âncora no mesmo nível (ambos no fundo).

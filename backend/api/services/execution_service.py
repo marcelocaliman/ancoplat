@@ -47,6 +47,7 @@ def run_solve_and_persist(
         seabed=case_input.seabed,
         criteria_profile=case_input.criteria_profile,
         user_limits=case_input.user_defined_limits,
+        attachments=case_input.attachments,
     )
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
 

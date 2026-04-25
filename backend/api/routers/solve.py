@@ -120,6 +120,7 @@ def preview_solve(case_input: CaseInput, response: Response) -> SolverResult:
         seabed=case_input.seabed,
         criteria_profile=case_input.criteria_profile,
         user_limits=case_input.user_defined_limits,
+        attachments=list(case_input.attachments),
     )
     http_status = http_status_for_solver_status(result.status)
     if http_status != 200:

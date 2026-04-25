@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.solver.types import (
     BoundaryConditions,
     CriteriaProfile,
+    LineAttachment,
     LineSegment,
     SeabedConfig,
     SolverResult,
@@ -89,6 +90,15 @@ class CaseInput(BaseModel):
     user_defined_limits: Optional[UtilizationLimits] = Field(
         default=None,
         description="Obrigatório quando criteria_profile = UserDefined.",
+    )
+    attachments: list[LineAttachment] = Field(
+        default_factory=list,
+        max_length=20,
+        description=(
+            "Boias ou clump weights pontuais nas junções entre segmentos "
+            "(F5.2). Cada attachment fica em `position_index` (0 = entre "
+            "seg 0 e seg 1). Lista vazia para linha sem elementos pontuais."
+        ),
     )
 
 

@@ -15,6 +15,10 @@
 #           w/EA/MBL próprios). Novo módulo multi_segment despachado por
 #           solve() quando len(segments) > 1. Caso primário fully suspended;
 #           touchdown em multi fica para sub-fase futura.
-SOLVER_VERSION = "1.2.0"
+#   1.3.0 — F5.2: attachments pontuais (boias e clump weights) nas junções
+#           entre segmentos. V acumulado tem salto na junção; (x,y) contínuo;
+#           ângulo da tangente faz quebra (kink). Validação por equilíbrio
+#           vertical estendido V_fl − V_anchor = Σw·L_eff + Σ F_attachments.
+SOLVER_VERSION = "1.3.0"
 
 __all__ = ["SOLVER_VERSION"]

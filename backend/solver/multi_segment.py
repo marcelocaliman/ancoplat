@@ -78,11 +78,23 @@ from scipy.optimize import brentq, fsolve
 
 from .types import (
     ConvergenceStatus,
+    LineAttachment,
     LineSegment,
     SolutionMode,
     SolverConfig,
     SolverResult,
 )
+
+
+def _signed_force(att: LineAttachment) -> float:
+    """
+    Converte LineAttachment em força líquida signada aplicada à V acumulada
+    na junção: clump_weight tende a aumentar V (peso → puxa para baixo);
+    buoy tende a diminuir V (empuxo → empurra para cima).
+    """
+    if att.kind == "buoy":
+        return -att.submerged_force
+    return att.submerged_force  # clump_weight ou default
 
 
 # ==============================================================================
@@ -95,6 +107,7 @@ def _integrate_segments(
     L_effs: Sequence[float],
     H: float,
     V_anchor: float,
+    attachments: Sequence[LineAttachment] = (),
     n_points_per_segment: int = 50,
 ) -> dict:
     """
@@ -103,6 +116,11 @@ def _integrate_segments(
     Para cada segmento i, parametriza a catenária local pela arc length s_i
     medida no vértice virtual local (s_i = V_local / w_i). H define o
     parâmetro a_i = H/w_i.
+
+    Attachments (boias/clumps, F5.2) aplicam saltos em V_local nas junções
+    entre segmentos: V_local += signed_force(att) imediatamente antes de
+    iniciar a integração do segmento seguinte. (x, y) ficam contínuos; a
+    inclinação muda no kink.
 
     Retorna dict com:
       X_total, h_total, V_fairlead, T_fairlead, T_anchor,
@@ -126,12 +144,41 @@ def _integrate_segments(
     boundaries: list[int] = []
     t_mean_per_seg: list[float] = []
 
+    # Pré-tabela: força signada por junção (índice da junção = posição
+    # entre segmento i e i+1, que é também o número da junção). Junções
+    # válidas: 0 .. N-2.
+    junction_force: dict[int, float] = {}
+    for att in attachments:
+        if att.position_index < 0 or att.position_index >= len(segments) - 1:
+            raise ValueError(
+                f"Attachment '{att.name or att.kind}' tem position_index="
+                f"{att.position_index} fora do range válido "
+                f"[0, {len(segments) - 2}] para {len(segments)} segmentos."
+            )
+        junction_force[att.position_index] = (
+            junction_force.get(att.position_index, 0.0) + _signed_force(att)
+        )
+
     x_acc = 0.0
     y_acc = 0.0
     V_local = V_anchor  # vai acumulando peso suspenso a cada segmento
 
     boundaries.append(0)
     for i, (seg, L_i) in enumerate(zip(segments, L_effs)):
+        # Aplica salto da junção anterior (i-1 → i): att com position_index
+        # = i-1 atua AO ENTRAR no segmento i. Para i=0, sem efeito.
+        if i > 0 and (i - 1) in junction_force:
+            V_local = V_local + junction_force[i - 1]
+            if V_local < 0:
+                # V negativo significa vértice virtual ABAIXO da junção:
+                # geometria fisicamente inviável (linha "voltaria para
+                # baixo" depois de subir, sem mais peso suspenso).
+                raise ValueError(
+                    f"Attachment na junção {i - 1} produz V_local={V_local:.1f}"
+                    " < 0 — empuxo excede peso suspenso acumulado. "
+                    "Reduza o empuxo da boia ou troque a posição."
+                )
+
         w_i = seg.w
         a_i = H / w_i
         s_start = V_local / w_i
@@ -218,43 +265,58 @@ def _solve_suspended_tension(
     h: float,
     T_fl: float,
     config: SolverConfig,
+    attachments: Sequence[LineAttachment] = (),
 ) -> dict:
     """
     Resolve modo Tension para multi-segmento totalmente suspenso.
 
     V_fl está determinado por T_fl: V_fl = sqrt(T_fl² − H²). Daí
-    V_anchor = V_fl − Σ w_i L_i. Brentq em H para h_total(H) = h.
+    V_anchor = V_fl − Σ w_i L_i − Σ F_attachments. Brentq em H para
+    h_total(H) = h.
 
     Levanta ValueError se a busca não consegue bracket — caso provável de
     touchdown (V_anchor negativo) ou geometria infactível.
     """
     sum_wL = sum(s.w * L for s, L in zip(segments, L_effs))
+    sum_F = sum(_signed_force(att) for att in attachments)
+    # Total de "peso suspenso" considerando attachments. Sum pode ser
+    # negativa se há mais empuxo (boias) do que peso submerso (caso
+    # patológico que vai cair em V_anchor inviável).
+    sum_total = sum_wL + sum_F
 
     def residual(H: float) -> float:
         V_fl_sq = T_fl * T_fl - H * H
         if V_fl_sq < 0:
             return float("inf")
         V_fl = math.sqrt(V_fl_sq)
-        V_anchor = V_fl - sum_wL
+        V_anchor = V_fl - sum_total
         if V_anchor < 0:
             # Vértice virtual estaria além do anchor: requer touchdown
             return float("inf")
         try:
-            res = _integrate_segments(segments, L_effs, H, V_anchor)
+            res = _integrate_segments(
+                segments, L_effs, H, V_anchor, attachments=attachments,
+            )
         except ValueError:
             return float("inf")
         return res["h_total"] - h
 
-    # Bracket: H ∈ (0, H_max] onde H_max = sqrt(T_fl² − sum_wL²) é o limite
-    # físico em que V_anchor → 0 (touchdown iminente). Acima disso, V_anchor
-    # ficaria negativo → caso requer touchdown (não suportado em F5.1
-    # neste cenário fully-suspended).
-    H_max_sq = T_fl * T_fl - sum_wL * sum_wL
+    # Bracket: H ∈ (0, H_max] onde H_max = sqrt(T_fl² − sum_total²) é o
+    # limite físico em que V_anchor → 0 (touchdown iminente). Acima disso,
+    # V_anchor ficaria negativo → caso requer touchdown.
+    if sum_total <= 0:
+        raise ValueError(
+            f"Somatório de peso suspenso (Σw·L + Σ F_attachments) = "
+            f"{sum_total:.1f} N <= 0: empuxo das boias excede o peso da "
+            "linha. Geometria invertida não suportada."
+        )
+    H_max_sq = T_fl * T_fl - sum_total * sum_total
     if H_max_sq <= 0:
         raise ValueError(
-            f"T_fl={T_fl:.1f} N <= soma de pesos suspensos {sum_wL:.1f} N: "
-            "linha não consegue sustentar o peso pendurado de todos os "
-            "segmentos. Reduza algum w·L ou aumente T_fl."
+            f"T_fl={T_fl:.1f} N <= soma de pesos suspensos {sum_total:.1f} N "
+            "(incluindo attachments): linha não consegue sustentar o peso "
+            "pendurado. Reduza algum w·L, aumente T_fl, ou troque clump "
+            "weights por boias."
         )
     H_max = math.sqrt(H_max_sq)
 
@@ -279,8 +341,10 @@ def _solve_suspended_tension(
         xtol=1e-3, rtol=1e-6, maxiter=config.max_brent_iter,
     )
     V_fl = math.sqrt(T_fl * T_fl - H_sol * H_sol)
-    V_anchor = V_fl - sum_wL
-    return _integrate_segments(segments, L_effs, H_sol, V_anchor)
+    V_anchor = V_fl - sum_total
+    return _integrate_segments(
+        segments, L_effs, H_sol, V_anchor, attachments=attachments,
+    )
 
 
 # ==============================================================================
@@ -294,6 +358,7 @@ def _solve_suspended_range(
     h: float,
     X: float,
     config: SolverConfig,
+    attachments: Sequence[LineAttachment] = (),
 ) -> dict:
     """
     Modo Range com multi-segmento: fsolve sobre (H, V_anchor).
@@ -317,7 +382,9 @@ def _solve_suspended_range(
         if H <= 0 or V_anchor < 0:
             return np.array([1e9, 1e9])
         try:
-            res = _integrate_segments(segments, L_effs, H, V_anchor)
+            res = _integrate_segments(
+                segments, L_effs, H, V_anchor, attachments=attachments,
+            )
         except ValueError:
             return np.array([1e9, 1e9])
         return np.array(
@@ -334,7 +401,9 @@ def _solve_suspended_range(
             "Verifique se a geometria é factível (X compatível com sum L)."
         )
     H_sol, V_anchor_sol = sol
-    return _integrate_segments(segments, L_effs, H_sol, V_anchor_sol)
+    return _integrate_segments(
+        segments, L_effs, H_sol, V_anchor_sol, attachments=attachments,
+    )
 
 
 # ==============================================================================
@@ -349,15 +418,16 @@ def _solve_rigid_multi(
     mode: SolutionMode,
     input_value: float,
     config: SolverConfig,
+    attachments: Sequence[LineAttachment] = (),
 ) -> dict:
     """Roteia para o modo apropriado e retorna o dicionário de resultados."""
     if mode == SolutionMode.TENSION:
         return _solve_suspended_tension(
-            segments, L_effs, h, float(input_value), config,
+            segments, L_effs, h, float(input_value), config, attachments,
         )
     elif mode == SolutionMode.RANGE:
         return _solve_suspended_range(
-            segments, L_effs, h, float(input_value), config,
+            segments, L_effs, h, float(input_value), config, attachments,
         )
     else:
         raise ValueError(f"modo inválido: {mode}")
@@ -370,6 +440,7 @@ def solve_multi_segment(
     input_value: float,
     mu: float = 0.0,
     config: SolverConfig | None = None,
+    attachments: Sequence[LineAttachment] = (),
 ) -> SolverResult:
     """
     Solver multi-segmento (F5.1). Ver docstring do módulo.
@@ -401,7 +472,9 @@ def solve_multi_segment(
 
     for it in range(config.max_elastic_iter):
         iters_used = it + 1
-        rigid = _solve_rigid_multi(segments, L_effs, h, mode, input_value, config)
+        rigid = _solve_rigid_multi(
+            segments, L_effs, h, mode, input_value, config, attachments,
+        )
         last_rigid = rigid
         new_L_effs = [
             L_unstretched[i] * (1.0 + rigid["T_mean_per_segment"][i] / segments[i].EA)
