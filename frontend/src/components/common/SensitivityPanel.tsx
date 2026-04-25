@@ -27,21 +27,21 @@ export interface SensitivityPanelProps {
 interface Knobs {
   /** Multiplicador do T_fl baseline (0.5 a 1.5). */
   tFlMul: number
-  /** Multiplicador do L baseline (0.5 a 1.5). */
-  lengthMul: number
+  /**
+   * Comprimento de cada segmento em metros (absoluto, índice
+   * espelhando `baseInput.segments`). Cada segmento tem seu próprio
+   * slider — engenheiro varia componentes individualmente
+   * (ex.: chain do trecho âncora ↔ wire do trecho médio).
+   */
+  segmentLengths: number[]
   /** Atrito absoluto, 0 a 1.5 (μ não escala bem com multiplicador). */
   mu: number
   /**
    * Posição em metros (s_from_anchor) do PRIMEIRO attachment.
    * Quando o caso não tem attachments, este knob é ignorado pelo
-   * preview e o slider correspondente é ocultado. Default: posição
-   * baseline do attachment (preserva o input original).
+   * preview e o slider correspondente é ocultado.
    */
   attachmentS: number
-}
-
-const DEFAULT_KNOBS: Knobs = {
-  tFlMul: 1, lengthMul: 1, mu: NaN, attachmentS: NaN,
 }
 
 /**
@@ -69,10 +69,11 @@ export function SensitivityPanel({
   // todos proporcionalmente (mantém razão entre segmentos quando
   // multi-segmento — antes do fix, só o primeiro segmento entrava no
   // preview e os demais sumiam do gráfico).
-  const baseLength = baseInput.segments.reduce(
-    (acc, s) => acc + s.length,
-    0,
+  const baseSegmentLengths = useMemo(
+    () => baseInput.segments.map((s) => s.length),
+    [baseInput.segments],
   )
+  const baseLength = baseSegmentLengths.reduce((acc, L) => acc + L, 0)
   const baseMu = baseInput.seabed?.mu ?? 0
 
   // Atalho para o primeiro attachment do caso (se existir). Posição
@@ -97,7 +98,8 @@ export function SensitivityPanel({
   }, [firstAttachment, baseInput.segments])
 
   const [knobs, setKnobs] = useState<Knobs>({
-    ...DEFAULT_KNOBS,
+    tFlMul: 1,
+    segmentLengths: [...baseSegmentLengths],
     mu: baseMu,
     attachmentS: baseAttachmentS,
   })
@@ -110,6 +112,12 @@ export function SensitivityPanel({
   // mostrar o resultado salvo).
   const hasChange = useMemo(
     () => {
+      const segChanged = baseSegmentLengths.some(
+        (L, i) =>
+          Math.abs((debouncedKnobs.segmentLengths[i] ?? L) - L) /
+            Math.max(L, 1) >
+          1e-3,
+      )
       const attChanged =
         firstAttachment != null &&
         !Number.isNaN(baseAttachmentS) &&
@@ -117,61 +125,41 @@ export function SensitivityPanel({
         Math.abs(debouncedKnobs.attachmentS - baseAttachmentS) > 1e-2
       return (
         Math.abs(debouncedKnobs.tFlMul - 1) > 1e-3 ||
-        Math.abs(debouncedKnobs.lengthMul - 1) > 1e-3 ||
+        segChanged ||
         Math.abs(debouncedKnobs.mu - baseMu) > 1e-3 ||
         attChanged
       )
     },
-    [debouncedKnobs, baseMu, baseAttachmentS, firstAttachment],
+    [debouncedKnobs, baseMu, baseAttachmentS, firstAttachment, baseSegmentLengths],
   )
 
   const previewInput = useMemo<CaseInput>(() => {
-    const mul = debouncedKnobs.lengthMul
-    const newSegments = baseInput.segments.map((seg) => ({
+    // Aplica os comprimentos individuais de cada segmento. Cada um
+    // tem seu próprio slider — engenheiro pode esticar só o trecho
+    // de wire mantendo as chains; ou variar só o pendant superior.
+    const newSegments = baseInput.segments.map((seg, i) => ({
       ...seg,
-      length: seg.length * mul,
+      length: debouncedKnobs.segmentLengths[i] ?? seg.length,
     }))
     const newTotalLen = newSegments.reduce((acc, s) => acc + s.length, 0)
 
     // Atualiza o primeiro attachment com a posição do slider quando
-    // aplicável. Os outros attachments seguem do input original,
-    // respeitando a escala de length proporcionalmente.
+    // o usuário moveu o slider de posição da boia. Caso contrário,
+    // mantém attachments no input original (eles seguem em arc length
+    // ABSOLUTO; se um segmento mudou de tamanho e o attachment cair
+    // num segmento diferente agora, o resolver lida com isso via
+    // split automático).
     let newAttachments = baseInput.attachments ?? []
     if (
       firstAttachment != null &&
       !Number.isNaN(debouncedKnobs.attachmentS)
     ) {
-      // Clamp em (1% .. 99% × novo comprimento total) — evita o
-      // resolver rejeitar a posição por estar sobre âncora/fairlead.
       const minS = newTotalLen * 0.01
       const maxS = newTotalLen * 0.99
       const newS = Math.min(maxS, Math.max(minS, debouncedKnobs.attachmentS))
-      newAttachments = newAttachments.map((att, i) => {
-        if (i === 0) {
-          return {
-            ...att,
-            position_s_from_anchor: newS,
-            position_index: null,
-          }
-        }
-        // Outros attachments: se estavam em modo distância e os
-        // segmentos foram escalados, escala proporcionalmente; em
-        // modo junção, mantém o índice (a junção segue o segmento).
-        if (att.position_s_from_anchor != null) {
-          return {
-            ...att,
-            position_s_from_anchor: att.position_s_from_anchor * mul,
-          }
-        }
-        return att
-      })
-    } else if (Math.abs(mul - 1) > 1e-3) {
-      // Sem o primeiro attachment ativo no slider, ainda escalamos
-      // os attachments em modo distância para acompanhar a mudança
-      // de comprimento da linha.
-      newAttachments = newAttachments.map((att) =>
-        att.position_s_from_anchor != null
-          ? { ...att, position_s_from_anchor: att.position_s_from_anchor * mul }
+      newAttachments = newAttachments.map((att, i) =>
+        i === 0
+          ? { ...att, position_s_from_anchor: newS, position_index: null }
           : att,
       )
     }
@@ -236,7 +224,9 @@ export function SensitivityPanel({
 
   function reset() {
     setKnobs({
-      tFlMul: 1, lengthMul: 1, mu: baseMu,
+      tFlMul: 1,
+      segmentLengths: [...baseSegmentLengths],
+      mu: baseMu,
       attachmentS: baseAttachmentS,
     })
     onPreview(null)
@@ -248,7 +238,7 @@ export function SensitivityPanel({
 
   // Faixas dos sliders: ±50% para multiplicadores; μ vai de 0 a 1.5.
   const tFlActual = baseTfl * knobs.tFlMul
-  const lengthActual = baseLength * knobs.lengthMul
+  const totalLengthActual = knobs.segmentLengths.reduce((a, b) => a + b, 0)
 
   return (
     <Card className="border-primary/20 bg-primary/[0.02]">
@@ -311,57 +301,103 @@ export function SensitivityPanel({
           </Button>
         </div>
       </CardHeader>
-      <CardContent
-        className={cn(
-          'grid grid-cols-1 gap-5 pb-4',
-          firstAttachment && !Number.isNaN(baseAttachmentS)
-            ? 'md:grid-cols-2 xl:grid-cols-4'
-            : 'md:grid-cols-3',
-        )}
-      >
-        {baseInput.boundary.mode === 'Tension' && (
-          <KnobSlider
-            label="Tração no fairlead"
-            valueLabel={fmtForce(tFlActual, system)}
-            baselineLabel={`baseline ${fmtForce(baseTfl, system)}`}
-            mul={knobs.tFlMul}
-            onMulChange={(m) => setKnobs((k) => ({ ...k, tFlMul: m }))}
+      <CardContent className="space-y-5 pb-4">
+        {/* Linha 1 — knobs globais (T_fl, μ, posição da boia) */}
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-5',
+            firstAttachment && !Number.isNaN(baseAttachmentS)
+              ? 'md:grid-cols-3'
+              : 'md:grid-cols-2',
+          )}
+        >
+          {baseInput.boundary.mode === 'Tension' && (
+            <KnobSlider
+              label="Tração no fairlead"
+              valueLabel={fmtForce(tFlActual, system)}
+              baselineLabel={`baseline ${fmtForce(baseTfl, system)}`}
+              mul={knobs.tFlMul}
+              onMulChange={(m) => setKnobs((k) => ({ ...k, tFlMul: m }))}
+            />
+          )}
+          <MuSlider
+            mu={knobs.mu}
+            baselineLabel={`baseline ${fmtNumber(baseMu, 2)}`}
+            onChange={(mu) => setKnobs((k) => ({ ...k, mu }))}
           />
-        )}
-        <KnobSlider
-          label={
-            baseInput.segments.length > 1
-              ? 'Comprimento total (todos os segmentos)'
-              : 'Comprimento da linha'
-          }
-          valueLabel={fmtMeters(lengthActual, 1)}
-          baselineLabel={`baseline ${fmtMeters(baseLength, 1)}`}
-          mul={knobs.lengthMul}
-          onMulChange={(m) => setKnobs((k) => ({ ...k, lengthMul: m }))}
-        />
-        <MuSlider
-          mu={knobs.mu}
-          baselineLabel={`baseline ${fmtNumber(baseMu, 2)}`}
-          onChange={(mu) => setKnobs((k) => ({ ...k, mu }))}
-        />
-        {/* Slider de posição da primeira boia/clump (F5.4.6a). Só
-            aparece quando o caso tem ao menos um attachment. Adjusta
-            o `position_s_from_anchor` em metros, na faixa 1%–99% do
-            comprimento total atual da linha (clamp evita ValueError
-            no resolver). */}
-        {firstAttachment && !Number.isNaN(baseAttachmentS) && (
-          <AttachmentPosSlider
-            kind={firstAttachment.kind}
-            name={firstAttachment.name ?? null}
-            valueS={knobs.attachmentS}
-            baselineS={baseAttachmentS}
-            totalLength={baseLength * knobs.lengthMul}
-            countOthers={(baseInput.attachments ?? []).length - 1}
-            onChangeS={(s) =>
-              setKnobs((k) => ({ ...k, attachmentS: s }))
-            }
-          />
-        )}
+          {firstAttachment && !Number.isNaN(baseAttachmentS) && (
+            <AttachmentPosSlider
+              kind={firstAttachment.kind}
+              name={firstAttachment.name ?? null}
+              valueS={knobs.attachmentS}
+              baselineS={baseAttachmentS}
+              totalLength={totalLengthActual}
+              countOthers={(baseInput.attachments ?? []).length - 1}
+              onChangeS={(s) =>
+                setKnobs((k) => ({ ...k, attachmentS: s }))
+              }
+            />
+          )}
+        </div>
+
+        {/* Linha 2 — comprimentos por segmento. Engenheiro varia
+            componentes individualmente (ex.: chain do trecho âncora,
+            wire do trecho médio, pendant superior). Total atual
+            mostrado no header. */}
+        <div className="space-y-2 border-t border-border/40 pt-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-xs font-semibold text-foreground">
+              Comprimento por segmento
+              {baseInput.segments.length > 1 && (
+                <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+                  ({baseInput.segments.length} segmentos)
+                </span>
+              )}
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              total: <span className="text-foreground">{fmtMeters(totalLengthActual, 1)}</span>
+              {' '}· baseline {fmtMeters(baseLength, 1)}
+            </span>
+          </div>
+          <div
+            className={cn(
+              'grid grid-cols-1 gap-5',
+              baseInput.segments.length === 2 && 'md:grid-cols-2',
+              baseInput.segments.length === 3 && 'md:grid-cols-3',
+              baseInput.segments.length >= 4 && 'md:grid-cols-2 xl:grid-cols-4',
+            )}
+          >
+            {baseInput.segments.map((seg, idx) => {
+              const baseL = baseSegmentLengths[idx] ?? seg.length
+              const cur = knobs.segmentLengths[idx] ?? baseL
+              const segLabel =
+                baseInput.segments.length === 1
+                  ? 'Comprimento da linha'
+                  : `Seg ${idx + 1}${
+                      seg.line_type
+                        ? ` · ${seg.line_type}`
+                        : seg.category
+                          ? ` · ${seg.category}`
+                          : ''
+                    }`
+              return (
+                <SegmentLengthSlider
+                  key={idx}
+                  label={segLabel}
+                  valueM={cur}
+                  baselineM={baseL}
+                  onChangeM={(m) =>
+                    setKnobs((k) => {
+                      const next = [...k.segmentLengths]
+                      next[idx] = m
+                      return { ...k, segmentLengths: next }
+                    })
+                  }
+                />
+              )
+            })}
+          </div>
+        </div>
       </CardContent>
       {errored && previewQuery.error && (
         <CardContent className="pt-0">
@@ -552,6 +588,76 @@ function AttachmentPosSlider({
           {isChanged
             ? `${valueS > baselineS ? '+' : ''}${(valueS - baselineS).toFixed(1)} m`
             : '—'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Slider de comprimento de um único segmento. Range: 0.5×–1.5×
+ * baseline. Mostra valor absoluto em metros + delta % em relação
+ * ao baseline. Visualmente similar ao KnobSlider, mas operando em
+ * metros absolutos em vez de multiplicador.
+ */
+function SegmentLengthSlider({
+  label,
+  valueM,
+  baselineM,
+  onChangeM,
+}: {
+  label: string
+  valueM: number
+  baselineM: number
+  onChangeM: (m: number) => void
+}) {
+  // Range ±50% do baseline em metros absolutos.
+  const minM = baselineM * 0.5
+  const maxM = baselineM * 1.5
+  const range = Math.max(maxM - minM, 0.001)
+  const sliderValue = ((valueM - minM) / range) * 100
+  const delta = valueM - baselineM
+  const pctDelta = baselineM > 0 ? (delta / baselineM) * 100 : 0
+  const isChanged = Math.abs(pctDelta) > 0.05
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate text-xs font-medium text-foreground">
+          {label}
+        </span>
+        <span className="font-mono text-[10px] text-muted-foreground">
+          baseline {baselineM.toFixed(1)} m
+        </span>
+      </div>
+      <Slider
+        min={0}
+        max={100}
+        step={1}
+        value={[Math.max(0, Math.min(100, sliderValue))]}
+        onValueChange={(v) => {
+          const sv = v[0] ?? 50
+          onChangeM(minM + (sv / 100) * range)
+        }}
+      />
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-mono text-sm font-semibold tabular-nums">
+          {valueM.toFixed(1)}{' '}
+          <span className="text-[10px] font-normal text-muted-foreground">
+            m
+          </span>
+        </span>
+        <span
+          className={`font-mono text-[10px] tabular-nums ${
+            !isChanged
+              ? 'text-muted-foreground'
+              : delta > 0
+                ? 'text-warning'
+                : 'text-success'
+          }`}
+        >
+          {!isChanged
+            ? '—'
+            : `${delta > 0 ? '+' : ''}${pctDelta.toFixed(0)}%`}
         </span>
       </div>
     </div>
