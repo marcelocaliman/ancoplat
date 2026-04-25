@@ -169,9 +169,49 @@ class AppConfigRecord(Base):
     )
 
 
+class MooringSystemRecord(Base):
+    """
+    Sistema de ancoragem multi-linha (F5.4).
+
+    Armazena a configuração completa em `config_json` (mesma estratégia
+    de `cases.input_json`) e desnormaliza só `line_count` + nome da
+    plataforma para queries de listagem. Solver e execuções vêm em F5.4.2.
+    """
+
+    __tablename__ = "mooring_systems"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    platform_radius: Mapped[float] = mapped_column(Float, nullable=False)
+    line_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # JSON serializado de MooringSystemInput.
+    config_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint("length(name) >= 1", name="ck_msys_name_nonempty"),
+        CheckConstraint("platform_radius > 0", name="ck_msys_platform_radius_positive"),
+        CheckConstraint("line_count >= 1", name="ck_msys_line_count_positive"),
+        Index("idx_msys_name", "name"),
+        Index("idx_msys_updated", "updated_at"),
+    )
+
+
 __all__ = [
     "AppConfigRecord",
     "CaseRecord",
     "ExecutionRecord",
     "LineTypeRecord",
+    "MooringSystemRecord",
 ]

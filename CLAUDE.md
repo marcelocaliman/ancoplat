@@ -19,10 +19,13 @@ Este é um projeto de aplicação web pessoal para análise estática de linhas 
 - ✅ F0 — Setup do ambiente (concluído)
 - ✅ F1a — Importação do catálogo QMoor para SQLite (concluída, 522 entradas)
 - ✅ F1b — Implementação do solver (concluída, 45 testes, 96% cobertura, BC-01..09 validados contra MoorPy)
-- ⏳ F2 — API FastAPI (próximo passo; ver `docs/plano_F2_api.md`)
-- ⬜ F3 — Frontend React
-- ⬜ F4 — Calibração com MoorPy
-- ⬜ F5 — Polimento e exportações
+- ✅ F2 — API FastAPI (concluída; ver `docs/relatorio_F2.md`)
+- ✅ F3 — Frontend React (concluída; ver `docs/relatorio_F3.md`)
+- ✅ F4 — Calibração com MoorPy (concluída; ver `docs/relatorio_F4.md`)
+- ✅ F5.1 — Multi-segmento (concluída)
+- ✅ F5.2 — Attachments (boias e clumps)
+- ✅ F5.3 — Seabed inclinado + batimetria (concluída)
+- ⏳ F5.4 — Sistema multi-linha (mooring system); F5.4.1 schema+persistência ✅, próximo é F5.4.2 solver/agregação. Ver `docs/relatorio_F5_4.md`.
 
 ### Documentação de referência (ordem de leitura recomendada)
 
