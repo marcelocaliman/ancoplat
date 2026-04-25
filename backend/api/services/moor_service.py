@@ -14,6 +14,7 @@ imperial/metric conforme o `unitSystem` declarado.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Optional
 
 from pint import UnitRegistry
@@ -55,6 +56,28 @@ class MoorFormatError(Exception):
     """Falha ao parsear ou validar um payload .moor."""
 
 
+# Aliases comuns em arquivos .moor que o Pint default não reconhece.
+# Ordem importa: aliases mais específicos primeiro.
+_UNIT_ALIASES: list[tuple[re.Pattern[str], str]] = [
+    # `te` = tonelada-força métrica (convenção QMoor/offshore BR), diferente
+    # de `t` ou `tonne` (que são MASSA no Pint). Substituímos antes do
+    # parsing para que a dimensão saia como [força].
+    (re.compile(r"\bte\b"), "metric_ton_force"),
+    (re.compile(r"\btonnef\b"), "metric_ton_force"),
+    # `tf` às vezes aparece como tonne-force; protegemos a substituição
+    # contra conflito com `T_fl`/`Tf` minúsculo tratando-o só quando isolado.
+    (re.compile(r"(?<![A-Za-z_])tf(?![A-Za-z_])"), "metric_ton_force"),
+]
+
+
+def _normalize_unit_string(s: str) -> str:
+    """Substitui aliases QMoor-specific por unidades reconhecidas pelo Pint."""
+    out = s
+    for pattern, replacement in _UNIT_ALIASES:
+        out = pattern.sub(replacement, out)
+    return out
+
+
 def _parse_quantity(
     value: Any, dimension: str, unit_system: str
 ) -> float:
@@ -74,8 +97,9 @@ def _parse_quantity(
     }[dimension]
 
     if isinstance(value, str):
+        normalized = _normalize_unit_string(value)
         try:
-            q = _ureg(value)
+            q = _ureg(normalized)
         except Exception as exc:  # noqa: BLE001
             raise MoorFormatError(
                 f"Valor '{value}' não é reconhecido como quantidade (dimension={dimension})"
@@ -133,11 +157,28 @@ def parse_moor_payload(payload: dict[str, Any]) -> CaseInput:
         if unit_system not in ("imperial", "metric"):
             raise MoorFormatError(f"unitSystem inválido: {unit_system}")
 
-        name = payload.get("name") or payload.get("mooringLine", {}).get("name")
+        # O QMoor 0.8.x emite `mooringLines` (plural, array). Nosso schema
+        # interno antigo era `mooringLine` (singular). Aceitamos ambos.
+        ml: dict[str, Any] | None = payload.get("mooringLine")
+        if ml is None:
+            lines = payload.get("mooringLines") or []
+            if not isinstance(lines, list) or len(lines) == 0:
+                raise MoorFormatError(
+                    "Arquivo .moor não contém 'mooringLine' nem 'mooringLines'."
+                )
+            if len(lines) > 1:
+                raise MoorFormatError(
+                    f"v1 aceita 1 mooring line por arquivo; recebeu {len(lines)}. "
+                    "Importe cada linha separadamente ou aguarde multi-linha em v2."
+                )
+            ml = lines[0]
+        if not isinstance(ml, dict):
+            raise MoorFormatError("mooringLine deve ser um objeto.")
+
+        name = payload.get("name") or ml.get("name")
         if not name:
             raise MoorFormatError("campo 'name' obrigatório")
 
-        ml = payload.get("mooringLine") or {}
         segments_raw = ml.get("segments") or []
         if len(segments_raw) != 1:
             raise MoorFormatError(
@@ -146,6 +187,20 @@ def parse_moor_payload(payload: dict[str, Any]) -> CaseInput:
         seg_raw = segments_raw[0]
         props = seg_raw.get("lineProps") or {}
 
+        # Metadados opcionais — transportam informação do catálogo original para
+        # o CaseOutput e memoriais, mesmo que o solver não precise deles.
+        diameter_m: Optional[float] = None
+        if "diameter" in props and props["diameter"] is not None:
+            diameter_m = _parse_quantity(props["diameter"], "diameter", unit_system)
+        dry_weight_si: Optional[float] = None
+        if "dryWeight" in props and props["dryWeight"] is not None:
+            dry_weight_si = _parse_quantity(
+                props["dryWeight"], "weight_per_length", unit_system,
+            )
+        modulus_pa: Optional[float] = None
+        if "modulus" in props and props["modulus"] is not None:
+            modulus_pa = _parse_quantity(props["modulus"], "modulus", unit_system)
+
         segment = LineSegment(
             length=_parse_quantity(seg_raw["length"], "length", unit_system),
             w=_parse_quantity(props["wetWeight"], "weight_per_length", unit_system),
@@ -153,6 +208,9 @@ def parse_moor_payload(payload: dict[str, Any]) -> CaseInput:
             MBL=_parse_quantity(props["breakStrength"], "force", unit_system),
             category=_parse_category(seg_raw.get("category") or props.get("category")),
             line_type=props.get("lineType"),
+            diameter=diameter_m,
+            dry_weight=dry_weight_si,
+            modulus=modulus_pa,
         )
 
         boundary_raw = ml.get("boundary") or {}
@@ -165,7 +223,9 @@ def parse_moor_payload(payload: dict[str, Any]) -> CaseInput:
             raise MoorFormatError("endpointDepth (ou startpointDepth) deve ser > 0")
 
         solution = ml.get("solution") or {}
-        mode = solution.get("inputParam") or "Tension"
+        # QMoor 0.8.x grava `inputParam` em minúsculas ("tension"); normalizamos.
+        mode_raw = (solution.get("inputParam") or "Tension").strip()
+        mode = mode_raw.capitalize()
         if mode == "Tension":
             input_value = _parse_quantity(solution["fairleadTension"], "force", unit_system)
         elif mode == "Range":
@@ -175,7 +235,7 @@ def parse_moor_payload(payload: dict[str, Any]) -> CaseInput:
                 unit_system,
             )
         else:
-            raise MoorFormatError(f"inputParam inválido: {mode}")
+            raise MoorFormatError(f"inputParam inválido: {mode_raw}")
 
         boundary = BoundaryConditions(
             h=h,
