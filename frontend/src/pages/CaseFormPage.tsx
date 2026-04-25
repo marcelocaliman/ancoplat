@@ -559,6 +559,7 @@ export function CaseFormPage() {
                   attachments={attachmentsArray}
                   segmentCount={segmentsArray.fields.length}
                   setValue={setValue}
+                  solverResult={previewQuery.data}
                   totalLength={(values.segments ?? []).reduce(
                     (acc, s) => acc + (s.length ?? 0),
                     0,
@@ -578,6 +579,7 @@ export function CaseFormPage() {
                   attachments={attachmentsArray}
                   segmentCount={segmentsArray.fields.length}
                   setValue={setValue}
+                  solverResult={previewQuery.data}
                   totalLength={(values.segments ?? []).reduce(
                     (acc, s) => acc + (s.length ?? 0),
                     0,

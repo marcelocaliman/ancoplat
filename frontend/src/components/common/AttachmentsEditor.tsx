@@ -53,6 +53,13 @@ export interface AttachmentsEditorProps<
    * exibir o range válido. Quando ausente, usa um placeholder vazio.
    */
   totalLength?: number
+  /**
+   * F5.7.7 — resultado do solver. Quando presente, exibe abaixo do
+   * campo "Distância do fairlead (arc length)" a distância HORIZONTAL
+   * computada (≠ arc length por causa da curvatura do cabo). Sem isso,
+   * engenheiros confundem os dois conceitos.
+   */
+  solverResult?: import('@/api/types').SolverResult | null
 }
 
 /**
@@ -77,6 +84,7 @@ export function AttachmentsEditor<T extends FieldValues = CaseFormValues>({
   kind,
   basePath = 'attachments',
   totalLength,
+  solverResult,
 }: AttachmentsEditorProps<T>) {
   const maxJunctions = Math.max(0, segmentCount - 1)
   // F5.4.6a/F5.6: precisa de pelo menos 1 segmento. Modo distância
@@ -174,6 +182,7 @@ export function AttachmentsEditor<T extends FieldValues = CaseFormValues>({
                 showKindSelect={!kind}
                 basePath={basePath}
                 totalLength={totalLength}
+                solverResult={solverResult}
                 onRemove={() => attachments.remove(realIdx)}
               />
             </div>
@@ -205,6 +214,7 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
   showKindSelect,
   basePath,
   totalLength,
+  solverResult,
   onRemove,
 }: {
   realIndex: number
@@ -215,6 +225,7 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
   showKindSelect: boolean
   basePath: string
   totalLength?: number
+  solverResult?: import('@/api/types').SolverResult | null
   onRemove: () => void
 }) {
   // Painel de detalhes (tipo de boia, dimensões, pendant material) é
@@ -363,7 +374,9 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center justify-between gap-1">
             <Label className="text-[10px] font-medium text-muted-foreground">
-              {mode === 'distance' ? 'Distância do fairlead (m)' : 'Junção'}
+              {mode === 'distance'
+                ? 'Distância do fairlead (m de cabo)'
+                : 'Junção'}
             </Label>
             {hasJunctions && (
               <button
@@ -394,28 +407,77 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
                   totalLength != null && totalLength > 0
                     ? Math.max(0, totalLength - sAnc)
                     : sAnc
-                return (
-                  <Input
-                    type="number"
-                    min={0.01}
-                    max={totalLength ? totalLength - 0.01 : undefined}
-                    step={1}
-                    value={sFl}
-                    onChange={(e) => {
-                      const newSfl = parseFloat(e.target.value || '0')
-                      const newSanc =
-                        totalLength != null && totalLength > 0
-                          ? Math.max(0.01, totalLength - newSfl)
-                          : newSfl
-                      field.onChange(newSanc)
-                    }}
-                    className="h-8 font-mono"
-                    title={
-                      totalLength
-                        ? `Range válido: 0 < s_fl < ${totalLength.toFixed(1)} m`
-                        : 'Distância em metros desde o fairlead ao longo da linha'
+                // F5.7.7 — calcula a distância HORIZONTAL projetada
+                // (≠ arc length por causa da curvatura do cabo) usando
+                // os coords do solver. Aparece como hint pra evitar a
+                // confusão arc-length vs horizontal.
+                let horizontalHint: string | null = null
+                if (
+                  solverResult &&
+                  solverResult.coords_x &&
+                  solverResult.coords_x.length > 1 &&
+                  totalLength != null &&
+                  totalLength > 0 &&
+                  sAnc > 0
+                ) {
+                  // Encontra o ponto da curva cuja arc length cumulativa ≈ sAnc
+                  // (frame anchor-first; precisamos varrer e somar dx² + dy²
+                  // ou usar segment_boundaries se disponível). Usamos
+                  // interpolação proporcional simples como aproximação.
+                  const xs = solverResult.coords_x
+                  const ys = solverResult.coords_y ?? []
+                  // arc length cumulativa do anchor-first
+                  let cumArc = 0
+                  let arcAtTarget: number | null = null
+                  for (let i = 1; i < xs.length; i += 1) {
+                    const dx = xs[i]! - xs[i - 1]!
+                    const dy = ys[i]! - ys[i - 1]!
+                    const seg = Math.sqrt(dx * dx + dy * dy)
+                    if (cumArc + seg >= sAnc - 1e-6) {
+                      const frac = (sAnc - cumArc) / Math.max(seg, 1e-9)
+                      const xAtTarget =
+                        xs[i - 1]! + frac * dx
+                      arcAtTarget = xAtTarget
+                      break
                     }
-                  />
+                    cumArc += seg
+                  }
+                  if (arcAtTarget != null) {
+                    const Xtotal = solverResult.total_horz_distance ?? 0
+                    const horizFromFL = Xtotal - arcAtTarget
+                    horizontalHint = `≈ ${horizFromFL.toFixed(0)} m horizontal`
+                  }
+                }
+                return (
+                  <>
+                    <Input
+                      type="number"
+                      min={0.01}
+                      max={totalLength ? totalLength - 0.01 : undefined}
+                      step={1}
+                      value={sFl}
+                      onChange={(e) => {
+                        const newSfl = parseFloat(e.target.value || '0')
+                        const newSanc =
+                          totalLength != null && totalLength > 0
+                            ? Math.max(0.01, totalLength - newSfl)
+                            : newSfl
+                        field.onChange(newSanc)
+                      }}
+                      className="h-8 font-mono"
+                      title={
+                        totalLength
+                          ? `Comprimento de cabo (arc length não-esticada) entre o fairlead e este attachment. Range válido: 0 < s_fl < ${totalLength.toFixed(1)} m. NÃO é a distância horizontal — depende da curvatura.`
+                          : 'Comprimento de cabo (arc length) desde o fairlead. NÃO é a distância horizontal.'
+                      }
+                    />
+                    {horizontalHint && (
+                      <p className="mt-0.5 text-[9px] leading-tight text-muted-foreground">
+                        {horizontalHint}{' '}
+                        <span className="opacity-60">(catenária)</span>
+                      </p>
+                    )}
+                  </>
                 )
               }}
             />
