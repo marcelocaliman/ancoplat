@@ -282,10 +282,18 @@ def solve(
     # Anexa os parâmetros geométricos globais + versão do solver para o plot
     # reconstruir o sistema de coordenadas surface-relative (superfície em
     # y=0, seabed em y=-water_depth, fairlead em y=-startpoint_depth).
+    #
+    # Batimetria nos dois pontos: anchor está no seabed sob a sua coluna
+    # d'água (depth_at_anchor = boundary.h por convenção). Sob o fairlead,
+    # a profundidade do seabed é deslocada por tan(slope)·X_total —
+    # quando slope > 0 (sobe ao fairlead), depth_at_fairlead < depth_at_anchor.
+    depth_at_fairlead = boundary.h - math.tan(seabed.slope_rad) * result.total_horz_distance
     result = result.model_copy(update={
         "water_depth": boundary.h,
         "startpoint_depth": boundary.startpoint_depth,
         "solver_version": SOLVER_VERSION,
+        "depth_at_anchor": boundary.h,
+        "depth_at_fairlead": depth_at_fairlead,
     })
 
     # Pós-classificação (Camada 7 + alert_level da Seção 5 Documento A).

@@ -287,6 +287,34 @@ def test_slope_rad_fora_do_range_rejeitado() -> None:
 # ==============================================================================
 
 
+def test_BC_BAT_01_batimetria_dois_pontos() -> None:
+    """
+    F5.3.z: depth_at_anchor e depth_at_fairlead derivados.
+
+    Para slope > 0 (sobe ao fairlead): depth_at_fairlead < depth_at_anchor.
+    Para slope < 0 (desce ao fairlead): depth_at_fairlead > depth_at_anchor.
+    Para slope = 0: ambos iguais.
+    """
+    seg = _build_segment(length=900.0)
+    bc = BoundaryConditions(
+        h=300.0, mode=SolutionMode.TENSION, input_value=500_000,
+    )
+    # Slope positivo: anchor mais profundo
+    r_p = solve([seg], bc, seabed=SeabedConfig(mu=0.0, slope_rad=math.radians(5)))
+    assert r_p.depth_at_anchor == pytest.approx(300.0, abs=0.1)
+    expected_fl = 300.0 - math.tan(math.radians(5)) * r_p.total_horz_distance
+    assert r_p.depth_at_fairlead == pytest.approx(expected_fl, abs=0.5)
+    assert r_p.depth_at_fairlead < r_p.depth_at_anchor
+
+    # Slope negativo: anchor mais raso, fairlead mais profundo
+    r_n = solve([seg], bc, seabed=SeabedConfig(mu=0.0, slope_rad=math.radians(-5)))
+    assert r_n.depth_at_fairlead > r_n.depth_at_anchor
+
+    # Slope zero: depth_at_fairlead == depth_at_anchor == h
+    r_z = solve([seg], bc, seabed=SeabedConfig(mu=0.0, slope_rad=0.0))
+    assert r_z.depth_at_anchor == pytest.approx(r_z.depth_at_fairlead, abs=1e-9)
+
+
 def test_solver_version_inclui_f5_3() -> None:
     seg = _build_segment(length=900.0)
     bc = BoundaryConditions(

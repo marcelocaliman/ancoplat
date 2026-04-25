@@ -411,6 +411,19 @@ class SolverResult(BaseModel):
     # Vazio para casos single-segmento (compatibilidade).
     segment_boundaries: list[int] = Field(default_factory=list)
 
+    # --- Batimetria (F5.3.z) ---
+    # Profundidade do seabed nos dois pontos críticos do problema, ambos
+    # medidos da superfície da água (positivo = abaixo). Em casos sem
+    # slope, ambos são iguais a `water_depth`. Com slope, eles diferem
+    # exatamente por `tan(slope_rad) · total_horz_distance`.
+    #
+    # Convenção (slope_rad > 0 = seabed sobe ao fairlead):
+    #   depth_at_anchor   ≥ depth_at_fairlead  (anchor mais fundo)
+    # Convenção (slope_rad < 0 = seabed desce ao fairlead):
+    #   depth_at_anchor   ≤ depth_at_fairlead  (anchor mais raso)
+    depth_at_anchor: float = 0.0
+    depth_at_fairlead: float = 0.0
+
 
 __all__ = [
     "AlertLevel",
