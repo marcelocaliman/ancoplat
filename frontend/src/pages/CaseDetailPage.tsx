@@ -399,6 +399,14 @@ export function CaseDetailPage() {
                 {result.status !== 'converged' && (
                   <AlertBanner result={result} />
                 )}
+                {/* Banner: execução antiga com slope ≠ 0 → coords salvas
+                    sem o caminho de touchdown em rampa. Sugere recalcular. */}
+                {isStaleSolverForSlope(result, caseInput.seabed?.slope_rad ?? 0) && (
+                  <StaleSolverBanner
+                    onRecalculate={() => solveMutation.mutate()}
+                    pending={solveMutation.isPending}
+                  />
+                )}
                 <Card className="mb-4">
                   <CardContent className="h-[480px] p-2">
                     <CatenaryPlot
@@ -732,6 +740,62 @@ function AlertBanner({ result }: { result: SolverResult }) {
         </p>
         <p className="text-muted-foreground">{result.message}</p>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Detecta execuções calculadas em versão do solver anterior à F5.3.x
+ * (sem suporte a touchdown em rampa). Quando existe slope no caso atual
+ * mas a run salva é dessa época, as coords da curva ficam horizontais
+ * e o gráfico fica visualmente errado.
+ */
+function isStaleSolverForSlope(
+  result: SolverResult,
+  slopeRad: number,
+): boolean {
+  if (Math.abs(slopeRad) < 1e-6) return false
+  const sv = result.solver_version || ''
+  if (!sv) return true
+  const parts = sv.split('.').map((p) => parseInt(p, 10))
+  // Antes de 1.4.1 não havia touchdown em rampa
+  if (parts[0]! < 1) return true
+  if (parts[0] === 1 && (parts[1] ?? 0) < 4) return true
+  if (parts[0] === 1 && parts[1] === 4 && (parts[2] ?? 0) < 1) return true
+  return false
+}
+
+function StaleSolverBanner({
+  onRecalculate,
+  pending,
+}: {
+  onRecalculate: () => void
+  pending: boolean
+}) {
+  return (
+    <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
+      <AlertCircle className="mt-0.5 h-4 w-4 text-warning" />
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="font-medium">Execução em versão antiga do solver</p>
+        <p className="text-muted-foreground">
+          Esta run foi calculada antes da v1.4.1 (sem suporte a touchdown
+          em seabed inclinado). A curva no gráfico foi salva como
+          horizontal — geometria atualizada exige recalcular.
+        </p>
+      </div>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={onRecalculate}
+        disabled={pending}
+      >
+        {pending ? (
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <Play className="h-3.5 w-3.5" />
+        )}
+        Recalcular agora
+      </Button>
     </div>
   )
 }
