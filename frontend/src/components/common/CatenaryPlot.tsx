@@ -218,7 +218,11 @@ export function CatenaryPlot({
         surface: '#3B82F6',
         surfaceFill: 'rgba(59, 130, 246, 0.06)',
         suspended: '#60A5FA',
-        grounded: '#FBBF24',
+        // Trecho apoiado (e marcador touchdown) propositalmente em
+        // vermelho — destaca o ponto crítico onde a linha encontra o
+        // seabed e a porção apoiada que pode estar arrastando. Antes era
+        // amarelo, mas conflitava com cores cíclicas de multi-segmento.
+        grounded: '#EF4444',
         anchor: '#94A3B8',
         fairlead: '#60A5FA',
         grid: '#1E293B',
@@ -242,7 +246,7 @@ export function CatenaryPlot({
       surface: '#0EA5E9',
       surfaceFill: 'rgba(14, 165, 233, 0.05)',
       suspended: '#1E3A5F',
-      grounded: '#D97706',
+      grounded: '#DC2626',
       anchor: '#475569',
       fairlead: '#1E3A5F',
       grid: '#E2E8F0',
@@ -448,6 +452,35 @@ export function CatenaryPlot({
           text: st.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
           hovertemplate:
             `${traceName}<br>x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>`,
+        })
+      }
+
+      // Overlay do trecho apoiado em vermelho (sobrepõe a cor do
+      // segmento na porção que está em contato com o seabed). Drawn
+      // depois dos traces dos segmentos para ficar por cima na ordem
+      // de empilhamento. Sem touchdown, onGround é tudo false e nada
+      // é renderizado.
+      const gXm: number[] = []
+      const gYm: number[] = []
+      const gTm: number[] = []
+      for (let i = 0; i < curve.plotX.length; i += 1) {
+        if (curve.onGround[i]) {
+          gXm.push(curve.plotX[i]!)
+          gYm.push(curve.plotY[i]!)
+          gTm.push(curve.tensions[i]!)
+        }
+      }
+      if (gXm.length > 0) {
+        traces.push({
+          type: 'scatter',
+          mode: 'lines',
+          x: gXm,
+          y: gYm,
+          line: { color: palette.grounded, width: 4 },
+          name: 'Trecho apoiado',
+          text: gTm.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
+          hovertemplate:
+            'Apoiado<br>x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>',
         })
       }
     } else {
@@ -914,6 +947,17 @@ export function CatenaryPlot({
           label: labelParts.join(' · '),
           dash: catStyle.dash,
           width: catStyle.width,
+        })
+      }
+      // Mesmo em multi-segmento, mostra o chip "Trecho apoiado" quando
+      // há touchdown — explica o overlay vermelho que aparece sobre as
+      // cores dos segmentos no trecho que está em contato com o seabed.
+      if (hasGrounded) {
+        items.push({
+          kind: 'line',
+          color: palette.grounded,
+          label: 'Trecho apoiado',
+          width: 4,
         })
       }
     } else {
