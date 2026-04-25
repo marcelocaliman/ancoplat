@@ -6,12 +6,15 @@ comuns. Router fica fino.
 """
 from __future__ import annotations
 
+import logging
 from typing import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from backend.api.db.models import CaseRecord, ExecutionRecord
+
+logger = logging.getLogger("qmoor.api.cases")
 from backend.api.schemas.cases import (
     CaseInput,
     CaseOutput,
@@ -49,17 +52,30 @@ def case_record_to_summary(rec: CaseRecord) -> CaseSummary:
 
 
 def case_record_to_output(rec: CaseRecord) -> CaseOutput:
-    """Hidrata CaseRecord em CaseOutput incluindo execuções."""
+    """
+    Hidrata CaseRecord em CaseOutput incluindo execuções.
+
+    Se uma execução individual tem `result_json` corrompido (campo
+    legacy ou edição manual no banco), pulamos só essa entrada com
+    aviso no log — sem derrubar a resposta inteira.
+    """
     case_input = CaseInput.model_validate_json(rec.input_json)
-    executions = [
-        ExecutionOutput(
-            id=e.id,
-            case_id=e.case_id,
-            result=SolverResult.model_validate_json(e.result_json),
-            executed_at=e.executed_at,
-        )
-        for e in rec.executions
-    ]
+    executions: list[ExecutionOutput] = []
+    for e in rec.executions:
+        try:
+            executions.append(
+                ExecutionOutput(
+                    id=e.id,
+                    case_id=e.case_id,
+                    result=SolverResult.model_validate_json(e.result_json),
+                    executed_at=e.executed_at,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "execução id=%s do caso id=%s ignorada (result_json corrompido): %s",
+                e.id, rec.id, exc,
+            )
     return CaseOutput(
         id=rec.id,
         name=rec.name,

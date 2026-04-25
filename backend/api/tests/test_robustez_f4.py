@@ -90,6 +90,44 @@ def test_rate_limit_dispara_apos_100_req_minuto(client: TestClient) -> None:
 # ==============================================================================
 
 
+# ==============================================================================
+# Edge cases (F4.7)
+# ==============================================================================
+
+
+def test_execucao_corrompida_e_pulada_sem_derrubar(client: TestClient) -> None:
+    """
+    Se um ExecutionRecord no banco tem result_json inválido (edição manual,
+    schema antigo), GET /cases/{id} deve retornar 200 ignorando essa
+    execução em vez de 500.
+    """
+    # Cria caso e roda solve para ter execução real (válida).
+    cid = client.post("/api/v1/cases", json=BC01_LIKE_INPUT).json()["id"]
+    client.post(f"/api/v1/cases/{cid}/solve")
+
+    # Corrompe manualmente o result_json da última execução.
+    from backend.api.db import session as ds
+    from backend.api.db.models import ExecutionRecord
+
+    with ds.SessionLocal() as db:
+        rec = (
+            db.query(ExecutionRecord)
+            .filter(ExecutionRecord.case_id == cid)
+            .first()
+        )
+        assert rec is not None
+        rec.result_json = "{not json"  # claramente inválido
+        db.commit()
+
+    resp = client.get(f"/api/v1/cases/{cid}")
+    # Deve seguir respondendo 200 (e simplesmente ignorar a execução
+    # corrompida em latest_executions).
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == cid
+    assert isinstance(body["latest_executions"], list)
+
+
 def test_log_arquivo_rotativo_existe(tmp_path: Path, monkeypatch) -> None:
     """
     Reconfigurar logging com DB_PATH apontando para tmp e gerar uma linha

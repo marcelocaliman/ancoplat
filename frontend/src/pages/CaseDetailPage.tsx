@@ -239,11 +239,30 @@ export function CaseDetailPage() {
               JSON
             </a>
           </DropdownMenuItem>
-          <DropdownMenuItem asChild>
-            <a href={exportPdfUrl(caseId)} target="_blank" rel="noreferrer">
-              <FileText className="h-4 w-4" />
-              PDF (relatório)
-            </a>
+          <DropdownMenuItem
+            asChild={!!latest}
+            disabled={!latest}
+            onSelect={(e) => {
+              if (!latest) {
+                e.preventDefault()
+                toast.warning('Caso sem execução', {
+                  description:
+                    'Calcule o caso pelo menos uma vez antes de exportar o PDF.',
+                })
+              }
+            }}
+          >
+            {latest ? (
+              <a href={exportPdfUrl(caseId)} target="_blank" rel="noreferrer">
+                <FileText className="h-4 w-4" />
+                PDF (relatório)
+              </a>
+            ) : (
+              <span className="flex items-center gap-2 opacity-60">
+                <FileText className="h-4 w-4" />
+                PDF (calcule primeiro)
+              </span>
+            )}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
