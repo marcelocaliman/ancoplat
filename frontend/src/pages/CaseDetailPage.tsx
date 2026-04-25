@@ -33,6 +33,7 @@ import {
 import type { ExecutionOutput, SolverResult } from '@/api/types'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
 import { EmptyState } from '@/components/common/EmptyState'
+import { SensitivityPanel } from '@/components/common/SensitivityPanel'
 import {
   AlertBadge,
   CategoryBadge,
@@ -84,6 +85,10 @@ export function CaseDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [jsonOpen, setJsonOpen] = useState(false)
   const [selectedExecId, setSelectedExecId] = useState<number | null>(null)
+  // Resultado live do painel de sensibilidade. Quando setado, sobrescreve
+  // visualmente o resultado salvo nos cards/gráfico/tabelas. As entradas
+  // de Histórico continuam refletindo as runs persistidas.
+  const [liveResult, setLiveResult] = useState<SolverResult | null>(null)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['case', String(caseId)],
@@ -168,7 +173,10 @@ export function CaseDetailPage() {
       ? executions.find((e) => e.id === selectedExecId)
       : null
   const execToShow = selectedExec ?? latest
-  const result = execToShow?.result
+  const savedResult = execToShow?.result
+  // displayResult é o que efetivamente alimenta os cards/gráfico/tabelas.
+  // Quando há preview ao vivo (sensibilidade), sobrescreve o salvo.
+  const result = liveResult ?? savedResult
 
   const breadcrumbs = [
     { label: 'Casos', to: '/cases' },
@@ -371,10 +379,24 @@ export function CaseDetailPage() {
                     <CatenaryPlot result={result} />
                   </CardContent>
                 </Card>
+                <div className="mb-4">
+                  <SensitivityPanel
+                    caseId={caseId}
+                    baseInput={caseInput}
+                    onPreview={setLiveResult}
+                    onApplied={() => {
+                      queryClient.invalidateQueries({
+                        queryKey: ['case', String(caseId)],
+                      })
+                    }}
+                  />
+                </div>
                 <OverviewCards
                   result={result}
                   input={caseInput}
-                  executedAt={execToShow?.executed_at}
+                  executedAt={
+                    liveResult ? undefined : execToShow?.executed_at
+                  }
                   system={system}
                 />
               </TabsContent>
