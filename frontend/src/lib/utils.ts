@@ -86,3 +86,34 @@ export function fmtDiameterMM(valueM: number, digits = 1): string {
     maximumFractionDigits: digits,
   })} mm`
 }
+
+/**
+ * Resolve depth_at_anchor e depth_at_fairlead com fallback para casos
+ * legados (execuções antigas onde esses campos foram persistidos como 0
+ * antes da F5.3.z). Quando o `result` traz valores não-zero, usa eles;
+ * caso contrário, computa a partir de `water_depth`/`h`, `slope_rad` e
+ * `total_horz_distance` (mesma fórmula do backend).
+ */
+export function resolveSeabedDepths(
+  result: {
+    depth_at_anchor?: number
+    depth_at_fairlead?: number
+    water_depth?: number
+    total_horz_distance: number
+  },
+  fallbackH: number,
+  slopeRad: number,
+): { atAnchor: number; atFairlead: number } {
+  const baseH = result.water_depth ?? fallbackH
+  const computedAnchor = baseH
+  const computedFairlead = baseH - Math.tan(slopeRad) * result.total_horz_distance
+  // Considera que valores ≤ 0 ou ausentes são "não populados" (legacy).
+  // Mesmo um caso real horizontal terá depth_at_anchor = h > 0.
+  const atAnchor = (result.depth_at_anchor ?? 0) > 0
+    ? result.depth_at_anchor!
+    : computedAnchor
+  const atFairlead = (result.depth_at_fairlead ?? 0) > 0
+    ? result.depth_at_fairlead!
+    : computedFairlead
+  return { atAnchor, atFairlead }
+}

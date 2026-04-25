@@ -66,6 +66,7 @@ import {
   fmtMeters,
   fmtNumber,
   fmtPercent,
+  resolveSeabedDepths,
 } from '@/lib/utils'
 import { fmtForce, fmtForcePair as fmtForcePairUnits } from '@/lib/units'
 import { useUnitsStore } from '@/store/units'
@@ -598,6 +599,8 @@ export function CaseFormPage() {
         <MetricsRow
           result={previewQuery.data}
           previewReady={previewReady}
+          fallbackH={debouncedValues.boundary?.h ?? 0}
+          slopeRad={debouncedValues.seabed?.slope_rad ?? 0}
         />
       </div>
     </>
@@ -781,9 +784,13 @@ function PlotArea({
 function MetricsRow({
   result,
   previewReady,
+  fallbackH,
+  slopeRad,
 }: {
   result?: SolverResult
   previewReady: boolean
+  fallbackH: number
+  slopeRad: number
 }) {
   const system = useUnitsStore((s) => s.system)
 
@@ -815,6 +822,10 @@ function MetricsRow({
 
   // Formatador "primário (te) + secundário (kN)" para o card principal de tração.
   const tFlPair = fmtForcePairUnits(result.fairlead_tension, system)
+  // Compatibilidade legacy: para execuções persistidas antes da F5.3.z,
+  // depth_at_anchor/depth_at_fairlead vinham 0. Recompõe via fórmula
+  // do backend (h − tan(slope)·X_total).
+  const seabedDepths = resolveSeabedDepths(result, fallbackH, slopeRad)
 
   // Auxiliares para abreviar dentro das linhas dos demais cards.
   const F = (v: number): string => fmtForce(v, system)
@@ -861,8 +872,8 @@ function MetricsRow({
           // Batimetria: profundidades nos dois pontos críticos. Útil em
           // casos com seabed inclinado (slope_rad ≠ 0); para horizontal
           // ambos são iguais a h.
-          ['Prof. seabed @ âncora', fmtMeters(result.depth_at_anchor, 1)],
-          ['Prof. seabed @ fairlead', fmtMeters(result.depth_at_fairlead, 1)],
+          ['Prof. seabed @ âncora', fmtMeters(seabedDepths.atAnchor, 1)],
+          ['Prof. seabed @ fairlead', fmtMeters(seabedDepths.atFairlead, 1)],
         ]}
       />
 

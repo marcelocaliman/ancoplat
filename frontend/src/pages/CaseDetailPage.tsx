@@ -71,7 +71,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { fmtAngleDeg, fmtMeters, fmtNumber, fmtPercent } from '@/lib/utils'
+import {
+  fmtAngleDeg,
+  fmtMeters,
+  fmtNumber,
+  fmtPercent,
+  resolveSeabedDepths,
+} from '@/lib/utils'
 import { fmtForce, fmtForcePair, fmtForcePerM } from '@/lib/units'
 import { useUnitsStore } from '@/store/units'
 
@@ -523,6 +529,14 @@ function OverviewCards({
   // os defaults conservadores aqui — a UI do critério é informativa.
   const utilPct = result.utilization
 
+  // Fallback de batimetria: execuções salvas antes da F5.3.z não têm
+  // depth_at_*; recomputamos a partir de h e slope_rad.
+  const seabedDepths = resolveSeabedDepths(
+    result,
+    input.boundary.h,
+    input.seabed?.slope_rad ?? 0,
+  )
+
   return (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
       {/* Tração no fairlead — destaque */}
@@ -562,8 +576,8 @@ function OverviewCards({
         </CardHeader>
         <CardContent className="space-y-1.5 font-mono text-[12px] tabular-nums">
           <Row label="X total (fairlead → âncora)" value={fmtMeters(result.total_horz_distance, 2)} />
-          <Row label="Prof. seabed @ âncora" value={fmtMeters(result.depth_at_anchor ?? input.boundary.h, 1)} />
-          <Row label="Prof. seabed @ fairlead" value={fmtMeters(result.depth_at_fairlead ?? input.boundary.h, 1)} />
+          <Row label="Prof. seabed @ âncora" value={fmtMeters(seabedDepths.atAnchor, 1)} />
+          <Row label="Prof. seabed @ fairlead" value={fmtMeters(seabedDepths.atFairlead, 1)} />
           <Row label="Prof. do fairlead (vessel)" value={fmtMeters(result.startpoint_depth ?? 0, 1)} />
           <Row label="Drop vertical" value={fmtMeters(drop, 1)} />
           {hasTouchdown && (
@@ -743,6 +757,9 @@ function ResultsTables({
   const strain =
     segment.length > 0 ? result.elongation / segment.length : 0
   const friction = result.fairlead_tension - result.anchor_tension
+  const seabedDepths = resolveSeabedDepths(
+    result, input.boundary.h, input.seabed?.slope_rad ?? 0,
+  )
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -769,8 +786,8 @@ function ResultsTables({
         <KeyValueTable
           rows={[
             ['X total (fairlead → âncora)', fmtMeters(result.total_horz_distance, 3)],
-            ['Prof. seabed @ âncora', fmtMeters(result.depth_at_anchor ?? input.boundary.h, 2)],
-            ['Prof. seabed @ fairlead', fmtMeters(result.depth_at_fairlead ?? input.boundary.h, 2)],
+            ['Prof. seabed @ âncora', fmtMeters(seabedDepths.atAnchor, 2)],
+            ['Prof. seabed @ fairlead', fmtMeters(seabedDepths.atFairlead, 2)],
             ['Profundidade do fairlead (vessel)', fmtMeters(result.startpoint_depth ?? 0, 2)],
             ['Drop vertical efetivo', fmtMeters(drop, 2)],
             ['L total (unstretched)', fmtMeters(segment.length, 3)],
