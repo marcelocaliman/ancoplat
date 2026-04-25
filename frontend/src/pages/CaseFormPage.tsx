@@ -714,26 +714,26 @@ export function CaseFormPage() {
           </Tabs>
         </Card>
 
-        {/* ───── Middle: gráfico ───── */}
-        <Card className="min-h-0 flex-1 overflow-hidden">
-          <CardContent className="h-full p-1">
-            <PlotArea
-              isFetching={previewQuery.isFetching}
-              result={previewQuery.data}
-              previewReady={previewReady}
-              attachments={debouncedValues.attachments ?? []}
-              seabedSlopeRad={debouncedValues.seabed?.slope_rad ?? 0}
-            />
-          </CardContent>
-        </Card>
-
-        {/* ───── Bottom: métricas ───── */}
-        <MetricsRow
-          result={previewQuery.data}
-          previewReady={previewReady}
-          fallbackH={debouncedValues.boundary?.h ?? 0}
-          slopeRad={debouncedValues.seabed?.slope_rad ?? 0}
-        />
+        {/* ───── Middle: gráfico (esquerda) + métricas empilhadas (direita) ───── */}
+        <div className="flex min-h-0 flex-1 gap-3">
+          <Card className="min-h-0 flex-1 overflow-hidden">
+            <CardContent className="h-full p-1">
+              <PlotArea
+                isFetching={previewQuery.isFetching}
+                result={previewQuery.data}
+                previewReady={previewReady}
+                attachments={debouncedValues.attachments ?? []}
+                seabedSlopeRad={debouncedValues.seabed?.slope_rad ?? 0}
+              />
+            </CardContent>
+          </Card>
+          <MetricsColumn
+            result={previewQuery.data}
+            previewReady={previewReady}
+            fallbackH={debouncedValues.boundary?.h ?? 0}
+            slopeRad={debouncedValues.seabed?.slope_rad ?? 0}
+          />
+        </div>
       </div>
     </>
   )
@@ -894,7 +894,7 @@ function PlotArea({
   )
 }
 
-function MetricsRow({
+function MetricsColumn({
   result,
   previewReady,
   fallbackH,
@@ -909,9 +909,9 @@ function MetricsRow({
 
   if (!previewReady || !result) {
     return (
-      <div className="grid shrink-0 grid-cols-4 gap-2">
+      <div className="flex w-[280px] shrink-0 flex-col gap-2 overflow-y-auto">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="bg-muted/10">
+          <Card key={i} className="shrink-0 bg-muted/10">
             <CardContent className="flex h-[156px] flex-col justify-center gap-1 p-3">
               <div className="h-2.5 w-16 rounded bg-muted/40" />
               <div className="h-5 w-24 rounded bg-muted/30" />
@@ -948,7 +948,7 @@ function MetricsRow({
   }
 
   return (
-    <div className="grid shrink-0 grid-cols-4 gap-2">
+    <div className="flex w-[280px] shrink-0 flex-col gap-2 overflow-y-auto pr-1">
       {/* Tração — primário com gauge */}
       <MetricCard
         label="Tração no fairlead"
@@ -1040,7 +1040,7 @@ function MetricCard({
   footer?: string
 }) {
   return (
-    <Card>
+    <Card className="shrink-0">
       <CardContent className="flex h-[156px] flex-col gap-1.5 p-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {label}
