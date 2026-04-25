@@ -562,8 +562,9 @@ function OverviewCards({
         </CardHeader>
         <CardContent className="space-y-1.5 font-mono text-[12px] tabular-nums">
           <Row label="X total (fairlead → âncora)" value={fmtMeters(result.total_horz_distance, 2)} />
-          <Row label="Lâmina d'água" value={fmtMeters(result.water_depth ?? input.boundary.h, 1)} />
-          <Row label="Prof. fairlead" value={fmtMeters(result.startpoint_depth ?? 0, 1)} />
+          <Row label="Prof. seabed @ âncora" value={fmtMeters(result.depth_at_anchor ?? input.boundary.h, 1)} />
+          <Row label="Prof. seabed @ fairlead" value={fmtMeters(result.depth_at_fairlead ?? input.boundary.h, 1)} />
+          <Row label="Prof. do fairlead (vessel)" value={fmtMeters(result.startpoint_depth ?? 0, 1)} />
           <Row label="Drop vertical" value={fmtMeters(drop, 1)} />
           {hasTouchdown && (
             <Row
@@ -768,8 +769,9 @@ function ResultsTables({
         <KeyValueTable
           rows={[
             ['X total (fairlead → âncora)', fmtMeters(result.total_horz_distance, 3)],
-            ['Lâmina d\'água', fmtMeters(result.water_depth ?? input.boundary.h, 2)],
-            ['Profundidade do fairlead', fmtMeters(result.startpoint_depth ?? 0, 2)],
+            ['Prof. seabed @ âncora', fmtMeters(result.depth_at_anchor ?? input.boundary.h, 2)],
+            ['Prof. seabed @ fairlead', fmtMeters(result.depth_at_fairlead ?? input.boundary.h, 2)],
+            ['Profundidade do fairlead (vessel)', fmtMeters(result.startpoint_depth ?? 0, 2)],
             ['Drop vertical efetivo', fmtMeters(drop, 2)],
             ['L total (unstretched)', fmtMeters(segment.length, 3)],
             ['L esticado', fmtMeters(result.stretched_length, 3)],

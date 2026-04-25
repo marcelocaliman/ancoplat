@@ -1183,6 +1183,16 @@ export interface components {
             solver_version: string;
             /** Segment Boundaries */
             segment_boundaries?: number[];
+            /**
+             * Depth At Anchor
+             * @default 0
+             */
+            depth_at_anchor: number;
+            /**
+             * Depth At Fairlead
+             * @default 0
+             */
+            depth_at_fairlead: number;
         };
         /**
          * UtilizationLimits

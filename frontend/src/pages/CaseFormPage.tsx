@@ -26,6 +26,7 @@ import {
 } from '@/api/endpoints'
 import type { SolverResult } from '@/api/types'
 import { AttachmentsEditor } from '@/components/common/AttachmentsEditor'
+import { BathymetryPopover } from '@/components/common/BathymetryPopover'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
 import { SegmentEditor } from '@/components/common/SegmentEditor'
 import { UnitInput } from '@/components/common/UnitInput'
@@ -536,32 +537,39 @@ export function CaseFormPage() {
                 unit="°"
                 tooltip={
                   '0° = horizontal. Positivo: seabed sobe em direção ao fairlead. ' +
-                  'F5.3 inicial: suporta apenas casos fully-suspended em rampa.'
+                  'Use o ícone ao lado para calcular pela batimetria nos dois pontos.'
                 }
               >
                 <Controller
                   control={control}
                   name="seabed.slope_rad"
                   render={({ field }) => (
-                    <Input
-                      type="number"
-                      step="0.5"
-                      min={-45}
-                      max={45}
-                      // Estado interno em radianos; UI em graus
-                      value={
-                        field.value != null
-                          ? ((field.value * 180) / Math.PI).toFixed(2)
-                          : '0'
-                      }
-                      onChange={(e) => {
-                        const deg = parseFloat(e.target.value)
-                        field.onChange(
-                          Number.isFinite(deg) ? (deg * Math.PI) / 180 : 0,
-                        )
-                      }}
-                      className="h-8 font-mono"
-                    />
+                    <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
+                      <input
+                        type="number"
+                        step={0.5}
+                        min={-45}
+                        max={45}
+                        // Estado interno em radianos; UI em graus
+                        value={
+                          field.value != null
+                            ? ((field.value * 180) / Math.PI).toFixed(2)
+                            : '0'
+                        }
+                        onChange={(e) => {
+                          const deg = parseFloat(e.target.value)
+                          field.onChange(
+                            Number.isFinite(deg) ? (deg * Math.PI) / 180 : 0,
+                          )
+                        }}
+                        className="min-w-0 flex-1 bg-transparent px-2 py-1 font-mono text-sm tabular-nums focus:outline-none"
+                      />
+                      <BathymetryPopover
+                        currentSlopeRad={field.value ?? 0}
+                        currentH={watch('boundary.h') ?? 0}
+                        onApplyRad={(rad) => field.onChange(rad)}
+                      />
+                    </div>
                   )}
                 />
               </InlineField>
@@ -847,6 +855,11 @@ function MetricsRow({
             : ['Touchdown', '—'],
           ['L esticado', fmtMeters(result.stretched_length, 2)],
           ['ΔL', fmtMeters(result.elongation, 3)],
+          // Batimetria: profundidades nos dois pontos críticos. Útil em
+          // casos com seabed inclinado (slope_rad ≠ 0); para horizontal
+          // ambos são iguais a h.
+          ['Prof. seabed @ âncora', fmtMeters(result.depth_at_anchor, 1)],
+          ['Prof. seabed @ fairlead', fmtMeters(result.depth_at_fairlead, 1)],
         ]}
       />
 
