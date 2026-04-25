@@ -20,6 +20,7 @@ import math
 from typing import Optional, Sequence
 
 from . import SOLVER_VERSION
+from .attachment_resolver import resolve_attachments
 from .elastic import solve_elastic_iterative
 from .laid_line import solve_laid_line
 from .multi_segment import solve_multi_segment
@@ -144,38 +145,52 @@ def solve(
             solver_version=SOLVER_VERSION,
         )
 
+    # F5.4.6a — Resolve attachments com posição contínua.
+    # Pré-processador divide o segmento que contém um
+    # `position_s_from_anchor` em dois sub-segmentos idênticos, virando
+    # o attachment numa "junção virtual". O solver downstream nunca sabe
+    # que houve split. Attachments via `position_index` (legacy) passam
+    # intactos.
+    try:
+        resolved_segments, resolved_attachments = resolve_attachments(
+            line_segments, attachments,
+        )
+    except ValueError as exc:
+        return SolverResult(
+            status=ConvergenceStatus.INVALID_CASE,
+            message=f"Attachment inválido: {exc}",
+            water_depth=boundary.h,
+            startpoint_depth=boundary.startpoint_depth,
+            solver_version=SOLVER_VERSION,
+        )
+
     # Drop vertical efetivo: distância entre a âncora (no seabed, y=-h)
     # e o fairlead (submerso a profundidade startpoint_depth da superfície).
     # Quando startpoint_depth = 0 (fairlead na superfície), drop = h.
     h_drop = boundary.h - boundary.startpoint_depth
 
     try:
-        n_segments = len(line_segments)
+        n_segments = len(resolved_segments)
         slope = seabed.slope_rad
         slope_is_significant = abs(slope) > 1e-6
 
         # F5.3.y: attachments + slope agora suportados via integrador
         # com grounded estendido para aplicar saltos em V nas junções.
-        if n_segments > 1 or attachments:
+        if n_segments > 1 or resolved_attachments:
             # Linha composta heterogênea (F5.1) ou com attachments (F5.2).
-            # Caminho de código separado preserva o solver single-segmento
-            # original em todas as suas otimizações e testes. Attachments
-            # com 1 segmento só fazem sentido se forem em "junções" — não
-            # existe junção para 1 segmento, então rejeitamos com mensagem.
-            if attachments and n_segments < 2:
-                raise ValueError(
-                    "Attachments (boias/clumps) precisam de pelo menos 2 "
-                    "segmentos para se posicionarem nas junções. Divida o "
-                    "segmento atual em dois com mesmas propriedades."
-                )
+            # F5.4.6a: para ter ≥ 2 segmentos pós-resolver, ou o usuário
+            # já passou multi-segmento, ou usou `position_s_from_anchor`
+            # que disparou split. Attachment com `position_index` em
+            # linha de 1 segmento não faz sentido (pego pelo Pydantic
+            # range validator com max_position_index = N-2).
             result = solve_multi_segment(
-                segments=list(line_segments),
+                segments=resolved_segments,
                 h=h_drop,
                 mode=boundary.mode,
                 input_value=boundary.input_value,
                 mu=seabed.mu,
                 config=config,
-                attachments=attachments,
+                attachments=resolved_attachments,
                 slope_rad=slope,
             )
         elif slope_is_significant:

@@ -533,6 +533,12 @@ export function CatenaryPlot({
     // markers transparentes no mesmo ponto.
     if (attachments.length > 0 && segBounds.length >= 2) {
       const N = curve.plotX.length
+      // Comprimento não-esticado total do input — usado para mapear
+      // `position_s_from_anchor` (F5.4.6a) numa fração da curva renderizada.
+      const totalUnstretched = (segments ?? []).reduce(
+        (acc, s) => acc + ((s as { length?: number }).length ?? 0),
+        0,
+      )
       const buoyX: number[] = []
       const buoyY: number[] = []
       const buoyText: string[] = []
@@ -540,10 +546,31 @@ export function CatenaryPlot({
       const clumpY: number[] = []
       const clumpText: string[] = []
       for (const att of attachments) {
-        const junctionA = att.position_index + 1  // índice em segment_boundaries
-        if (junctionA <= 0 || junctionA >= segBounds.length) continue
-        const idxAnchorFrame = segBounds[junctionA]!
-        const idxPlot = N - 1 - idxAnchorFrame
+        let idxPlot: number | null = null
+        if (att.position_index != null) {
+          const junctionA = att.position_index + 1
+          if (junctionA <= 0 || junctionA >= segBounds.length) continue
+          const idxAnchorFrame = segBounds[junctionA]!
+          idxPlot = N - 1 - idxAnchorFrame
+        } else if (
+          att.position_s_from_anchor != null && totalUnstretched > 0
+        ) {
+          // Aproximação proporcional: assume sampling razoavelmente
+          // uniforme em arc length na curva renderizada. Erro residual
+          // (devido a stretching elástico e a sampling não-uniforme)
+          // é < 1% para configurações típicas — aceitável p/ visualizar
+          // o ícone, não para análise numérica.
+          const sFromFairlead =
+            totalUnstretched - att.position_s_from_anchor
+          if (sFromFairlead > 0 && sFromFairlead < totalUnstretched) {
+            const frac = sFromFairlead / totalUnstretched
+            idxPlot = Math.max(
+              0,
+              Math.min(N - 1, Math.round(frac * (N - 1))),
+            )
+          }
+        }
+        if (idxPlot == null) continue
         const px = curve.plotX[idxPlot]
         const py = curve.plotY[idxPlot]
         if (px == null || py == null) continue
@@ -687,11 +714,31 @@ export function CatenaryPlot({
     const segBounds = result.segment_boundaries ?? []
     if (attachments.length > 0 && segBounds.length >= 2) {
       const N = curve.plotX.length
+      const totalUnstretched = (segments ?? []).reduce(
+        (acc, s) => acc + ((s as { length?: number }).length ?? 0),
+        0,
+      )
       for (const att of attachments) {
-        const junctionA = att.position_index + 1
-        if (junctionA <= 0 || junctionA >= segBounds.length) continue
-        const idxAnchorFrame = segBounds[junctionA]!
-        const idxPlot = N - 1 - idxAnchorFrame
+        let idxPlot: number | null = null
+        if (att.position_index != null) {
+          const junctionA = att.position_index + 1
+          if (junctionA <= 0 || junctionA >= segBounds.length) continue
+          const idxAnchorFrame = segBounds[junctionA]!
+          idxPlot = N - 1 - idxAnchorFrame
+        } else if (
+          att.position_s_from_anchor != null && totalUnstretched > 0
+        ) {
+          const sFromFairlead =
+            totalUnstretched - att.position_s_from_anchor
+          if (sFromFairlead > 0 && sFromFairlead < totalUnstretched) {
+            const frac = sFromFairlead / totalUnstretched
+            idxPlot = Math.max(
+              0,
+              Math.min(N - 1, Math.round(frac * (N - 1))),
+            )
+          }
+        }
+        if (idxPlot == null) continue
         const px = curve.plotX[idxPlot]
         const py = curve.plotY[idxPlot]
         if (px == null || py == null) continue

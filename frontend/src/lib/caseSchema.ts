@@ -6,18 +6,35 @@ import { z } from 'zod'
  * adiciona validações e mensagens em PT-BR que a API levantaria só no submit.
  */
 /**
- * Attachment pontual (boia ou clump weight). F5.2.
+ * Attachment pontual (boia ou clump weight). F5.2 + F5.4.6a.
  *
- * Posicionado em uma JUNÇÃO entre segmentos: position_index = 0 fica
- * entre seg[0] e seg[1], etc. Para um número N de segmentos, junções
- * válidas são 0..N-2.
+ * Posição pode ser informada de duas formas (exatamente uma):
+ *   - `position_index` (legacy): junção entre segmentos pré-existentes.
+ *   - `position_s_from_anchor`: distância em metros desde a âncora.
+ *     Solver divide o segmento que contém essa posição automaticamente.
+ *
+ * O backend valida exclusividade. No frontend, deixamos os dois como
+ * optional/nullable para permitir o toggle entre modos sem perder o
+ * outro valor durante a edição.
  */
-export const lineAttachmentSchema = z.object({
-  kind: z.enum(['clump_weight', 'buoy']),
-  submerged_force: z.number().positive('Força submersa deve ser > 0'),
-  position_index: z.number().int().min(0),
-  name: z.string().trim().max(80).nullable().optional(),
-})
+export const lineAttachmentSchema = z
+  .object({
+    kind: z.enum(['clump_weight', 'buoy']),
+    submerged_force: z.number().positive('Força submersa deve ser > 0'),
+    position_index: z.number().int().min(0).nullable().optional(),
+    position_s_from_anchor: z.number().positive().nullable().optional(),
+    name: z.string().trim().max(80).nullable().optional(),
+  })
+  .refine(
+    (a) =>
+      (a.position_index != null && a.position_s_from_anchor == null) ||
+      (a.position_index == null && a.position_s_from_anchor != null),
+    {
+      message:
+        'Informe exatamente um entre position_index (junção) e ' +
+        'position_s_from_anchor (distância da âncora)',
+    },
+  )
 
 export const lineSegmentSchema = z.object({
   length: z.number().positive('Comprimento deve ser > 0'),

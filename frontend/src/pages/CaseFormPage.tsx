@@ -473,6 +473,11 @@ export function CaseFormPage() {
                   control={control}
                   attachments={attachmentsArray}
                   segmentCount={segmentsArray.fields.length}
+                  setValue={setValue}
+                  totalLength={(values.segments ?? []).reduce(
+                    (acc, s) => acc + (s.length ?? 0),
+                    0,
+                  )}
                   kind="buoy"
                 />
               </TabsContent>
@@ -487,6 +492,11 @@ export function CaseFormPage() {
                   control={control}
                   attachments={attachmentsArray}
                   segmentCount={segmentsArray.fields.length}
+                  setValue={setValue}
+                  totalLength={(values.segments ?? []).reduce(
+                    (acc, s) => acc + (s.length ?? 0),
+                    0,
+                  )}
                   kind="clump_weight"
                 />
               </TabsContent>

@@ -528,6 +528,15 @@ function LineForm({
             >
           }
           segmentCount={segArray.fields.length}
+          setValue={setValue}
+          totalLength={segArray.fields.reduce(
+            (acc, _f, idx) => {
+              const len = (segArray.fields[idx] as unknown as { length?: number })
+                .length
+              return acc + (len ?? 0)
+            },
+            0,
+          )}
           kind="buoy"
           basePath={`${base}.attachments`}
         />
@@ -541,6 +550,15 @@ function LineForm({
             >
           }
           segmentCount={segArray.fields.length}
+          setValue={setValue}
+          totalLength={segArray.fields.reduce(
+            (acc, _f, idx) => {
+              const len = (segArray.fields[idx] as unknown as { length?: number })
+                .length
+              return acc + (len ?? 0)
+            },
+            0,
+          )}
           kind="clump_weight"
           basePath={`${base}.attachments`}
         />

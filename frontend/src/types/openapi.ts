@@ -426,6 +426,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mooring-systems/{msys_id}/export/json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exportar mooring system como JSON normalizado
+         * @description Retorna o `MooringSystemOutput` completo (input + últimas execuções). Equivalente ao GET, com header `Content-Disposition: attachment` para download direto pelo browser.
+         */
+        get: operations["export_mooring_system_json_api_v1_mooring_systems__msys_id__export_json_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mooring-systems/{msys_id}/export/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exportar relatório técnico em PDF
+         * @description Gera um PDF A4 com header, disclaimer técnico, tabela de configuração, plan view (matplotlib), tabela de agregados e tabela detalhada por linha. Usa a **última execução** do sistema; se nunca foi resolvido, gera relatório parcial só com as entradas e plan view com âncoras estimadas.
+         */
+        get: operations["export_mooring_system_pdf_api_v1_mooring_systems__msys_id__export_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -735,20 +775,23 @@ export interface components {
         /**
          * LineAttachment
          * @description Elemento pontual ao longo da linha — boia (empuxo líquido) ou clump
-         *     weight (peso adicional). F5.2.
+         *     weight (peso adicional). F5.2 + F5.4.6a.
          *
-         *     Convenção: attachments são posicionados em **junções entre segmentos**
-         *     (não no meio de um segmento). Para colocar uma boia no meio de uma
-         *     linha homogênea, divida em 2 segmentos idênticos e ponha a boia entre
-         *     eles.
+         *     A posição pode ser informada de duas formas (use **exatamente uma**):
+         *
+         *     - `position_s_from_anchor` (m, recomendado) — arc length desde a
+         *       âncora ao longo da linha **não-esticada**. O solver divide o
+         *       segmento que contém essa posição em dois sub-segmentos idênticos
+         *       durante o pré-processamento, transformando o attachment numa junção
+         *       virtual (preserva a matemática original do solver de junções).
+         *
+         *     - `position_index` (legacy, F5.2) — índice da junção pré-existente
+         *       entre segmentos heterogêneos. 0 = entre seg 0 e seg 1.
          *
          *     `submerged_force` é magnitude positiva (N). A direção física é
          *     determinada pelo `kind`:
          *       - `clump_weight`: tende a puxar a linha para BAIXO → V += force
          *       - `buoy`:         tende a empurrar a linha para CIMA  → V −= force
-         *
-         *     `position_index` é zero-based: 0 = junção entre segmento 0 e 1.
-         *     Range válido: 0 .. len(segments) − 2.
          */
         LineAttachment: {
             /**
@@ -763,9 +806,14 @@ export interface components {
             submerged_force: number;
             /**
              * Position Index
-             * @description Índice da junção (0 = entre segmento 0 e 1). Deve ser < N-1 onde N é o número de segmentos.
+             * @description (Legacy F5.2) Índice da junção pré-existente entre segmentos. 0 = entre seg 0 e seg 1; deve ser ≤ N-2.
              */
-            position_index: number;
+            position_index?: number | null;
+            /**
+             * Position S From Anchor
+             * @description Arc length desde a âncora (m), ao longo da linha não-esticada. Use este modo quando a boia/clump fica no meio de um segmento — o solver divide o segmento automaticamente. Mutuamente exclusivo com `position_index`.
+             */
+            position_s_from_anchor?: number | null;
             /**
              * Name
              * @description Identificador legível para relatórios (ex.: 'Boia A')
@@ -2627,6 +2675,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MooringSystemExecutionOutput"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_mooring_system_json_api_v1_mooring_systems__msys_id__export_json_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                msys_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MooringSystemOutput"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_mooring_system_pdf_api_v1_mooring_systems__msys_id__export_pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                msys_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PDF gerado com sucesso */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
                 };
             };
             /** @description Not Found */

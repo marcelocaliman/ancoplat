@@ -1,10 +1,12 @@
 import { Anchor, Plus, Trash2, Waves } from 'lucide-react'
 import {
   Controller,
+  useWatch,
   type Control,
   type FieldValues,
   type Path,
   type UseFieldArrayReturn,
+  type UseFormSetValue,
 } from 'react-hook-form'
 import { UnitInput } from '@/components/common/UnitInput'
 import { Button } from '@/components/ui/button'
@@ -28,6 +30,13 @@ export interface AttachmentsEditorProps<
   attachments: UseFieldArrayReturn<T, never, 'id'>
   segmentCount: number
   /**
+   * `setValue` do form pai. Necessário para o toggle de modo
+   * Junção/Distância (F5.4.6a) — quando o usuário troca de modo,
+   * limpamos um dos dois campos (`position_index` ou
+   * `position_s_from_anchor`).
+   */
+  setValue: UseFormSetValue<T>
+  /**
    * Quando definido, mostra somente itens deste tipo (boias OU clumps).
    * Sem o filtro, mostra ambos junto com seletor de tipo (modo legacy).
    */
@@ -38,6 +47,11 @@ export interface AttachmentsEditorProps<
    * dentro de um sistema multi-linha.
    */
   basePath?: string
+  /**
+   * Comprimento total da linha (m), usado para o input de distância
+   * exibir o range válido. Quando ausente, usa um placeholder vazio.
+   */
+  totalLength?: number
 }
 
 /**
@@ -50,8 +64,10 @@ export function AttachmentsEditor<T extends FieldValues = CaseFormValues>({
   control,
   attachments,
   segmentCount,
+  setValue,
   kind,
   basePath = 'attachments',
+  totalLength,
 }: AttachmentsEditorProps<T>) {
   const maxJunctions = Math.max(0, segmentCount - 1)
   const canAdd = segmentCount >= 2
@@ -76,14 +92,14 @@ export function AttachmentsEditor<T extends FieldValues = CaseFormValues>({
         : 'Boias e clump weights'
 
   const addNew = () => {
-    const usedJunctions = new Set(allFields.map((a) => a.position_index))
-    let firstFree = 0
-    while (firstFree < maxJunctions && usedJunctions.has(firstFree))
-      firstFree += 1
+    // F5.4.6a: por padrão, novos attachments usam `position_s_from_anchor`
+    // — mais flexível e didático ("a 100 m da âncora") do que apontar
+    // para uma junção pré-existente.
     attachments.append({
       kind: kind ?? 'buoy',
       submerged_force: 50_000,
-      position_index: Math.min(firstFree, maxJunctions - 1),
+      position_s_from_anchor: 100,
+      position_index: null,
       name: null,
     } as never)
   }
@@ -133,9 +149,11 @@ export function AttachmentsEditor<T extends FieldValues = CaseFormValues>({
               <AttachmentRow
                 realIndex={realIdx}
                 control={control}
+                setValue={setValue}
                 maxJunction={maxJunctions - 1}
                 showKindSelect={!kind}
                 basePath={basePath}
+                totalLength={totalLength}
                 onRemove={() => attachments.remove(realIdx)}
               />
             </div>
@@ -161,20 +179,45 @@ export function AttachmentsEditor<T extends FieldValues = CaseFormValues>({
 function AttachmentRow<T extends FieldValues = CaseFormValues>({
   realIndex,
   control,
+  setValue,
   maxJunction,
   showKindSelect,
   basePath,
+  totalLength,
   onRemove,
 }: {
   realIndex: number
   control: Control<T>
+  setValue: UseFormSetValue<T>
   maxJunction: number
   showKindSelect: boolean
   basePath: string
+  totalLength?: number
   onRemove: () => void
 }) {
   const p = (suffix: string): Path<T> =>
     `${basePath}.${realIndex}.${suffix}` as Path<T>
+  // Modo derivado dos campos atuais: se `position_s_from_anchor` está
+  // setado, mostra input de distância; caso contrário, input de junção.
+  const positionS = useWatch({ control, name: p('position_s_from_anchor') })
+  const mode: 'distance' | 'junction' =
+    positionS != null ? 'distance' : 'junction'
+
+  function setMode(next: 'distance' | 'junction') {
+    if (next === mode) return
+    if (next === 'distance') {
+      setValue(p('position_s_from_anchor'), 100 as never, {
+        shouldValidate: true,
+      })
+      setValue(p('position_index'), null as never, { shouldValidate: true })
+    } else {
+      setValue(p('position_index'), 0 as never, { shouldValidate: true })
+      setValue(p('position_s_from_anchor'), null as never, {
+        shouldValidate: true,
+      })
+    }
+  }
+
   return (
     <div className="space-y-2 rounded-md border border-border/40 bg-background p-2">
       <div className="flex items-center gap-2">
@@ -274,29 +317,66 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
           />
         </div>
         <div className="flex flex-col gap-0.5">
-          <Label className="text-[10px] font-medium text-muted-foreground">
-            Junção
-          </Label>
-          <Controller
-            control={control}
-            name={p('position_index')}
-            render={({ field }) => (
-              <Input
-                type="number"
-                min={0}
-                max={maxJunction}
-                step={1}
-                value={(field.value as number | null) ?? 0}
-                onChange={(e) =>
-                  field.onChange(parseInt(e.target.value || '0', 10))
-                }
-                className="h-8 font-mono"
-                title={`Entre seg ${
-                  ((field.value as number | null) ?? 0) + 1
-                } e seg ${((field.value as number | null) ?? 0) + 2}`}
-              />
-            )}
-          />
+          <div className="flex items-center justify-between gap-1">
+            <Label className="text-[10px] font-medium text-muted-foreground">
+              {mode === 'distance' ? 'Distância da âncora (m)' : 'Junção'}
+            </Label>
+            <button
+              type="button"
+              onClick={() =>
+                setMode(mode === 'distance' ? 'junction' : 'distance')
+              }
+              className="text-[9px] uppercase tracking-wide text-primary hover:underline"
+              title="Alternar modo de posicionamento"
+            >
+              {mode === 'distance' ? '↺ junção' : '↺ distância'}
+            </button>
+          </div>
+          {mode === 'distance' ? (
+            <Controller
+              control={control}
+              name={p('position_s_from_anchor')}
+              render={({ field }) => (
+                <Input
+                  type="number"
+                  min={0.01}
+                  max={totalLength ? totalLength - 0.01 : undefined}
+                  step={1}
+                  value={(field.value as number | null) ?? 0}
+                  onChange={(e) =>
+                    field.onChange(parseFloat(e.target.value || '0'))
+                  }
+                  className="h-8 font-mono"
+                  title={
+                    totalLength
+                      ? `Range válido: 0 < s < ${totalLength.toFixed(1)} m`
+                      : 'Distância em metros desde a âncora ao longo da linha'
+                  }
+                />
+              )}
+            />
+          ) : (
+            <Controller
+              control={control}
+              name={p('position_index')}
+              render={({ field }) => (
+                <Input
+                  type="number"
+                  min={0}
+                  max={maxJunction}
+                  step={1}
+                  value={(field.value as number | null) ?? 0}
+                  onChange={(e) =>
+                    field.onChange(parseInt(e.target.value || '0', 10))
+                  }
+                  className="h-8 font-mono"
+                  title={`Entre seg ${
+                    ((field.value as number | null) ?? 0) + 1
+                  } e seg ${((field.value as number | null) ?? 0) + 2}`}
+                />
+              )}
+            />
+          )}
         </div>
       </div>
     </div>

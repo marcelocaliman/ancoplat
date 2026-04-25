@@ -201,20 +201,23 @@ AttachmentKind = Literal["clump_weight", "buoy"]
 class LineAttachment(BaseModel):
     """
     Elemento pontual ao longo da linha — boia (empuxo líquido) ou clump
-    weight (peso adicional). F5.2.
+    weight (peso adicional). F5.2 + F5.4.6a.
 
-    Convenção: attachments são posicionados em **junções entre segmentos**
-    (não no meio de um segmento). Para colocar uma boia no meio de uma
-    linha homogênea, divida em 2 segmentos idênticos e ponha a boia entre
-    eles.
+    A posição pode ser informada de duas formas (use **exatamente uma**):
+
+    - `position_s_from_anchor` (m, recomendado) — arc length desde a
+      âncora ao longo da linha **não-esticada**. O solver divide o
+      segmento que contém essa posição em dois sub-segmentos idênticos
+      durante o pré-processamento, transformando o attachment numa junção
+      virtual (preserva a matemática original do solver de junções).
+
+    - `position_index` (legacy, F5.2) — índice da junção pré-existente
+      entre segmentos heterogêneos. 0 = entre seg 0 e seg 1.
 
     `submerged_force` é magnitude positiva (N). A direção física é
     determinada pelo `kind`:
       - `clump_weight`: tende a puxar a linha para BAIXO → V += force
       - `buoy`:         tende a empurrar a linha para CIMA  → V −= force
-
-    `position_index` é zero-based: 0 = junção entre segmento 0 e 1.
-    Range válido: 0 .. len(segments) − 2.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -224,17 +227,45 @@ class LineAttachment(BaseModel):
         ..., gt=0,
         description="Força submersa líquida em N (sempre positiva)",
     )
-    position_index: int = Field(
-        ..., ge=0,
+    position_index: Optional[int] = Field(
+        default=None,
+        ge=0,
         description=(
-            "Índice da junção (0 = entre segmento 0 e 1). Deve ser < N-1 "
-            "onde N é o número de segmentos."
+            "(Legacy F5.2) Índice da junção pré-existente entre "
+            "segmentos. 0 = entre seg 0 e seg 1; deve ser ≤ N-2."
+        ),
+    )
+    position_s_from_anchor: Optional[float] = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Arc length desde a âncora (m), ao longo da linha "
+            "não-esticada. Use este modo quando a boia/clump fica no "
+            "meio de um segmento — o solver divide o segmento "
+            "automaticamente. Mutuamente exclusivo com `position_index`."
         ),
     )
     name: Optional[str] = Field(
         default=None, max_length=80,
         description="Identificador legível para relatórios (ex.: 'Boia A')",
     )
+
+    @model_validator(mode="after")
+    def _exactly_one_position(self) -> "LineAttachment":
+        has_idx = self.position_index is not None
+        has_s = self.position_s_from_anchor is not None
+        if has_idx and has_s:
+            raise ValueError(
+                "LineAttachment: especifique exatamente um entre "
+                "`position_index` e `position_s_from_anchor` (não ambos)"
+            )
+        if not has_idx and not has_s:
+            raise ValueError(
+                "LineAttachment: é obrigatório informar `position_index` "
+                "(junção entre segmentos) ou `position_s_from_anchor` "
+                "(distância em m da âncora)"
+            )
+        return self
 
 
 class BoundaryConditions(BaseModel):

@@ -216,10 +216,14 @@ def test_BC_AT_05_sem_attachments_match_sem_parametro() -> None:
 # ==============================================================================
 
 
-def test_BC_AT_06_attachments_com_1_segmento_invalido() -> None:
+def test_BC_AT_06_attachments_com_1_segmento_via_position_index_invalido() -> None:
     """
-    Attachments precisam de pelo menos 2 segmentos (ficam nas junções).
-    Com 1 segmento, deve cair em INVALID_CASE com mensagem orientadora.
+    Em linha de 1 segmento, position_index=0 aponta para o fairlead
+    (não há junção entre segmentos). Resolver rejeita com INVALID_CASE.
+
+    F5.4.6a: posicionar boia/clump em linha homogênea de 1 segmento
+    agora é possível via `position_s_from_anchor` (resolver divide
+    automaticamente). Veja `test_BC_AT_06b_position_s_em_1_segmento`.
     """
     s = LineSegment(length=600.0, w=200.0, EA=4.4e8, MBL=4.8e6, category="Wire")
     boia = LineAttachment(kind="buoy", submerged_force=20_000.0, position_index=0)
@@ -227,4 +231,29 @@ def test_BC_AT_06_attachments_com_1_segmento_invalido() -> None:
 
     r = solve([s], bc, attachments=[boia])
     assert r.status == ConvergenceStatus.INVALID_CASE
-    assert "junções" in r.message.lower() or "junção" in r.message.lower() or "segmento" in r.message.lower()
+    assert "fairlead" in r.message.lower() or "âncora" in r.message.lower()
+
+
+def test_BC_AT_06b_position_s_em_1_segmento_funciona() -> None:
+    """
+    F5.4.6a: linha homogênea de 1 segmento + boia em
+    `position_s_from_anchor=300m` agora funciona — o resolver divide
+    o segmento em dois internamente e o solver canônico vê a boia na
+    nova junção 0.
+    """
+    s = LineSegment(length=600.0, w=200.0, EA=4.4e8, MBL=4.8e6, category="Wire")
+    boia = LineAttachment(
+        kind="buoy", submerged_force=20_000.0, position_s_from_anchor=300.0,
+    )
+    bc = BoundaryConditions(h=400.0, mode=SolutionMode.TENSION, input_value=1.5e6)
+
+    r = solve([s], bc, attachments=[boia])
+    # Aceita CONVERGED ou ILL_CONDITIONED (solver pode ficar próximo do
+    # limite numérico nesta geometria); o ponto-chave é que NÃO é
+    # INVALID_CASE — a posição via s_from_anchor é aceita.
+    assert r.status in (
+        ConvergenceStatus.CONVERGED, ConvergenceStatus.ILL_CONDITIONED,
+    )
+    # O resultado tem 3 fronteiras de segmento (anchor + 1 split + fairlead)
+    # já que o resolver dividiu o segmento original em dois.
+    assert len(r.segment_boundaries) >= 3
