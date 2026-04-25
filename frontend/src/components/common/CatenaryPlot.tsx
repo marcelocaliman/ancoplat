@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { LineAttachment, SolverResult } from '@/api/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useThemeStore, resolveTheme } from '@/store/theme'
@@ -189,6 +189,25 @@ export function CatenaryPlot({
     ? { width: '100%', height: '100%' }
     : { width: '100%', height }
   const theme = resolveTheme(useThemeStore((s) => s.theme))
+
+  // Mede o canvas do plot para que os ícones SVG (fairlead, âncora,
+  // boia, clump) tenham tamanho **constante em pixels** independente do
+  // range dos eixos. Sem isso, em catenárias longas (X grande) os
+  // ícones encolhem porque sizex/sizey são em unidades de dado.
+  const plotContainerRef = useRef<HTMLDivElement>(null)
+  const [plotPx, setPlotPx] = useState<{ w: number; h: number } | null>(null)
+  useEffect(() => {
+    const el = plotContainerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const e = entries[0]
+      if (!e) return
+      const { width, height } = e.contentRect
+      if (width > 0 && height > 0) setPlotPx({ w: width, h: height })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // Paleta theme-aware
   const palette = useMemo(() => {
@@ -612,16 +631,31 @@ export function CatenaryPlot({
   ])
 
   // ── Imagens SVG sobrepostas (fairlead + âncora + attachments) ──
-  // Tamanho proporcional ao range do menor eixo, para não dominar o canvas.
+  // Tamanho **fixo em pixels** na tela: medimos o canvas via ResizeObserver
+  // e convertemos targetPx → unidades de dado usando os ranges atuais.
+  // Assim ancor/fairlead aparecem com o mesmo tamanho visual seja qual
+  // for o range horizontal (linha curta ou longa).
   const images = useMemo(() => {
+    // Margens (devem casar com layout.margin abaixo).
+    const margin = { t: 18, r: 24, b: 48, l: 64 }
+    // Fallback enquanto o ResizeObserver não disparou (primeira render).
+    const containerW = plotPx?.w ?? 800
+    const containerH = plotPx?.h ?? 480
+    const plotW = Math.max(containerW - margin.l - margin.r, 80)
+    const plotH = Math.max(containerH - margin.t - margin.b, 80)
+
     const xSpan = ranges.xRange[1]! - ranges.xRange[0]!
     const ySpan = ranges.yRange[1]! - ranges.yRange[0]!
-    // ícone de ~9% do menor span; assim ele não some quando a água é rasa nem
-    // estoura quando o trecho horizontal é longo.
-    const iconBase = Math.min(xSpan, ySpan) * 0.09
-    // Attachments (boias e clumps) ficam um pouco menores (~70%) que os
-    // ícones de fairlead/âncora para não dominar a curva da linha.
-    const attIcon = iconBase * 0.7
+    // Tamanho-alvo em pixels; calculamos sizex/sizey em unidades de dado
+    // tais que o ícone meça `targetPx` em cada eixo na tela. Como xSpan
+    // e ySpan podem ter aspect ratio bem diferente, calcular separado
+    // mantém o ícone visualmente quadrado (não distorcido).
+    const fairleadTargetPx = 32
+    const attTargetPx = 24 // ~75% do ícone principal
+    const fxData = (fairleadTargetPx / plotW) * xSpan
+    const fyData = (fairleadTargetPx / plotH) * ySpan
+    const axData = (attTargetPx / plotW) * xSpan
+    const ayData = (attTargetPx / plotH) * ySpan
 
     const imgs: Record<string, unknown>[] = [
       {
@@ -630,8 +664,8 @@ export function CatenaryPlot({
         yref: 'y',
         x: 0,
         y: fairleadY,
-        sizex: iconBase,
-        sizey: iconBase,
+        sizex: fxData,
+        sizey: fyData,
         xanchor: 'center',
         yanchor: 'middle',
         layer: 'above',
@@ -642,15 +676,14 @@ export function CatenaryPlot({
         yref: 'y',
         x: Xtotal,
         y: anchorY,
-        sizex: iconBase,
-        sizey: iconBase,
+        sizex: fxData,
+        sizey: fyData,
         xanchor: 'center',
         yanchor: 'middle',
         layer: 'above',
       },
     ]
 
-    // Posiciona ícones SVG nas junções onde há boia ou clump.
     const segBounds = result.segment_boundaries ?? []
     if (attachments.length > 0 && segBounds.length >= 2) {
       const N = curve.plotX.length
@@ -672,8 +705,8 @@ export function CatenaryPlot({
           yref: 'y',
           x: px,
           y: py,
-          sizex: attIcon,
-          sizey: attIcon,
+          sizex: axData,
+          sizey: ayData,
           xanchor: 'center',
           yanchor: 'middle',
           layer: 'above',
@@ -681,7 +714,17 @@ export function CatenaryPlot({
       }
     }
     return imgs
-  }, [ranges, palette, fairleadY, anchorY, Xtotal, attachments, curve, result.segment_boundaries])
+  }, [
+    ranges,
+    palette,
+    fairleadY,
+    anchorY,
+    Xtotal,
+    attachments,
+    curve,
+    result.segment_boundaries,
+    plotPx,
+  ])
 
   // ── Annotations: rótulos dos pontos ──
   const annotations = useMemo(
@@ -864,7 +907,7 @@ export function CatenaryPlot({
   }, [result, palette, theme, attachments, segments])
 
   return (
-    <div className="relative h-full w-full">
+    <div ref={plotContainerRef} className="relative h-full w-full">
       {/* Legenda HTML flutuante no topo do plot, com SVGs inline para
           fairlead e âncora — algo que a legenda nativa do Plotly não suporta. */}
       <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center px-2">
