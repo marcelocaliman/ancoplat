@@ -28,7 +28,17 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-SeverityLevel = Literal["error", "warning"]
+SeverityLevel = Literal["critical", "error", "warning", "info"]
+"""
+4-level severity hierarchy:
+- critical: caso não pode ser computado (zero geometria, math impossível)
+- error:    geometria existe mas viola física (boia voadora, clump enterrado)
+- warning:  geometria válida mas ill-conditioned (anchor uplift alto, taut)
+- info:     observação útil (margem de segurança, detalhe geométrico)
+
+Cores e prioridade são consistentes em toda a UI: critical/error = vermelho,
+warning = âmbar, info = azul/cinza.
+"""
 
 
 class SuggestedChange(BaseModel):
@@ -55,12 +65,20 @@ class SolverDiagnostic(BaseModel):
     Diagnóstico estruturado do solver — substitui mensagens de erro
     soltas por algo que a UI pode renderizar com clareza e sugerir
     correções automaticamente.
+
+    `affected_fields` lista os caminhos dotted dos campos do form que
+    causaram este diagnóstico. A UI usa essa lista pra renderizar
+    indicadores visuais nos campos (dot vermelho) e no tab que contém
+    eles (Boias ⚠ 2). Pode ser vazio para diagnósticos globais (e.g.,
+    geometria infactível).
     """
 
     model_config = ConfigDict(frozen=True)
 
     code: str = Field(..., description="Código único (D001, D002, ...)")
-    severity: SeverityLevel = Field(..., description="error ou warning")
+    severity: SeverityLevel = Field(
+        ..., description="critical, error, warning ou info"
+    )
     title: str = Field(..., description="Resumo em uma linha")
     cause: str = Field(..., description="Explicação física/matemática")
     suggestion: str = Field(
@@ -68,6 +86,13 @@ class SolverDiagnostic(BaseModel):
         description="Como corrigir, em prosa. Pode ser vazio se houver suggested_changes.",
     )
     suggested_changes: list[SuggestedChange] = Field(default_factory=list)
+    affected_fields: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Caminhos dotted dos campos culpados (ex: 'attachments[0].submerged_force'). "
+            "UI renderiza indicador visual em cada um."
+        ),
+    )
 
 
 # =============================================================================
@@ -100,7 +125,7 @@ def D001_buoy_near_anchor(
 
     return SolverDiagnostic(
         code="D001_BUOY_NEAR_ANCHOR",
-        severity="error",
+        severity="critical",
         title=f"Boia '{buoy_name}' perto demais da âncora",
         cause=(
             f"O empuxo configurado ({F_atual_te:.2f} te) exigiria um arco "
@@ -120,6 +145,10 @@ def D001_buoy_near_anchor(
                 value=round(F_max_n * 0.95, 1),  # 5% de margem
                 label=f"Reduzir empuxo para {F_max_te * 0.95:.2f} te",
             ),
+        ],
+        affected_fields=[
+            f"attachments[{buoy_index}].submerged_force",
+            f"attachments[{buoy_index}].position_s_from_anchor",
         ],
     )
 
@@ -144,7 +173,7 @@ def D002_buoy_near_fairlead(
 
     return SolverDiagnostic(
         code="D002_BUOY_NEAR_FAIRLEAD",
-        severity="error",
+        severity="critical",
         title=f"Boia '{buoy_name}' perto demais do fairlead",
         cause=(
             f"O arco da boia ({s_arch_atual:.0f} m) extrapolaria o "
@@ -161,6 +190,10 @@ def D002_buoy_near_fairlead(
                 value=round(F_max_n * 0.95, 1),
                 label=f"Reduzir empuxo para {F_max_te * 0.95:.2f} te",
             ),
+        ],
+        affected_fields=[
+            f"attachments[{buoy_index}].submerged_force",
+            f"attachments[{buoy_index}].position_s_from_anchor",
         ],
     )
 
@@ -188,7 +221,7 @@ def D003_arch_does_not_fit_grounded(
 
     return SolverDiagnostic(
         code="D003_ARCH_OVERFLOWS_GROUNDED",
-        severity="error",
+        severity="critical",
         title=f"Arco da boia '{buoy_name}' não cabe no trecho apoiado",
         cause=(
             f"O arco gerado pela boia ({s_arch_atual:.0f} m) extrapola o "
@@ -207,6 +240,9 @@ def D003_arch_does_not_fit_grounded(
                 value=round(F_max_n * 0.95, 1),
                 label=f"Reduzir empuxo para {F_max_te * 0.95:.2f} te",
             ),
+        ],
+        affected_fields=[
+            f"attachments[{buoy_index}].submerged_force",
         ],
     )
 
@@ -232,7 +268,7 @@ def D004_buoy_above_surface(
 
     return SolverDiagnostic(
         code="D004_BUOY_ABOVE_SURFACE",
-        severity="warning",
+        severity="error",
         title=f"Boia '{buoy_name}' fora d'água ({height_above_m:.1f} m acima)",
         cause=(
             f"O empuxo configurado ({F_atual_te:.2f} te) é maior do que "
@@ -250,6 +286,9 @@ def D004_buoy_above_surface(
                 value=round(F_max_n, 1),
                 label=f"Reduzir empuxo para {F_max_te:.2f} te",
             ),
+        ],
+        affected_fields=[
+            f"attachments[{buoy_index}].submerged_force",
         ],
     )
 
@@ -271,7 +310,7 @@ def D005_buoyancy_exceeds_weight(
 
     return SolverDiagnostic(
         code="D005_BUOYANCY_EXCEEDS_WEIGHT",
-        severity="error",
+        severity="critical",
         title=f"Empuxo da boia '{buoy_name}' excede o peso da linha",
         cause=(
             f"O empuxo total das boias ({F_atual_te:.2f} te) excede o peso "
@@ -291,6 +330,9 @@ def D005_buoyancy_exceeds_weight(
                 label=f"Reduzir empuxo para {F_max_te * 0.9:.2f} te",
             ),
         ],
+        affected_fields=[
+            f"attachments[{buoy_index}].submerged_force",
+        ],
     )
 
 
@@ -306,7 +348,7 @@ def D006_cable_too_short(
 
     return SolverDiagnostic(
         code="D006_CABLE_TOO_SHORT",
-        severity="error",
+        severity="critical",
         title="Cabo curto demais para a lâmina d'água",
         cause=(
             f"Comprimento do cabo ({cable_length:.0f} m) é menor ou igual à "
@@ -324,6 +366,7 @@ def D006_cable_too_short(
                 label=f"Aumentar comprimento para {L_min:.0f} m",
             ),
         ],
+        affected_fields=["segments[0].length", "boundary.h"],
     )
 
 
@@ -337,7 +380,7 @@ def D007_tfl_below_critical_horizontal(
     """
     return SolverDiagnostic(
         code="D007_TFL_TOO_LOW",
-        severity="error",
+        severity="critical",
         title="T_fl insuficiente para sustentar a coluna d'água",
         cause=(
             f"A tração no fairlead ({tfl_atual / 1000:.1f} kN) não é "
@@ -354,6 +397,90 @@ def D007_tfl_below_critical_horizontal(
                 label=f"Aumentar T_fl para {tfl_min_critical / 1000 * 1.1:.0f} kN",
             ),
         ],
+        affected_fields=["boundary.input_value"],
+    )
+
+
+def D008_safety_margin(
+    *,
+    parameter: str,
+    field_path: str,
+    current: float,
+    limit: float,
+    margin_pct: float,
+    label_unit: str = "",
+) -> SolverDiagnostic:
+    """
+    INFO: parâmetro está perto de um limite (margem < 15%). Não é
+    erro mas alerta o engenheiro pra que considere uma folga maior.
+    """
+    return SolverDiagnostic(
+        code="D008_SAFETY_MARGIN",
+        severity="info",
+        title=f"{parameter} próximo do limite (margem {margin_pct:.0f}%)",
+        cause=(
+            f"{parameter} atual é {current:.2f}{label_unit} contra um limite "
+            f"de {limit:.2f}{label_unit}. Pequenas variações de carga ambiental "
+            "podem levar o sistema fora da janela de operação."
+        ),
+        suggestion=(
+            "Considere aumentar a margem em pelo menos 25% para resiliência "
+            "operacional."
+        ),
+        affected_fields=[field_path] if field_path else [],
+    )
+
+
+def D009_anchor_uplift_high(
+    *,
+    angle_deg: float,
+    severity: SeverityLevel = "warning",
+) -> SolverDiagnostic:
+    """
+    Anchor uplift acima do limite de drag anchors típicos (5°/15°).
+    """
+    return SolverDiagnostic(
+        code="D009_ANCHOR_UPLIFT_HIGH",
+        severity=severity,
+        title=f"Anchor uplift {angle_deg:.1f}° {'crítico' if severity == 'error' else 'alto'}",
+        cause=(
+            f"O ângulo da linha na âncora ({angle_deg:.1f}°) está acima do "
+            "tolerável para drag anchors (DA / VLA), que tipicamente "
+            "operam ≤ 5°. Acima disso, a âncora pode arrastar."
+        ),
+        suggestion=(
+            "Use um pile/suction caisson, OU aumente o comprimento do cabo "
+            "para reduzir o ângulo, OU reposicione a âncora mais longe."
+        ),
+        affected_fields=["segments[0].length", "boundary.input_value"],
+    )
+
+
+def D010_high_utilization(
+    *,
+    utilization: float,
+    threshold: float,
+    severity: SeverityLevel = "warning",
+) -> SolverDiagnostic:
+    """
+    Utilização T_fl/MBL acima do limite operacional. Não bloqueia
+    o cálculo (matemática converge), mas indica que o cabo está
+    trabalhando perto do MBL.
+    """
+    return SolverDiagnostic(
+        code="D010_HIGH_UTILIZATION",
+        severity=severity,
+        title=f"Utilização {utilization * 100:.0f}% acima do limite operacional",
+        cause=(
+            f"T_fl/MBL = {utilization:.2%} acima do limite de "
+            f"{threshold:.0%}. O cabo está trabalhando próximo da capacidade "
+            "máxima — sensibilidade alta a aumentos de carga."
+        ),
+        suggestion=(
+            "Use um cabo com MBL maior, OU reduza T_fl ajustando geometria, "
+            "OU aceite o nível atual com revisão técnica do limite operacional."
+        ),
+        affected_fields=["boundary.input_value", "segments[0].MBL"],
     )
 
 
@@ -367,7 +494,7 @@ def D900_generic_nonconvergence(
     """
     return SolverDiagnostic(
         code="D900_GENERIC",
-        severity="error",
+        severity="critical",
         title="Solver não convergiu",
         cause=(
             "A configuração atual não tem solução numérica estável. "
@@ -380,6 +507,7 @@ def D900_generic_nonconvergence(
             "estável, (b) reduzir empuxo de boias se houver, (c) aumentar "
             "ou diminuir levemente o comprimento do cabo."
         ),
+        affected_fields=["boundary.input_value", "segments[0].length"],
     )
 
 
@@ -416,6 +544,9 @@ __all__ = [
     "D005_buoyancy_exceeds_weight",
     "D006_cable_too_short",
     "D007_tfl_below_critical_horizontal",
+    "D008_safety_margin",
+    "D009_anchor_uplift_high",
+    "D010_high_utilization",
     "D900_generic_nonconvergence",
     "SolverDiagnostic",
     "SolverDiagnosticError",

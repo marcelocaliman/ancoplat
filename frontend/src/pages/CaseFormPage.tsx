@@ -33,9 +33,24 @@ import type { SolverResult } from '@/api/types'
 import { AttachmentsEditor } from '@/components/common/AttachmentsEditor'
 import { BathymetryPopover } from '@/components/common/BathymetryPopover'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
+import {
+  DiagnosticsProvider,
+  TabValidationCounter,
+} from '@/components/common/FieldValidation'
 import { SegmentEditor } from '@/components/common/SegmentEditor'
-import { SolverDiagnosticsCard } from '@/components/common/SolverDiagnosticsCard'
+import {
+  SEVERITY_STYLES,
+  SolverDiagnosticsCard,
+  type SolverDiagnostic,
+} from '@/components/common/SolverDiagnosticsCard'
+import { TemplatePicker } from '@/components/common/TemplatePicker'
 import { UnitInput } from '@/components/common/UnitInput'
+import { ValidationLogCard } from '@/components/common/ValidationLogCard'
+import {
+  type DiagnosticSeverity,
+  runPreSolveDiagnostics,
+  worstSeverity,
+} from '@/lib/preSolveDiagnostics'
 import {
   AlertBadge,
   StatusBadge,
@@ -211,6 +226,45 @@ export function CaseFormPage() {
     staleTime: 30_000,
   })
 
+  // F5.7.6 — pre-solve diagnostics (rodam ANTES do backend).
+  // Detectam erros óbvios em ms: cabo curto, empuxo > peso, posições
+  // inválidas, T_fl baixo. Concatenam com diagnostics post-solve.
+  const preSolveDiagnostics = useMemo(
+    () => runPreSolveDiagnostics(debouncedValues),
+    [debouncedValues],
+  )
+  const allDiagnostics: SolverDiagnostic[] = useMemo(() => {
+    const post =
+      ((previewQuery.data as unknown as {
+        diagnostics?: SolverDiagnostic[]
+      })?.diagnostics ?? []) as SolverDiagnostic[]
+    return [...preSolveDiagnostics, ...post]
+  }, [preSolveDiagnostics, previewQuery.data])
+
+  // F5.7.6 — track última configuração que CONVERGIU pra mostrar diff
+  // quando o estado atual fica inválido. Atualiza só quando o solver
+  // retorna CONVERGED com geometria não-vazia.
+  const [lastValidValues, setLastValidValues] = useState<CaseFormValues | null>(
+    null,
+  )
+  useEffect(() => {
+    const data = previewQuery.data
+    if (!data) return
+    const hasGeom = (data.coords_x?.length ?? 0) > 1
+    const hasCriticalDiag = allDiagnostics.some(
+      (d) => d.severity === 'critical',
+    )
+    if (data.status === 'converged' && hasGeom && !hasCriticalDiag) {
+      setLastValidValues(structuredClone(debouncedValues))
+    }
+  }, [previewQuery.data, debouncedValues, allDiagnostics])
+
+  // Severidade pior dos diagnostics ativos — alimenta o plot border.
+  const diagWorst: DiagnosticSeverity | null = useMemo(
+    () => worstSeverity(allDiagnostics),
+    [allDiagnostics],
+  )
+
   const saveMutation = useMutation({
     mutationFn: async (v: CaseFormValues) => {
       const payload = {
@@ -292,6 +346,15 @@ export function CaseFormPage() {
         result={previewQuery.data}
         previewReady={previewReady}
       />
+      {/* F5.7.6 — Template picker: starting points testados */}
+      {!isEdit && (
+        <TemplatePicker
+          onSelect={(tpl) => {
+            reset(tpl.values)
+            toast.success(`Template "${tpl.name}" carregado.`)
+          }}
+        />
+      )}
       <Button variant="ghost" size="sm" asChild>
         <Link to={isEdit ? `/cases/${id}` : '/cases'}>Cancelar</Link>
       </Button>
@@ -316,7 +379,7 @@ export function CaseFormPage() {
   )
 
   return (
-    <>
+    <DiagnosticsProvider diagnostics={allDiagnostics}>
       <Topbar breadcrumbs={breadcrumbs} actions={actions} />
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
         {/* ───── Linha 1: Metadados (compacta) — Nome + Notas ───── */}
@@ -382,6 +445,7 @@ export function CaseFormPage() {
                     {segmentsArray.fields.length}
                   </Badge>
                 )}
+                <TabValidationCounter prefix="segments[" />
               </TabsTrigger>
               <TabsTrigger value="boias" className="gap-1.5">
                 <Waves className="h-3.5 w-3.5" />
@@ -394,6 +458,7 @@ export function CaseFormPage() {
                     {buoyCount}
                   </Badge>
                 )}
+                <TabValidationCounter prefix="attachments[" />
               </TabsTrigger>
               <TabsTrigger value="clumps" className="gap-1.5">
                 <Anchor className="h-3.5 w-3.5" />
@@ -410,6 +475,8 @@ export function CaseFormPage() {
               <TabsTrigger value="ambiente" className="gap-1.5">
                 <Mountain className="h-3.5 w-3.5" />
                 Ambiente
+                <TabValidationCounter prefix="boundary." />
+                <TabValidationCounter prefix="seabed." />
               </TabsTrigger>
               <TabsTrigger value="analise" className="gap-1.5">
                 <Sigma className="h-3.5 w-3.5" />
@@ -750,11 +817,17 @@ export function CaseFormPage() {
                 attachments={debouncedValues.attachments ?? []}
                 seabedSlopeRad={debouncedValues.seabed?.slope_rad ?? 0}
                 segments={debouncedValues.segments ?? []}
+                preSolveDiagnostics={preSolveDiagnostics}
+                worstSeverity={diagWorst}
+                lastValidValues={lastValidValues}
+                currentValues={debouncedValues}
+                onRevertToLastValid={() => {
+                  if (lastValidValues) {
+                    reset(lastValidValues)
+                  }
+                }}
                 onApplyChange={(field, value) => {
                   // F5.7.4 — aplica sugestão do diagnóstico no form.
-                  // O field vem em notação dotted compatível com
-                  // react-hook-form (ex: "attachments[0].submerged_force").
-                  // O value já está em SI (Newtons, metros).
                   setValue(
                     field as Parameters<typeof setValue>[0],
                     value as Parameters<typeof setValue>[1],
@@ -772,7 +845,7 @@ export function CaseFormPage() {
           />
         </div>
       </div>
-    </>
+    </DiagnosticsProvider>
   )
 }
 
@@ -876,6 +949,11 @@ function PlotArea({
   attachments,
   seabedSlopeRad,
   segments,
+  preSolveDiagnostics,
+  worstSeverity: worstSev,
+  lastValidValues,
+  currentValues,
+  onRevertToLastValid,
   onApplyChange,
 }: {
   isFetching: boolean
@@ -887,6 +965,11 @@ function PlotArea({
     category?: 'Wire' | 'StuddedChain' | 'StudlessChain' | 'Polyester' | null
     line_type?: string | null
   }>
+  preSolveDiagnostics?: SolverDiagnostic[]
+  worstSeverity?: DiagnosticSeverity | null
+  lastValidValues?: CaseFormValues | null
+  currentValues?: CaseFormValues
+  onRevertToLastValid?: () => void
   /** F5.7.4 — callback do botão "Aplicar" no card de diagnósticos. */
   onApplyChange?: (field: string, value: number) => void
 }) {
@@ -917,41 +1000,82 @@ function PlotArea({
     )
   }
   const hasGeom = (result.coords_x?.length ?? 0) > 1
+  const totalDiagsCount =
+    (preSolveDiagnostics?.length ?? 0) +
+    ((result as { diagnostics?: unknown[] }).diagnostics?.length ?? 0)
+
+  // F5.7.6 — plot border colored by worst severity. Critical/error =
+  // vermelho grosso, warning = âmbar, info = azul. Sem diagnostics =
+  // border padrão (cinza translúcido).
+  const borderClass = worstSev
+    ? SEVERITY_STYLES[worstSev].container
+    : 'border-border/30'
+  const borderWidthClass =
+    worstSev === 'critical' || worstSev === 'error'
+      ? 'border-2'
+      : 'border'
+
   if (!hasGeom) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 overflow-y-auto p-4 text-center">
-        <AlertCircle className="h-6 w-6 text-danger" />
-        <p className="text-sm font-medium text-danger">
-          Sem geometria calculada
-        </p>
-        {/* F5.7.4 — card de diagnósticos com sugestões. Quando não há
-            geometria, este card substitui a mensagem texto solta. */}
-        <div className="w-full max-w-2xl text-left">
+      <div
+        className={cn(
+          'flex h-full flex-col gap-3 overflow-y-auto rounded-md p-4',
+          borderClass,
+          borderWidthClass,
+        )}
+      >
+        <div className="flex items-center justify-center gap-2 text-center">
+          <AlertCircle className="h-6 w-6 text-danger" />
+          <p className="text-sm font-medium text-danger">
+            Sem geometria calculada
+          </p>
+        </div>
+        <div className="space-y-2 text-left">
           <SolverDiagnosticsCard
             result={result}
+            extraDiagnostics={preSolveDiagnostics}
             onApplyChange={onApplyChange}
           />
+          {/* Validation log — mostra diff vs último válido (se houver). */}
+          {lastValidValues && currentValues && (
+            <ValidationLogCard
+              current={currentValues}
+              lastValid={lastValidValues}
+              onRevert={onRevertToLastValid}
+            />
+          )}
         </div>
         {/* Mensagem fallback só quando NÃO houver diagnósticos estruturados */}
-        {result.message &&
-          ((result as { diagnostics?: unknown[] }).diagnostics?.length ?? 0) === 0 && (
-            <p className="max-w-md text-xs text-muted-foreground">
-              {result.message}
-            </p>
-          )}
+        {result.message && totalDiagsCount === 0 && (
+          <p className="text-center text-xs text-muted-foreground">
+            {result.message}
+          </p>
+        )}
       </div>
     )
   }
   return (
-    <div className="flex h-full flex-col gap-2">
-      {/* F5.7.4 — diagnósticos warning aparecem ACIMA do plot pra
-          chamar atenção sem cobrir o gráfico */}
-      {((result as { diagnostics?: unknown[] }).diagnostics?.length ?? 0) > 0 && (
-        <div className="shrink-0 px-1">
+    <div
+      className={cn(
+        'flex h-full flex-col gap-2 rounded-md p-1',
+        borderClass,
+        borderWidthClass,
+      )}
+    >
+      {totalDiagsCount > 0 && (
+        <div className="max-h-[40%] shrink-0 space-y-2 overflow-y-auto px-1">
           <SolverDiagnosticsCard
             result={result}
+            extraDiagnostics={preSolveDiagnostics}
             onApplyChange={onApplyChange}
           />
+          {lastValidValues && currentValues && (
+            <ValidationLogCard
+              current={currentValues}
+              lastValid={lastValidValues}
+              onRevert={onRevertToLastValid}
+            />
+          )}
         </div>
       )}
       <div className="min-h-0 flex-1">

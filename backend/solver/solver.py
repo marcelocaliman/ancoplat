@@ -24,6 +24,9 @@ from .attachment_resolver import resolve_attachments
 from .diagnostics import (
     D004_buoy_above_surface,
     D006_cable_too_short,
+    D008_safety_margin,
+    D009_anchor_uplift_high,
+    D010_high_utilization,
     D900_generic_nonconvergence,
     SolverDiagnostic,
     diagnostic_from_exception,
@@ -377,10 +380,11 @@ def solve(
                     "height_above_surface_m": round(height_above, 2),
                 })
 
-    # F5.7.4 — gera diagnósticos D004 (warning) para cada violação
-    # de superfície. Popula `result.diagnostics` em paralelo a
-    # `surface_violations` (que mantemos por compatibilidade com a
-    # banner do plot).
+    # F5.7.4 + F5.7.6 — Popula `result.diagnostics` com:
+    #   • D004 (error) para boia acima da superfície
+    #   • D009 (warning/error) para anchor uplift alto
+    #   • D010 (warning) para utilização > 60% (threshold operacional)
+    #   • D008 (info) para margens de segurança apertadas
     diagnostics_list: list[dict] = []
     if surface_violations:
         for v in surface_violations:
@@ -394,6 +398,57 @@ def solve(
                     submerged_force_n=att.submerged_force,
                 )
                 diagnostics_list.append(diag.model_dump())
+
+    # D009 — anchor uplift alto (drag anchors toleram ≤ 5°, crítico > 15°)
+    if result.status == ConvergenceStatus.CONVERGED and uplift_severity != "ok":
+        diagnostics_list.append(
+            D009_anchor_uplift_high(
+                angle_deg=uplift_deg,
+                severity="error" if uplift_severity == "critical" else "warning",
+            ).model_dump()
+        )
+
+    # D010 — utilização alta (T_fl/MBL > 60% é red, > 50% é warning)
+    if result.status == ConvergenceStatus.CONVERGED and result.utilization > 0:
+        if result.utilization >= 0.6:
+            diagnostics_list.append(
+                D010_high_utilization(
+                    utilization=result.utilization,
+                    threshold=0.6,
+                    severity="error",
+                ).model_dump()
+            )
+        elif result.utilization >= 0.5:
+            diagnostics_list.append(
+                D010_high_utilization(
+                    utilization=result.utilization,
+                    threshold=0.5,
+                    severity="warning",
+                ).model_dump()
+            )
+
+    # D008 — sensitivity de margem (info): proximidade do taut (linha quase
+    # esticada). taut_margin = L_stretched / L_taut. Se < 5%, alerta.
+    if (
+        result.status == ConvergenceStatus.CONVERGED
+        and result.stretched_length > 0
+    ):
+        L_taut = math.sqrt(
+            result.total_horz_distance ** 2 + boundary.h ** 2
+        )
+        if L_taut > 0:
+            taut_margin = (result.stretched_length / L_taut) - 1.0
+            if 0.0 < taut_margin < 0.05:
+                diagnostics_list.append(
+                    D008_safety_margin(
+                        parameter="Margem ao taut",
+                        field_path="segments[0].length",
+                        current=result.stretched_length,
+                        limit=L_taut,
+                        margin_pct=taut_margin * 100,
+                        label_unit=" m",
+                    ).model_dump()
+                )
 
     result = result.model_copy(update={
         "water_depth": boundary.h,

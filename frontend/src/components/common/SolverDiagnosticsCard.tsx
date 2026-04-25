@@ -1,25 +1,27 @@
 /**
- * F5.7.4 — Card de diagnósticos do solver com sugestões de correção.
+ * F5.7.4 + F5.7.6 — Card de diagnósticos do solver com sugestões de
+ * correção. Suporta 4 níveis de severidade com tratamento visual
+ * consistente em toda a UI:
  *
- * Renderiza erros/avisos do solver em formato estruturado, com botão
- * "Aplicar" que despacha uma callback com (field, value) para o parent
- * atualizar o formulário automaticamente.
+ *   critical: caso não pode ser computado (sem geometria)
+ *   error:    geometria existe mas viola física (boia voadora)
+ *   warning:  geometria válida mas ill-conditioned (uplift alto)
+ *   info:     observação útil (margem de segurança apertada)
  *
- * Padrão de mensagem (Nível 0 da auditoria UX):
- *   [Severidade] Título
- *   Causa: explicação física/matemática
- *   Sugestão: como corrigir
- *   [Aplicar X] (botão que altera o form)
+ * Cada diagnóstico pode listar `affected_fields` que a UI usa pra
+ * destacar campos do form (FieldValidationDot) e contar issues por
+ * tab (TabValidationCounter).
  */
-import { AlertTriangle, Lightbulb, XOctagon } from 'lucide-react'
+import { AlertTriangle, Info, Lightbulb, XOctagon } from 'lucide-react'
 
 import type { SolverResult } from '@/api/types'
+import type { DiagnosticSeverity } from '@/lib/preSolveDiagnostics'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 export interface SolverDiagnostic {
   code: string
-  severity: 'error' | 'warning'
+  severity: DiagnosticSeverity
   title: string
   cause: string
   suggestion: string
@@ -28,20 +30,79 @@ export interface SolverDiagnostic {
     value: number
     label: string
   }>
+  affected_fields: string[]
 }
 
 export interface SolverDiagnosticsCardProps {
   /** Resultado do solver com `diagnostics` populado. */
-  result: SolverResult | null | undefined
+  result?: SolverResult | null
+  /**
+   * Diagnósticos extras (e.g., pre-solve do frontend) pra concatenar
+   * com os do result. Útil quando a UI roda checagens locais antes
+   * de chamar o backend.
+   */
+  extraDiagnostics?: SolverDiagnostic[]
   /**
    * Callback quando o usuário clica "Aplicar" numa sugestão. Recebe o
-   * `field` (caminho dotted tipo 'attachments[0].submerged_force') e
-   * o novo `value` (em SI). O parent é responsável por chamar
-   * react-hook-form `setValue(field, value)` e disparar recálculo.
+   * `field` (caminho dotted) e o novo `value` (em SI). O parent chama
+   * react-hook-form `setValue(field, value)`.
    */
   onApplyChange?: (field: string, value: number) => void
   /** Esconder o card quando não houver diagnósticos. Default true. */
   hideWhenEmpty?: boolean
+  /** Classe extra no container externo. */
+  className?: string
+}
+
+/** Cores e ícones consistentes por severidade. */
+export const SEVERITY_STYLES: Record<
+  DiagnosticSeverity,
+  {
+    label: string
+    Icon: typeof AlertTriangle
+    container: string
+    icon: string
+    badge: string
+    badgeText: string
+    button: string
+  }
+> = {
+  critical: {
+    label: 'CRÍTICO',
+    Icon: XOctagon,
+    container: 'border-red-600/60 bg-red-900/30',
+    icon: 'text-red-500',
+    badge: 'bg-red-700 text-white',
+    badgeText: 'text-red-400',
+    button: 'border-red-500/60 hover:bg-red-700/30',
+  },
+  error: {
+    label: 'ERRO',
+    Icon: XOctagon,
+    container: 'border-red-500/50 bg-red-900/20',
+    icon: 'text-red-400',
+    badge: 'bg-red-600 text-white',
+    badgeText: 'text-red-300',
+    button: 'border-red-500/50 hover:bg-red-600/20',
+  },
+  warning: {
+    label: 'AVISO',
+    Icon: AlertTriangle,
+    container: 'border-amber-500/50 bg-amber-900/15',
+    icon: 'text-amber-400',
+    badge: 'bg-amber-600 text-white',
+    badgeText: 'text-amber-300',
+    button: 'border-amber-500/50 hover:bg-amber-600/20',
+  },
+  info: {
+    label: 'INFO',
+    Icon: Info,
+    container: 'border-sky-500/50 bg-sky-900/15',
+    icon: 'text-sky-400',
+    badge: 'bg-sky-600 text-white',
+    badgeText: 'text-sky-300',
+    button: 'border-sky-500/50 hover:bg-sky-600/20',
+  },
 }
 
 /**
@@ -49,20 +110,30 @@ export interface SolverDiagnosticsCardProps {
  */
 export function SolverDiagnosticsCard({
   result,
+  extraDiagnostics,
   onApplyChange,
   hideWhenEmpty = true,
+  className,
 }: SolverDiagnosticsCardProps) {
-  const diagnostics =
+  const fromResult =
     (result as unknown as { diagnostics?: SolverDiagnostic[] })?.diagnostics ?? []
+  const all: SolverDiagnostic[] = [...(extraDiagnostics ?? []), ...fromResult]
 
-  if (diagnostics.length === 0) {
-    if (hideWhenEmpty) return null
-    return null
+  if (all.length === 0 && hideWhenEmpty) return null
+  if (all.length === 0) return null
+
+  // Ordena por severidade (mais grave primeiro)
+  const order: Record<DiagnosticSeverity, number> = {
+    critical: 0,
+    error: 1,
+    warning: 2,
+    info: 3,
   }
+  const sorted = [...all].sort((a, b) => order[a.severity] - order[b.severity])
 
   return (
-    <div className="space-y-2">
-      {diagnostics.map((diag, i) => (
+    <div className={cn('space-y-2', className)}>
+      {sorted.map((diag, i) => (
         <DiagnosticItem
           key={`${diag.code}-${i}`}
           diagnostic={diag}
@@ -80,36 +151,24 @@ function DiagnosticItem({
   diagnostic: SolverDiagnostic
   onApplyChange?: (field: string, value: number) => void
 }) {
-  const isError = diagnostic.severity === 'error'
-  const Icon = isError ? XOctagon : AlertTriangle
+  const style = SEVERITY_STYLES[diagnostic.severity]
+  const Icon = style.Icon
 
   return (
-    <div
-      className={cn(
-        'rounded-md border p-3 text-sm',
-        isError
-          ? 'border-destructive/50 bg-destructive/10 text-destructive-foreground'
-          : 'border-amber-500/50 bg-amber-500/10 text-amber-100',
-      )}
-    >
+    <div className={cn('rounded-md border p-3 text-sm', style.container)}>
       <div className="flex items-start gap-2">
-        <Icon
-          className={cn(
-            'mt-0.5 size-4 shrink-0',
-            isError ? 'text-destructive' : 'text-amber-500',
-          )}
-        />
+        <Icon className={cn('mt-0.5 size-4 shrink-0', style.icon)} />
         <div className="flex-1 space-y-1.5">
           <div className="flex items-baseline gap-2">
             <span
               className={cn(
-                'font-semibold',
-                isError ? 'text-destructive' : 'text-amber-200',
+                'rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide',
+                style.badge,
               )}
             >
-              {isError ? 'ERRO' : 'AVISO'}:
+              {style.label}
             </span>
-            <span className="font-medium">{diagnostic.title}</span>
+            <span className="font-medium text-foreground">{diagnostic.title}</span>
             <span className="ml-auto text-[10px] uppercase tracking-wide opacity-50">
               {diagnostic.code}
             </span>
@@ -134,12 +193,7 @@ function DiagnosticItem({
                   key={j}
                   size="sm"
                   variant="outline"
-                  className={cn(
-                    'h-7 gap-1.5 text-xs',
-                    isError
-                      ? 'border-destructive/50 hover:bg-destructive/20'
-                      : 'border-amber-500/50 hover:bg-amber-500/20',
-                  )}
+                  className={cn('h-7 gap-1.5 text-xs', style.button)}
                   onClick={() => onApplyChange(change.field, change.value)}
                 >
                   <Lightbulb className="size-3" />

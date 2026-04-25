@@ -1836,7 +1836,7 @@ export interface components {
              */
             diagnostics: Array<{
                 code: string
-                severity: 'error' | 'warning'
+                severity: 'critical' | 'error' | 'warning' | 'info'
                 title: string
                 cause: string
                 suggestion: string
@@ -1845,6 +1845,7 @@ export interface components {
                     value: number
                     label: string
                 }>
+                affected_fields: string[]
             }>;
         };
         /**
