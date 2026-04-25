@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
+  AlertCircle,
   ArrowDown,
   ArrowUp,
   CheckCircle2,
@@ -51,7 +52,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { fmtNumber, fmtPercent } from '@/lib/utils'
+import { fmtAngleDeg, fmtMeters, fmtNumber, fmtPercent } from '@/lib/utils'
 
 export function MooringSystemDetailPage() {
   const { id } = useParams()
@@ -340,6 +341,94 @@ export function MooringSystemDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Tabela de visão geral das linhas abaixo do plan view.
+            Complementa os cards visuais da coluna direita: aqui o
+            engenheiro vê todas as linhas em uma única página, sem
+            scroll, para decisão rápida. Cards à direita dão a
+            análise detalhada por linha; tabela aqui dá o panorama. */}
+        <Card className="mt-4 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border/60 bg-muted/20 px-4 py-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Tabela de linhas ({data.input.lines.length})
+            </span>
+            {equilibrium && (
+              <span className="text-[10px] text-primary">
+                · valores no equilíbrio aplicado
+              </span>
+            )}
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead className="text-right">Azimuth</TableHead>
+                <TableHead className="text-right">Raio</TableHead>
+                <TableHead className="text-right">T_fl / X (input)</TableHead>
+                <TableHead className="text-right">T_fl resultante</TableHead>
+                <TableHead className="text-right">H</TableHead>
+                <TableHead className="text-right">T_anc</TableHead>
+                <TableHead className="text-right">Âng. âncora</TableHead>
+                <TableHead className="text-right">Utilização</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.input.lines.map((line, idx) => {
+                const sourceLines =
+                  equilibrium?.lines ?? latestResult?.lines
+                const lr = sourceLines?.[idx]
+                const sr = lr?.solver_result
+                const inputLabel =
+                  line.boundary.mode === 'Tension'
+                    ? `${(line.boundary.input_value / 1000).toFixed(1)} kN`
+                    : fmtMeters(line.boundary.input_value, 1)
+                return (
+                  <TableRow key={line.name}>
+                    <TableCell className="font-medium">{line.name}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {fmtAngleDeg(
+                        (line.fairlead_azimuth_deg * Math.PI) / 180,
+                        1,
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {fmtMeters(line.fairlead_radius, 1)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                      {inputLabel}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {sr ? `${(sr.fairlead_tension / 1000).toFixed(1)} kN` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {sr ? `${(sr.H / 1000).toFixed(1)} kN` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {sr ? `${(sr.anchor_tension / 1000).toFixed(1)} kN` : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {sr ? fmtAngleDeg(sr.angle_wrt_horz_anchor, 1) : '—'}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {sr ? fmtPercent(sr.utilization, 1) : '—'}
+                    </TableCell>
+                    <TableCell>
+                      {sr ? (
+                        <StatusChip
+                          status={sr.status}
+                          alertLevel={sr.alert_level}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </Card>
 
         {/* F5.5 — Equilíbrio de plataforma sob carga ambiental */}
         <Card className="mt-4 overflow-hidden">
@@ -747,6 +836,24 @@ function Metric({
       </span>
     </div>
   )
+}
+
+function StatusChip({
+  status,
+  alertLevel,
+}: {
+  status: string
+  alertLevel: string | null | undefined
+}) {
+  if (status !== 'converged') {
+    return (
+      <Badge variant="danger" className="gap-1 text-[10px]">
+        <AlertCircle className="h-3 w-3" />
+        {status}
+      </Badge>
+    )
+  }
+  return <AlertChip level={alertLevel ?? 'ok'} />
 }
 
 function DeltaCell({
