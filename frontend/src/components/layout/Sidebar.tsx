@@ -1,16 +1,13 @@
 import {
   ArrowLeftRight,
-  ChevronsLeft,
-  ChevronsRight,
   LayoutList,
   Package,
   Settings,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import { Logo } from '@/components/common/Logo'
 import { ApiStatusIndicator } from '@/components/common/ApiStatusIndicator'
+import { Logo } from '@/components/common/Logo'
 import { ThemeToggle } from '@/components/common/ThemeToggle'
-import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import {
   Tooltip,
@@ -18,7 +15,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { useUIStore } from '@/store/ui'
 
 interface NavItem {
   label: string
@@ -33,88 +29,63 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Configurações', to: '/settings', icon: Settings },
 ]
 
+/**
+ * Sidebar compacta (64px) — apenas ícones, nome em tooltip ao hover.
+ * Sem toggle de colapsar; mantém o layout limpo e previsível.
+ */
 export function Sidebar() {
-  const { sidebarCollapsed, toggleSidebar } = useUIStore()
-
   return (
     <aside
       aria-label="Navegação principal"
-      className={cn(
-        'flex h-screen shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground transition-[width] duration-200 ease-out',
-        sidebarCollapsed ? 'w-16' : 'w-56',
-      )}
+      className="flex h-screen w-16 shrink-0 flex-col border-r border-border bg-sidebar text-sidebar-foreground"
     >
-      {/* Topo: logo + toggle — altura fixa 56px (mesma do topbar) */}
-      <div
-        className={cn(
-          'flex h-14 shrink-0 items-center border-b border-border',
-          sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-3',
-        )}
-      >
-        <Logo compact={sidebarCollapsed} />
+      {/* Logo */}
+      <div className="flex h-14 shrink-0 items-center justify-center border-b border-border">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={sidebarCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-              onClick={toggleSidebar}
-              className={cn(
-                'h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground',
-                sidebarCollapsed && 'hidden',
-              )}
-            >
-              <ChevronsLeft className="h-4 w-4" />
-            </Button>
+            <NavLink to="/" aria-label="QMoor Web — Início">
+              <Logo compact />
+            </NavLink>
           </TooltipTrigger>
-          <TooltipContent side="right">Colapsar (Cmd+B)</TooltipContent>
+          <TooltipContent side="right">QMoor Web</TooltipContent>
         </Tooltip>
       </div>
 
-      {sidebarCollapsed && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleSidebar}
-              aria-label="Expandir sidebar"
-              className="mx-2 my-2 inline-flex h-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <ChevronsRight className="h-4 w-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">Expandir</TooltipContent>
-        </Tooltip>
-      )}
-
-      {/* Navegação */}
-      <nav className="flex-1 overflow-y-auto custom-scroll px-2 py-2">
-        <ul className="space-y-0.5">
+      {/* Itens */}
+      <nav className="flex-1 overflow-y-auto custom-scroll py-2">
+        <ul className="flex flex-col items-center gap-1">
           {NAV_ITEMS.map(({ label, to, icon: Icon }) => (
             <li key={to}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <NavLink
                     to={to}
+                    end={to === '/cases'}
+                    aria-label={label}
                     className={({ isActive }) =>
                       cn(
-                        'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors',
+                        'relative flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         isActive
-                          ? 'bg-primary/10 text-primary'
-                          : 'text-sidebar-foreground hover:bg-muted/60 hover:text-foreground',
-                        sidebarCollapsed && 'justify-center px-0',
+                          ? 'bg-primary/12 text-primary'
+                          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                       )
                     }
-                    end={to === '/cases'}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {!sidebarCollapsed && <span>{label}</span>}
+                    {({ isActive }) => (
+                      <>
+                        {isActive && (
+                          <span
+                            aria-hidden
+                            className="absolute -left-[6px] top-1.5 h-7 w-[3px] rounded-full bg-primary"
+                          />
+                        )}
+                        <Icon className="h-[18px] w-[18px]" />
+                      </>
+                    )}
                   </NavLink>
                 </TooltipTrigger>
-                {sidebarCollapsed && (
-                  <TooltipContent side="right">{label}</TooltipContent>
-                )}
+                <TooltipContent side="right">{label}</TooltipContent>
               </Tooltip>
             </li>
           ))}
@@ -123,15 +94,10 @@ export function Sidebar() {
 
       <Separator />
 
-      {/* Rodapé: status API + toggle de tema */}
-      <div
-        className={cn(
-          'flex shrink-0 items-center gap-1 px-2 py-2',
-          sidebarCollapsed ? 'flex-col' : 'justify-between',
-        )}
-      >
-        <ApiStatusIndicator compact={sidebarCollapsed} />
-        <ThemeToggle compact={sidebarCollapsed} />
+      {/* Rodapé: status API + tema */}
+      <div className="flex shrink-0 flex-col items-center gap-1 py-2">
+        <ApiStatusIndicator compact />
+        <ThemeToggle compact />
       </div>
     </aside>
   )

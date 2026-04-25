@@ -42,7 +42,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
   TooltipContent,
@@ -64,13 +63,9 @@ import {
 } from '@/lib/utils'
 
 /**
- * Tela de criação/edição com PREVIEW AO VIVO em layout split.
- *
- * Sem scroll vertical no container principal — form e preview ocupam
- * a viewport inteira, reorganizando-se dentro. Cada mudança de input
- * dispara `POST /solve/preview` (não persiste) após 600ms de debounce.
- * Casos fisicamente inválidos (broken) ainda exibem o gráfico, pois
- * o solver retorna geometria completa; apenas o badge sinaliza.
+ * Layout vertical: form compacto no topo (3 blocos em grid) +
+ * gráfico preenchendo o espaço restante + métricas em faixa no rodapé.
+ * Preview live via POST /solve/preview, 600ms debounce.
  */
 export function CaseFormPage() {
   const { id } = useParams()
@@ -175,9 +170,7 @@ export function CaseFormPage() {
       const saved = await saveMutation.mutateAsync(v)
       toast.success(isEdit ? 'Caso atualizado.' : 'Caso criado.')
       navigate(`/cases/${saved.id}`)
-    } catch {
-      /* noop */
-    }
+    } catch { /* noop */ }
   }
 
   async function onSubmitAndSolve(v: CaseFormValues) {
@@ -192,9 +185,7 @@ export function CaseFormPage() {
         }),
       })
       navigate(`/cases/${saved.id}`)
-    } catch {
-      /* noop */
-    }
+    } catch { /* noop */ }
   }
 
   function applyLineTypeToSegment(lt: LineTypeOutput | null) {
@@ -205,8 +196,6 @@ export function CaseFormPage() {
       lt.category as CaseFormValues['segments'][number]['category'],
       { shouldValidate: true },
     )
-    // Arredonda para UX: evita mostrar 22.408937960... Mantém precisão
-    // suficiente para que o solver retorne resultado idêntico.
     setValue('segments.0.w', roundTo(lt.wet_weight, 2), { shouldValidate: true })
     setValue('segments.0.EA', roundTo(lt.qmoor_ea ?? lt.gmoor_ea ?? 0, 0), {
       shouldValidate: true,
@@ -214,7 +203,7 @@ export function CaseFormPage() {
     setValue('segments.0.MBL', roundTo(lt.break_strength, 0), {
       shouldValidate: true,
     })
-    toast.success(`Propriedades de ${lt.line_type} aplicadas.`, {
+    toast.success(`${lt.line_type} aplicado`, {
       description: `Ø ${fmtNumber(lt.diameter, 4)} m · MBL ${fmtNumber(lt.break_strength / 1000, 0)} kN`,
     })
   }
@@ -235,7 +224,12 @@ export function CaseFormPage() {
 
   const actions = (
     <>
-      <Button variant="outline" size="sm" asChild>
+      <PreviewStatusChip
+        isFetching={previewQuery.isFetching}
+        result={previewQuery.data}
+        formInvalid={!isValid}
+      />
+      <Button variant="ghost" size="sm" asChild>
         <Link to={isEdit ? `/cases/${id}` : '/cases'}>Cancelar</Link>
       </Button>
       <Button
@@ -261,168 +255,168 @@ export function CaseFormPage() {
   return (
     <>
       <Topbar breadcrumbs={breadcrumbs} actions={actions} />
-      <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[minmax(420px,440px)_1fr]">
-        {/* ── COLUNA ESQUERDA — Formulário ─────────────────────────── */}
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="flex min-h-0 flex-col overflow-y-auto custom-scroll border-r border-border bg-sidebar/30"
-          noValidate
-        >
-          <div className="space-y-3 p-4">
-            <Section title="Identificação">
-              <div className="space-y-2">
-                <InlineField label="Nome" required error={errors.name?.message}>
-                  <Input
-                    {...register('name')}
-                    placeholder="ex.: BC-01 suspenso"
-                    className="h-8"
-                  />
-                </InlineField>
-                <InlineField label="Descrição">
-                  <Textarea
-                    {...register('description')}
-                    rows={2}
-                    placeholder="Notas (opcional)"
-                    className="resize-none"
-                  />
-                </InlineField>
-              </div>
-            </Section>
-
-            <Section title="Segmento de linha">
-              <div className="space-y-2">
-                <Controller
-                  control={control}
-                  name="segments.0.line_type"
-                  render={({ field }) => (
-                    <LineTypePicker
-                      value={
-                        field.value
-                          ? ({
-                              id: 0,
-                              line_type: field.value,
-                              category: watch('segments.0.category') ?? 'Wire',
-                              diameter: 0,
-                              dry_weight: 0,
-                              wet_weight: watch('segments.0.w'),
-                              break_strength: watch('segments.0.MBL'),
-                              qmoor_ea: watch('segments.0.EA'),
-                              data_source: 'legacy_qmoor',
-                            } as LineTypeOutput)
-                          : null
-                      }
-                      onChange={applyLineTypeToSegment}
-                    />
-                  )}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
+        {/* ───── Linha 1: Identificação full-width ───── */}
+        <Card className="shrink-0 overflow-hidden">
+          <CardContent className="flex items-center gap-3 p-3">
+            <div className="flex-1">
+              <InlineField
+                label="Nome do caso"
+                required
+                error={errors.name?.message}
+              >
+                <Input
+                  {...register('name')}
+                  placeholder="ex.: BC-01 catenária suspensa"
+                  className="h-8"
                 />
-                <div className="grid grid-cols-2 gap-x-2 gap-y-2">
-                  <InlineField label="Comprimento" unit="m">
-                    <Input
-                      type="number"
-                      step="1"
-                      {...register('segments.0.length', { valueAsNumber: true })}
-                      className="h-8 font-mono"
-                    />
-                  </InlineField>
-                  <InlineField label="Categoria">
-                    <Controller
-                      control={control}
-                      name="segments.0.category"
-                      render={({ field }) => (
-                        <Select
-                          value={field.value ?? undefined}
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger className="h-8">
-                            <SelectValue placeholder="—" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Wire">Wire</SelectItem>
-                            <SelectItem value="StuddedChain">Studded</SelectItem>
-                            <SelectItem value="StudlessChain">Studless</SelectItem>
-                            <SelectItem value="Polyester">Poliéster</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </InlineField>
-                  <InlineField label="Peso subm." unit="N/m">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      {...register('segments.0.w', { valueAsNumber: true })}
-                      className="h-8 font-mono"
-                    />
-                  </InlineField>
-                  <InlineField label="EA" unit="N">
-                    <Input
-                      type="number"
-                      step="100000"
-                      {...register('segments.0.EA', { valueAsNumber: true })}
-                      className="h-8 font-mono"
-                    />
-                  </InlineField>
-                  <InlineField label="MBL" unit="N" className="col-span-2">
-                    <Input
-                      type="number"
-                      step="1000"
-                      {...register('segments.0.MBL', { valueAsNumber: true })}
-                      className="h-8 font-mono"
-                    />
-                  </InlineField>
-                </div>
-              </div>
-            </Section>
+              </InlineField>
+            </div>
+            <div className="flex-[2]">
+              <InlineField label="Descrição">
+                <Input
+                  {...register('description')}
+                  placeholder="Notas opcionais…"
+                  className="h-8 text-sm"
+                />
+              </InlineField>
+            </div>
+          </CardContent>
+        </Card>
 
-            <Section title="Condições de contorno">
-              <div className="grid grid-cols-2 gap-x-2 gap-y-2">
-                <InlineField label="Lâmina d'água" unit="m">
+        {/* ───── Linha 2: 3 blocos de parâmetros ───── */}
+        <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-[1.6fr_1fr_1fr]">
+          {/* Segmento */}
+          <Section title="Segmento de linha">
+            <div className="space-y-2">
+              <Controller
+                control={control}
+                name="segments.0.line_type"
+                render={({ field }) => (
+                  <LineTypePicker
+                    value={
+                      field.value
+                        ? ({
+                            id: 0,
+                            line_type: field.value,
+                            category: watch('segments.0.category') ?? 'Wire',
+                            diameter: 0,
+                            dry_weight: 0,
+                            wet_weight: watch('segments.0.w'),
+                            break_strength: watch('segments.0.MBL'),
+                            qmoor_ea: watch('segments.0.EA'),
+                            data_source: 'legacy_qmoor',
+                          } as LineTypeOutput)
+                        : null
+                    }
+                    onChange={applyLineTypeToSegment}
+                  />
+                )}
+              />
+              <div className="grid grid-cols-4 gap-2">
+                <InlineField label="Comp." unit="m">
                   <Input
                     type="number"
                     step="1"
-                    {...register('boundary.h', { valueAsNumber: true })}
+                    {...register('segments.0.length', { valueAsNumber: true })}
                     className="h-8 font-mono"
                   />
                 </InlineField>
-                <InlineField label="Modo">
+                <InlineField label="Peso w" unit="N/m">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    {...register('segments.0.w', { valueAsNumber: true })}
+                    className="h-8 font-mono"
+                  />
+                </InlineField>
+                <InlineField label="EA" unit="N">
+                  <Input
+                    type="number"
+                    step="100000"
+                    {...register('segments.0.EA', { valueAsNumber: true })}
+                    className="h-8 font-mono"
+                  />
+                </InlineField>
+                <InlineField label="MBL" unit="N">
+                  <Input
+                    type="number"
+                    step="1000"
+                    {...register('segments.0.MBL', { valueAsNumber: true })}
+                    className="h-8 font-mono"
+                  />
+                </InlineField>
+                <InlineField label="Categoria" className="col-span-4">
                   <Controller
                     control={control}
-                    name="boundary.mode"
+                    name="segments.0.category"
                     render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
+                      <Select
+                        value={field.value ?? undefined}
+                        onValueChange={field.onChange}
+                      >
                         <SelectTrigger className="h-8">
-                          <SelectValue />
+                          <SelectValue placeholder="—" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Tension">Tension</SelectItem>
-                          <SelectItem value="Range">Range</SelectItem>
+                          <SelectItem value="Wire">Wire</SelectItem>
+                          <SelectItem value="StuddedChain">Studded</SelectItem>
+                          <SelectItem value="StudlessChain">Studless</SelectItem>
+                          <SelectItem value="Polyester">Poliéster</SelectItem>
                         </SelectContent>
                       </Select>
                     )}
                   />
                 </InlineField>
-                <InlineField
-                  label={mode === 'Tension' ? 'T_fl' : 'X total'}
-                  unit={mode === 'Tension' ? 'N' : 'm'}
-                  className="col-span-2"
-                >
-                  <Input
-                    type="number"
-                    step="any"
-                    {...register('boundary.input_value', {
-                      valueAsNumber: true,
-                    })}
-                    className="h-8 font-mono"
-                  />
-                </InlineField>
               </div>
-            </Section>
+            </div>
+          </Section>
 
-            <Section
-              title="Seabed"
-              tooltip="Atrito axial de Coulomb. Wire ~0,3 · Corrente ~0,7 · Poliéster ~0,25."
-            >
-              <InlineField label="μ (atrito)">
+          {/* Condições de contorno + Seabed */}
+          <Section title="Condições">
+            <div className="grid grid-cols-2 gap-2">
+              <InlineField label="Lâmina" unit="m">
+                <Input
+                  type="number"
+                  step="1"
+                  {...register('boundary.h', { valueAsNumber: true })}
+                  className="h-8 font-mono"
+                />
+              </InlineField>
+              <InlineField label="Modo">
+                <Controller
+                  control={control}
+                  name="boundary.mode"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Tension">Tension</SelectItem>
+                        <SelectItem value="Range">Range</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </InlineField>
+              <InlineField
+                label={mode === 'Tension' ? 'T_fl' : 'X total'}
+                unit={mode === 'Tension' ? 'N' : 'm'}
+                className="col-span-2"
+              >
+                <Input
+                  type="number"
+                  step="any"
+                  {...register('boundary.input_value', { valueAsNumber: true })}
+                  className="h-8 font-mono"
+                />
+              </InlineField>
+              <InlineField
+                label="μ (atrito)"
+                tooltip="Wire ~0,3 · Corrente ~0,7 · Poliéster ~0,25"
+                className="col-span-2"
+              >
                 <Input
                   type="number"
                   step="0.05"
@@ -431,36 +425,41 @@ export function CaseFormPage() {
                   className="h-8 font-mono"
                 />
               </InlineField>
-            </Section>
+            </div>
+          </Section>
 
-            <Section title="Critério de utilização">
-              <Controller
-                control={control}
-                name="criteria_profile"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {profiles?.map((p) => (
-                        <SelectItem key={p.name} value={p.name}>
-                          <span className="flex items-center gap-2">
-                            <span>{p.name}</span>
-                            <span className="text-[10px] text-muted-foreground">
-                              y{fmtNumber(p.yellow_ratio, 2)} · r
-                              {fmtNumber(p.red_ratio, 2)} · b
-                              {fmtNumber(p.broken_ratio, 2)}
+          {/* Critério de utilização */}
+          <Section title="Critério de utilização">
+            <div className="space-y-2">
+              <InlineField label="Perfil">
+                <Controller
+                  control={control}
+                  name="criteria_profile"
+                  render={({ field }) => (
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="h-8">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {profiles?.map((p) => (
+                          <SelectItem key={p.name} value={p.name}>
+                            <span className="flex items-center gap-2">
+                              <span>{p.name}</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                y{fmtNumber(p.yellow_ratio, 2)} · r
+                                {fmtNumber(p.red_ratio, 2)} · b
+                                {fmtNumber(p.broken_ratio, 2)}
+                              </span>
                             </span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </InlineField>
               {criteriaProfile === 'UserDefined' && (
-                <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-1.5">
                   {(['yellow_ratio', 'red_ratio', 'broken_ratio'] as const).map(
                     (k) => (
                       <InlineField key={k} label={k.replace('_ratio', '')}>
@@ -489,32 +488,23 @@ export function CaseFormPage() {
                   )}
                 </div>
               )}
-            </Section>
-          </div>
-        </form>
+            </div>
+          </Section>
+        </div>
 
-        {/* ── COLUNA DIREITA — Preview live ─────────────────────────── */}
-        <section className="flex min-h-0 flex-col overflow-hidden bg-background">
-          <div className="flex h-full flex-col p-4">
-            <PreviewHeader
+        {/* ───── Middle: gráfico ───── */}
+        <Card className="min-h-0 flex-1 overflow-hidden">
+          <CardContent className="h-full p-1">
+            <PlotArea
               isFetching={previewQuery.isFetching}
               result={previewQuery.data}
               formInvalid={!isValid}
             />
-            <div className="mt-3 flex min-h-0 flex-1 flex-col gap-3">
-              <Card className="flex-1 overflow-hidden">
-                <CardContent className="h-full p-1">
-                  <PlotArea
-                    isFetching={previewQuery.isFetching}
-                    result={previewQuery.data}
-                    formInvalid={!isValid}
-                  />
-                </CardContent>
-              </Card>
-              <MetricsRow result={previewQuery.data} formInvalid={!isValid} />
-            </div>
-          </div>
-        </section>
+          </CardContent>
+        </Card>
+
+        {/* ───── Bottom: métricas ───── */}
+        <MetricsRow result={previewQuery.data} formInvalid={!isValid} />
       </div>
     </>
   )
@@ -525,28 +515,16 @@ export function CaseFormPage() {
 function Section({
   title,
   children,
-  tooltip,
 }: {
   title: string
   children: React.ReactNode
-  tooltip?: string
 }) {
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-center gap-1.5 border-b border-border/60 bg-muted/30 px-3 py-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="border-b border-border/60 bg-muted/20 px-3 py-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {title}
         </span>
-        {tooltip && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Info className="h-3 w-3 text-muted-foreground" />
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-xs text-xs">
-              {tooltip}
-            </TooltipContent>
-          </Tooltip>
-        )}
       </div>
       <CardContent className="p-3">{children}</CardContent>
     </Card>
@@ -559,6 +537,7 @@ function InlineField({
   required,
   error,
   className,
+  tooltip,
   children,
 }: {
   label: string
@@ -566,17 +545,28 @@ function InlineField({
   required?: boolean
   error?: string
   className?: string
+  tooltip?: string
   children: React.ReactNode
 }) {
   return (
     <div className={cn('flex flex-col gap-0.5', className)}>
-      <Label className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-        <span>
+      <Label className="flex items-center justify-between gap-1 text-[10px] font-medium text-muted-foreground">
+        <span className="flex items-center gap-1 truncate">
           {label}
-          {required && <span className="ml-0.5 text-danger">*</span>}
+          {required && <span className="text-danger">*</span>}
+          {tooltip && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-2.5 w-2.5 text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs text-xs">
+                {tooltip}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </span>
         {unit && (
-          <span className="font-mono text-[10px] font-normal">{unit}</span>
+          <span className="shrink-0 font-mono text-[9px] font-normal">{unit}</span>
         )}
       </Label>
       {children}
@@ -585,7 +575,7 @@ function InlineField({
   )
 }
 
-function PreviewHeader({
+function PreviewStatusChip({
   isFetching,
   result,
   formInvalid,
@@ -594,64 +584,41 @@ function PreviewHeader({
   result?: SolverResult
   formInvalid: boolean
 }) {
-  let badge: {
-    variant: 'success' | 'warning' | 'danger' | 'secondary'
-    icon: React.ReactNode
-    label: string
-  } = { variant: 'secondary', icon: null, label: 'Aguardando' }
+  let variant: 'success' | 'warning' | 'danger' | 'secondary' = 'secondary'
+  let icon: React.ReactNode = null
+  let label = 'Aguardando'
 
   if (formInvalid) {
-    badge = {
-      variant: 'secondary',
-      icon: <Info className="mr-1 h-3 w-3" />,
-      label: 'Preencha os campos',
-    }
+    label = 'Form inválido'
+    icon = <Info className="mr-1 h-3 w-3" />
   } else if (isFetching) {
-    badge = {
-      variant: 'warning',
-      icon: <Loader2 className="mr-1 h-3 w-3 animate-spin" />,
-      label: 'Calculando',
-    }
+    variant = 'warning'
+    icon = <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+    label = 'Calculando'
   } else if (result) {
     if (result.alert_level === 'broken' || result.status === 'invalid_case') {
-      badge = {
-        variant: 'danger',
-        icon: <AlertCircle className="mr-1 h-3 w-3" />,
-        label: 'Inviável',
-      }
+      variant = 'danger'
+      icon = <AlertCircle className="mr-1 h-3 w-3" />
+      label = 'Inviável'
     } else if (
       result.alert_level === 'red' ||
       result.status === 'ill_conditioned'
     ) {
-      badge = {
-        variant: 'warning',
-        icon: <AlertCircle className="mr-1 h-3 w-3" />,
-        label: 'Atenção',
-      }
+      variant = 'warning'
+      icon = <AlertCircle className="mr-1 h-3 w-3" />
+      label = 'Atenção'
     } else {
-      badge = {
-        variant: 'success',
-        icon: <CheckCircle2 className="mr-1 h-3 w-3" />,
-        label: 'Convergiu',
-      }
+      variant = 'success'
+      icon = <CheckCircle2 className="mr-1 h-3 w-3" />
+      label = 'Convergiu'
     }
   }
 
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <div>
-        <h2 className="text-base font-semibold leading-none tracking-tight">
-          Preview ao vivo
-        </h2>
-        <p className="mt-1 text-[11px] text-muted-foreground">
-          Recalcula automaticamente. Use "Salvar e calcular" para persistir.
-        </p>
-      </div>
-      <Badge variant={badge.variant} className="shrink-0">
-        {badge.icon}
-        {badge.label}
-      </Badge>
-    </div>
+    <Badge variant={variant} className="h-7 px-2 text-[11px]">
+      {icon}
+      {label}
+    </Badge>
   )
 }
 
@@ -667,9 +634,9 @@ function PlotArea({
   if (formInvalid && !result) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-        <Info className="h-5 w-5 text-muted-foreground" />
+        <Info className="h-6 w-6 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">
-          Preencha os campos à esquerda para ver o perfil calculado.
+          Preencha os campos acima para ver o perfil calculado.
         </p>
       </div>
     )
@@ -677,7 +644,7 @@ function PlotArea({
   if (!result && isFetching) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         <p className="text-sm text-muted-foreground">Calculando preview…</p>
       </div>
     )
@@ -689,12 +656,11 @@ function PlotArea({
       </div>
     )
   }
-  // Sempre renderiza gráfico quando há geometria (broken/ill_conditioned incluídos)
   const hasGeom = (result.coords_x?.length ?? 0) > 1
   if (!hasGeom) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
-        <AlertCircle className="h-5 w-5 text-danger" />
+        <AlertCircle className="h-6 w-6 text-danger" />
         <p className="text-sm font-medium text-danger">Sem geometria calculada</p>
         {result.message && (
           <p className="max-w-md text-xs text-muted-foreground">
@@ -704,7 +670,7 @@ function PlotArea({
       </div>
     )
   }
-  return <CatenaryPlot result={result} height={undefined as unknown as number} />
+  return <CatenaryPlot result={result} />
 }
 
 function MetricsRow({
@@ -718,20 +684,18 @@ function MetricsRow({
     return (
       <div className="grid shrink-0 grid-cols-4 gap-2">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="bg-muted/20">
+          <Card key={i} className="bg-muted/10">
             <CardContent className="flex h-[88px] flex-col justify-center gap-1 p-3">
-              <div className="h-3 w-16 rounded bg-muted/50" />
-              <div className="h-5 w-24 rounded bg-muted/40" />
+              <div className="h-2.5 w-16 rounded bg-muted/40" />
+              <div className="h-5 w-24 rounded bg-muted/30" />
             </CardContent>
           </Card>
         ))}
       </div>
     )
   }
-
   return (
     <div className="grid shrink-0 grid-cols-4 gap-2">
-      {/* Tração */}
       <MetricCard
         label="Tração fairlead"
         primary={fmtForceKN(result.fairlead_tension, 1)}
@@ -744,7 +708,6 @@ function MetricsRow({
           />
         }
       />
-      {/* Geometria */}
       <MetricCard
         label="Geometria"
         rows={[
@@ -753,7 +716,6 @@ function MetricsRow({
           ['Apoiado', fmtMeters(result.total_grounded_length, 1)],
         ]}
       />
-      {/* Forças */}
       <MetricCard
         label="Forças"
         rows={[
@@ -768,7 +730,6 @@ function MetricsRow({
           ['ΔL', fmtMeters(result.elongation, 3)],
         ]}
       />
-      {/* Status */}
       <MetricCard
         label="Status"
         extra={
@@ -800,37 +761,42 @@ function MetricCard({
 }) {
   return (
     <Card>
-      <CardContent className="flex h-full flex-col gap-1 p-3">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <CardContent className="flex h-[88px] flex-col justify-between gap-1 p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {label}
         </p>
-        {primary && (
-          <div className="flex items-baseline gap-1.5 font-mono tabular-nums">
-            <span className="text-lg font-semibold tracking-tight">
-              {primary}
-            </span>
-            {secondary && (
-              <span className="text-[10px] font-normal text-muted-foreground">
-                {secondary}
+        <div className="flex-1 overflow-hidden">
+          {primary && (
+            <div className="flex items-baseline gap-1.5 font-mono tabular-nums leading-none">
+              <span className="text-lg font-semibold tracking-tight">
+                {primary}
               </span>
-            )}
-          </div>
-        )}
-        {rows && (
-          <div className="space-y-0 font-mono text-[11px] tabular-nums">
-            {rows.map(([k, v]) => (
-              <div key={k} className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-muted-foreground">{k}</span>
-                <span className="shrink-0 font-medium text-foreground">{v}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {extra}
+              {secondary && (
+                <span className="text-[10px] font-normal text-muted-foreground">
+                  {secondary}
+                </span>
+              )}
+            </div>
+          )}
+          {rows && (
+            <div className="space-y-0 font-mono text-[11px] leading-tight tabular-nums">
+              {rows.map(([k, v]) => (
+                <div
+                  key={k}
+                  className="flex items-baseline justify-between gap-2"
+                >
+                  <span className="truncate text-muted-foreground">{k}</span>
+                  <span className="shrink-0 font-medium text-foreground">
+                    {v}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {extra}
+        </div>
         {footer && (
-          <p className="mt-auto font-mono text-[10px] text-muted-foreground">
-            {footer}
-          </p>
+          <p className="font-mono text-[10px] text-muted-foreground">{footer}</p>
         )}
       </CardContent>
     </Card>
