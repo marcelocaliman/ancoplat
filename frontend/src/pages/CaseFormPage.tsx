@@ -2,13 +2,18 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
+  Anchor,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   FileText,
   Info,
   Loader2,
+  Mountain,
   Save,
+  Sigma,
+  Waves,
+  Wrench,
   Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -48,6 +53,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
@@ -137,6 +148,16 @@ export function CaseFormPage() {
   const criteriaProfile = values.criteria_profile
   const [notesOpen, setNotesOpen] = useState(false)
   const hasNotes = (values.description?.trim().length ?? 0) > 0
+
+  // Contadores por tipo para os badges das abas Boias/Clumps. useFieldArray
+  // só nos dá `id`s e índices; a fonte da verdade do `kind` é o watch.
+  const watchedAttachments = (values.attachments ?? []) as Array<{
+    kind: 'buoy' | 'clump_weight'
+  }>
+  const buoyCount = watchedAttachments.filter((a) => a.kind === 'buoy').length
+  const clumpCount = watchedAttachments.filter(
+    (a) => a.kind === 'clump_weight',
+  ).length
 
   const debouncedValues = useDebounce(values, 600)
   const previewKey = useMemo(
@@ -280,9 +301,9 @@ export function CaseFormPage() {
     <>
       <Topbar breadcrumbs={breadcrumbs} actions={actions} />
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
-        {/* ───── Linha 1: Metadados (compacta) — Nome + Critério + Notas ───── */}
+        {/* ───── Linha 1: Metadados (compacta) — Nome + Notas ───── */}
         <Card className="shrink-0 overflow-hidden">
-          <CardContent className="grid grid-cols-[1.6fr_1.4fr_auto] items-end gap-3 p-3">
+          <CardContent className="grid grid-cols-[minmax(0,560px)_auto] items-end gap-3 p-3">
             <InlineField
               label="Nome do caso"
               required
@@ -292,33 +313,6 @@ export function CaseFormPage() {
                 {...register('name')}
                 placeholder="ex.: BC-01 catenária suspensa"
                 className="h-8"
-              />
-            </InlineField>
-            <InlineField label="Critério de utilização">
-              <Controller
-                control={control}
-                name="criteria_profile"
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {profiles?.map((p) => (
-                        <SelectItem key={p.name} value={p.name}>
-                          <span className="flex items-center gap-2">
-                            <span>{p.name}</span>
-                            <span className="text-[10px] text-muted-foreground">
-                              y{fmtNumber(p.yellow_ratio, 2)} · r
-                              {fmtNumber(p.red_ratio, 2)} · b
-                              {fmtNumber(p.broken_ratio, 2)}
-                            </span>
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
               />
             </InlineField>
             <Button
@@ -353,234 +347,372 @@ export function CaseFormPage() {
               />
             </div>
           )}
-          {criteriaProfile === 'UserDefined' && (
-            <div className="grid grid-cols-3 gap-2 border-t border-border/60 bg-muted/10 px-3 py-2">
-              {(['yellow_ratio', 'red_ratio', 'broken_ratio'] as const).map(
-                (k) => (
-                  <InlineField key={k} label={k.replace('_ratio', '')}>
-                    <Input
-                      type="number"
-                      step="0.05"
-                      defaultValue={
-                        watch(`user_defined_limits.${k}`) ??
-                        (k === 'yellow_ratio'
-                          ? 0.5
-                          : k === 'red_ratio'
-                            ? 0.6
-                            : 1.0)
-                      }
-                      onChange={(e) =>
-                        setValue(
-                          `user_defined_limits.${k}`,
-                          parseFloat(e.target.value),
-                          { shouldValidate: true },
-                        )
-                      }
-                      className="h-8 font-mono"
-                    />
-                  </InlineField>
-                ),
-              )}
-            </div>
-          )}
         </Card>
 
-        {/* ───── Linha 2: 2 blocos de parâmetros físicos ───── */}
-        <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
-          {/* Segmento(s) — F5.1 multi-segmento */}
-          <Section
-            title={
-              segmentsArray.fields.length === 1
-                ? 'Segmento de linha'
-                : `Segmentos da linha (${segmentsArray.fields.length})`
-            }
-          >
-            <div className="space-y-2">
-              {segmentsArray.fields.map((field, idx) => (
-                <SegmentEditor
-                  key={field.id}
-                  index={idx}
-                  total={segmentsArray.fields.length}
-                  control={control}
-                  register={register}
-                  watch={watch}
-                  setValue={setValue}
-                  onMoveUp={
-                    idx > 0 ? () => segmentsArray.move(idx, idx - 1) : undefined
-                  }
-                  onMoveDown={
-                    idx < segmentsArray.fields.length - 1
-                      ? () => segmentsArray.move(idx, idx + 1)
-                      : undefined
-                  }
-                  onRemove={
-                    segmentsArray.fields.length > 1
-                      ? () => segmentsArray.remove(idx)
-                      : undefined
-                  }
-                />
-              ))}
-              {segmentsArray.fields.length < 10 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 w-full gap-1.5 border-dashed text-[11px]"
-                  onClick={() => {
-                    // Clona o último segmento para acelerar a entrada de
-                    // configurações típicas (chain pendant em cima de chain pendant).
-                    const last = segmentsArray.fields[
-                      segmentsArray.fields.length - 1
-                    ] as unknown as CaseFormValues['segments'][number]
-                    segmentsArray.append({ ...last, length: 100 })
-                  }}
-                >
-                  + Adicionar segmento (próximo do fairlead)
-                </Button>
-              )}
-              {/* F5.2: attachments aparece quando há ≥ 2 segmentos */}
-              <AttachmentsEditor
-                control={control}
-                attachments={attachmentsArray}
-                segmentCount={segmentsArray.fields.length}
-              />
-            </div>
-          </Section>
+        {/* ───── Linha 2: tabs com inputs físicos do problema ───── */}
+        <Card className="shrink-0 overflow-hidden">
+          <Tabs defaultValue="linha" className="flex flex-col">
+            <TabsList className="mx-3 mt-2 w-fit">
+              <TabsTrigger value="linha" className="gap-1.5">
+                <Wrench className="h-3.5 w-3.5" />
+                Linha
+                {segmentsArray.fields.length > 1 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-4 px-1 text-[10px]"
+                  >
+                    {segmentsArray.fields.length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="boias" className="gap-1.5">
+                <Waves className="h-3.5 w-3.5" />
+                Boias
+                {buoyCount > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-4 px-1 text-[10px]"
+                  >
+                    {buoyCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="clumps" className="gap-1.5">
+                <Anchor className="h-3.5 w-3.5" />
+                Clumps
+                {clumpCount > 0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-4 px-1 text-[10px]"
+                  >
+                    {clumpCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="ambiente" className="gap-1.5">
+                <Mountain className="h-3.5 w-3.5" />
+                Ambiente
+              </TabsTrigger>
+              <TabsTrigger value="analise" className="gap-1.5">
+                <Sigma className="h-3.5 w-3.5" />
+                Análise
+              </TabsTrigger>
+            </TabsList>
 
-          {/* Condições de contorno + Seabed */}
-          <Section title="Condições">
-            <div className="grid grid-cols-2 gap-2">
-              <InlineField
-                label="Lâmina d'água"
-                unit="m"
-                tooltip="Profundidade do seabed a partir da superfície"
+            {/*
+             * Stack das abas: todos os <TabsContent> são forceMount + grid
+             * stacked (col/row-start-1) para que o card sempre tome a altura
+             * do maior conteúdo (Linha). Inativas ficam invisíveis e sem
+             * pointer events, mas continuam contribuindo p/ o layout. Isso
+             * mantém a posição do gráfico estável ao trocar de aba.
+             */}
+            <div className="grid">
+              {/* ───────── Aba Linha: só segmentos ───────── */}
+              <TabsContent
+                forceMount
+                value="linha"
+                className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-                <Input
-                  type="number"
-                  step="1"
-                  {...register('boundary.h', { valueAsNumber: true })}
-                  className="h-8 font-mono"
-                />
-              </InlineField>
-              <InlineField
-                label="Prof. fairlead"
-                unit="m"
-                tooltip="Profundidade do fairlead abaixo da superfície. 0 = linha partindo da superfície. Valor igual à lâmina = linha horizontal no fundo."
+              <div className="flex flex-wrap gap-2">
+                {segmentsArray.fields.map((field, idx) => (
+                  <div
+                    key={field.id}
+                    className="min-w-[300px] max-w-[420px] flex-1"
+                  >
+                    <SegmentEditor
+                      index={idx}
+                      total={segmentsArray.fields.length}
+                      control={control}
+                      register={register}
+                      watch={watch}
+                      setValue={setValue}
+                      onMoveUp={
+                        idx > 0
+                          ? () => segmentsArray.move(idx, idx - 1)
+                          : undefined
+                      }
+                      onMoveDown={
+                        idx < segmentsArray.fields.length - 1
+                          ? () => segmentsArray.move(idx, idx + 1)
+                          : undefined
+                      }
+                      onRemove={
+                        segmentsArray.fields.length > 1
+                          ? () => segmentsArray.remove(idx)
+                          : undefined
+                      }
+                    />
+                  </div>
+                ))}
+                {segmentsArray.fields.length < 10 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-auto min-h-[44px] min-w-[300px] flex-1 gap-1.5 border-dashed text-[11px]"
+                    onClick={() => {
+                      const last = segmentsArray.fields[
+                        segmentsArray.fields.length - 1
+                      ] as unknown as CaseFormValues['segments'][number]
+                      segmentsArray.append({ ...last, length: 100 })
+                    }}
+                  >
+                    + Adicionar segmento (próximo do fairlead)
+                  </Button>
+                )}
+              </div>
+            </TabsContent>
+
+              {/* ───────── Aba Boias ───────── */}
+              <TabsContent
+                forceMount
+                value="boias"
+                className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-                <Input
-                  type="number"
-                  step="1"
-                  min="0"
-                  {...register('boundary.startpoint_depth', {
-                    valueAsNumber: true,
-                  })}
-                  className="h-8 font-mono"
-                />
-              </InlineField>
-              <InlineField label="Modo">
-                <Controller
+                <AttachmentsEditor
                   control={control}
-                  name="boundary.mode"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Tension">Tension</SelectItem>
-                        <SelectItem value="Range">Range</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
+                  attachments={attachmentsArray}
+                  segmentCount={segmentsArray.fields.length}
+                  kind="buoy"
                 />
-              </InlineField>
-              <InlineField
-                label={mode === 'Tension' ? 'T_fl (fairlead)' : 'X total'}
-                unit={mode === 'Tension' ? undefined : 'm'}
+              </TabsContent>
+
+              {/* ───────── Aba Clumps ───────── */}
+              <TabsContent
+                forceMount
+                value="clumps"
+                className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-                {mode === 'Tension' ? (
-                  <Controller
-                    control={control}
-                    name="boundary.input_value"
-                    render={({ field }) => (
-                      <UnitInput
-                        value={field.value}
-                        onChange={field.onChange}
-                        quantity="force"
-                        digits={2}
-                        className="h-8"
-                      />
-                    )}
-                  />
-                ) : (
+                <AttachmentsEditor
+                  control={control}
+                  attachments={attachmentsArray}
+                  segmentCount={segmentsArray.fields.length}
+                  kind="clump_weight"
+                />
+              </TabsContent>
+
+              {/* ───────── Aba Ambiente: seabed + fairlead depth ───────── */}
+              <TabsContent
+                forceMount
+                value="ambiente"
+                className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
+              >
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,260px))] gap-3">
+                <InlineField
+                  label="Lâmina d'água (sob âncora)"
+                  unit="m"
+                  tooltip="Profundidade do seabed na coluna da âncora, medida da superfície"
+                >
                   <Input
                     type="number"
-                    step="any"
-                    {...register('boundary.input_value', { valueAsNumber: true })}
+                    step="1"
+                    {...register('boundary.h', { valueAsNumber: true })}
                     className="h-8 font-mono"
                   />
-                )}
-              </InlineField>
-              <InlineField
-                label="μ (atrito)"
-                tooltip="Wire ~0,3 · Corrente ~0,7 · Poliéster ~0,25"
-              >
-                <Input
-                  type="number"
-                  step="0.05"
-                  min="0"
-                  {...register('seabed.mu', { valueAsNumber: true })}
-                  className="h-8 font-mono"
-                />
-              </InlineField>
-              <InlineField
-                label="Inclinação seabed"
-                unit="°"
-                tooltip={
-                  '0° = horizontal. Positivo: seabed sobe em direção ao fairlead. ' +
-                  'Use o ícone ao lado para calcular pela batimetria nos dois pontos.'
-                }
-              >
-                <Controller
-                  control={control}
-                  name="seabed.slope_rad"
-                  render={({ field }) => (
-                    <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
-                      <input
-                        type="number"
-                        step={0.5}
-                        min={-45}
-                        max={45}
-                        // Estado interno em radianos; UI em graus
-                        value={
-                          field.value != null
-                            ? ((field.value * 180) / Math.PI).toFixed(2)
-                            : '0'
-                        }
-                        onChange={(e) => {
-                          const deg = parseFloat(e.target.value)
-                          field.onChange(
-                            Number.isFinite(deg) ? (deg * Math.PI) / 180 : 0,
-                          )
-                        }}
-                        className="min-w-0 flex-1 bg-transparent px-2 py-1 font-mono text-sm tabular-nums focus:outline-none"
-                      />
-                      <BathymetryPopover
-                        currentSlopeRad={field.value ?? 0}
-                        currentH={watch('boundary.h') ?? 0}
-                        currentXTotal={
-                          previewQuery.data?.total_horz_distance ?? undefined
-                        }
-                        onApplyRad={(rad) => field.onChange(rad)}
-                      />
-                    </div>
-                  )}
-                />
-              </InlineField>
-            </div>
-          </Section>
+                </InlineField>
+                <InlineField
+                  label="Prof. do fairlead"
+                  unit="m"
+                  tooltip="Profundidade do fairlead abaixo da superfície. 0 = na superfície. Igual à lâmina = linha horizontal no fundo."
+                >
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    {...register('boundary.startpoint_depth', {
+                      valueAsNumber: true,
+                    })}
+                    className="h-8 font-mono"
+                  />
+                </InlineField>
+                <InlineField
+                  label="μ (atrito do seabed)"
+                  tooltip="Wire ~0,3 · Corrente ~0,7 · Poliéster ~0,25"
+                >
+                  <Input
+                    type="number"
+                    step="0.05"
+                    min="0"
+                    {...register('seabed.mu', { valueAsNumber: true })}
+                    className="h-8 font-mono"
+                  />
+                </InlineField>
+                <InlineField
+                  label="Inclinação seabed"
+                  unit="°"
+                  tooltip={
+                    '0° = horizontal. Positivo: seabed sobe em direção ao fairlead. ' +
+                    'Use o ícone ao lado para calcular pela batimetria nos dois pontos.'
+                  }
+                >
+                  <Controller
+                    control={control}
+                    name="seabed.slope_rad"
+                    render={({ field }) => (
+                      <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
+                        <input
+                          type="number"
+                          step={0.5}
+                          min={-45}
+                          max={45}
+                          value={
+                            field.value != null
+                              ? ((field.value * 180) / Math.PI).toFixed(2)
+                              : '0'
+                          }
+                          onChange={(e) => {
+                            const deg = parseFloat(e.target.value)
+                            field.onChange(
+                              Number.isFinite(deg) ? (deg * Math.PI) / 180 : 0,
+                            )
+                          }}
+                          className="min-w-0 flex-1 bg-transparent px-2 py-1 font-mono text-sm tabular-nums focus:outline-none"
+                        />
+                        <BathymetryPopover
+                          currentSlopeRad={field.value ?? 0}
+                          currentH={watch('boundary.h') ?? 0}
+                          currentXTotal={
+                            previewQuery.data?.total_horz_distance ?? undefined
+                          }
+                          onApplyRad={(rad) => field.onChange(rad)}
+                        />
+                      </div>
+                    )}
+                  />
+                </InlineField>
+              </div>
+            </TabsContent>
 
-        </div>
+              {/* ───────── Aba Análise: modo + input + critério ───────── */}
+              <TabsContent
+                forceMount
+                value="analise"
+                className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
+              >
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,280px))] gap-3">
+                <InlineField label="Modo de cálculo">
+                  <Controller
+                    control={control}
+                    name="boundary.mode"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Tension">
+                            Tension (T_fl → X)
+                          </SelectItem>
+                          <SelectItem value="Range">
+                            Range (X → T_fl)
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </InlineField>
+                <InlineField
+                  label={mode === 'Tension' ? 'T_fl no fairlead' : 'X total'}
+                  unit={mode === 'Tension' ? undefined : 'm'}
+                  tooltip={
+                    mode === 'Tension'
+                      ? 'Tração total no fairlead. Solver computa X.'
+                      : 'Distância horizontal fairlead → âncora. Solver computa T_fl.'
+                  }
+                >
+                  {mode === 'Tension' ? (
+                    <Controller
+                      control={control}
+                      name="boundary.input_value"
+                      render={({ field }) => (
+                        <UnitInput
+                          value={field.value}
+                          onChange={field.onChange}
+                          quantity="force"
+                          digits={2}
+                          className="h-8"
+                        />
+                      )}
+                    />
+                  ) : (
+                    <Input
+                      type="number"
+                      step="any"
+                      {...register('boundary.input_value', {
+                        valueAsNumber: true,
+                      })}
+                      className="h-8 font-mono"
+                    />
+                  )}
+                </InlineField>
+                <InlineField
+                  label="Critério de utilização"
+                  className="col-span-full max-w-[560px]"
+                >
+                  <Controller
+                    control={control}
+                    name="criteria_profile"
+                    render={({ field }) => (
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className="h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {profiles?.map((p) => (
+                            <SelectItem key={p.name} value={p.name}>
+                              <span className="flex items-center gap-2">
+                                <span>{p.name}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  y{fmtNumber(p.yellow_ratio, 2)} · r
+                                  {fmtNumber(p.red_ratio, 2)} · b
+                                  {fmtNumber(p.broken_ratio, 2)}
+                                </span>
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </InlineField>
+                {criteriaProfile === 'UserDefined' && (
+                  <div className="col-span-full grid grid-cols-[repeat(auto-fill,minmax(140px,180px))] gap-2">
+                    {(
+                      ['yellow_ratio', 'red_ratio', 'broken_ratio'] as const
+                    ).map((k) => (
+                      <InlineField
+                        key={k}
+                        label={`${k.replace('_ratio', '')} (limite)`}
+                      >
+                        <Input
+                          type="number"
+                          step="0.05"
+                          defaultValue={
+                            watch(`user_defined_limits.${k}`) ??
+                            (k === 'yellow_ratio'
+                              ? 0.5
+                              : k === 'red_ratio'
+                                ? 0.6
+                                : 1.0)
+                          }
+                          onChange={(e) =>
+                            setValue(
+                              `user_defined_limits.${k}`,
+                              parseFloat(e.target.value),
+                              { shouldValidate: true },
+                            )
+                          }
+                          className="h-8 font-mono"
+                        />
+                      </InlineField>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+            </div>
+          </Tabs>
+        </Card>
 
         {/* ───── Middle: gráfico ───── */}
         <Card className="min-h-0 flex-1 overflow-hidden">
@@ -608,25 +740,6 @@ export function CaseFormPage() {
 }
 
 /* ───────────────────────── Helpers visuais ─────────────────────────── */
-
-function Section({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <Card className="overflow-hidden">
-      <div className="border-b border-border/60 bg-muted/20 px-3 py-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          {title}
-        </span>
-      </div>
-      <CardContent className="p-3">{children}</CardContent>
-    </Card>
-  )
-}
 
 function InlineField({
   label,

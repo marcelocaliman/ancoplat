@@ -166,8 +166,8 @@ export function SegmentEditor({
         )}
       />
 
-      <div className="grid grid-cols-3 gap-2">
-        <InlineLabeled label="Comp." unit="m">
+      <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+        <InlineLabeled label="Comprimento" unit="m">
           <Input
             type="number"
             step="1"
@@ -184,7 +184,7 @@ export function SegmentEditor({
             className="h-8 font-mono"
           />
         </InlineLabeled>
-        <InlineLabeled label="Categoria">
+        <InlineLabeled label="Categoria" className="col-span-2">
           <Controller
             control={control}
             name={`segments.${index}.category`}
@@ -198,8 +198,8 @@ export function SegmentEditor({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Wire">Wire</SelectItem>
-                  <SelectItem value="StuddedChain">Studded</SelectItem>
-                  <SelectItem value="StudlessChain">Studless</SelectItem>
+                  <SelectItem value="StuddedChain">Studded chain</SelectItem>
+                  <SelectItem value="StudlessChain">Studless chain</SelectItem>
                   <SelectItem value="Polyester">Poliéster</SelectItem>
                 </SelectContent>
               </Select>
@@ -251,7 +251,7 @@ export function SegmentEditor({
             )}
           />
         </InlineLabeled>
-        <InlineLabeled label="MBL" className="col-span-2">
+        <InlineLabeled label="MBL">
           <Controller
             control={control}
             name={`segments.${index}.MBL`}
@@ -266,7 +266,7 @@ export function SegmentEditor({
             )}
           />
         </InlineLabeled>
-        <InlineLabeled label="Módulo" unit="Pa">
+        <InlineLabeled label="Módulo" unit="Pa" className="col-span-2">
           <Input
             type="number"
             step="1e9"
