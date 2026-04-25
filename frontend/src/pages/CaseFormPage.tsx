@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  FileText,
   Info,
   Loader2,
   Save,
   Zap,
 } from 'lucide-react'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -121,6 +124,8 @@ export function CaseFormPage() {
   const values = watch()
   const mode = values.boundary.mode
   const criteriaProfile = values.criteria_profile
+  const [notesOpen, setNotesOpen] = useState(false)
+  const hasNotes = (values.description?.trim().length ?? 0) > 0
 
   const debouncedValues = useDebounce(values, 600)
   const previewKey = useMemo(
@@ -296,9 +301,9 @@ export function CaseFormPage() {
     <>
       <Topbar breadcrumbs={breadcrumbs} actions={actions} />
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
-        {/* ───── Linha 1: Identificação full-width ───── */}
+        {/* ───── Linha 1: Metadados (compacta) — Nome + Critério + Notas ───── */}
         <Card className="shrink-0 overflow-hidden">
-          <CardContent className="grid grid-cols-[1fr_2fr] items-start gap-3 p-3">
+          <CardContent className="grid grid-cols-[1.6fr_1.4fr_auto] items-end gap-3 p-3">
             <InlineField
               label="Nome do caso"
               required
@@ -310,19 +315,99 @@ export function CaseFormPage() {
                 className="h-8"
               />
             </InlineField>
-            <InlineField label="Descrição / notas">
+            <InlineField label="Critério de utilização">
+              <Controller
+                control={control}
+                name="criteria_profile"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {profiles?.map((p) => (
+                        <SelectItem key={p.name} value={p.name}>
+                          <span className="flex items-center gap-2">
+                            <span>{p.name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              y{fmtNumber(p.yellow_ratio, 2)} · r
+                              {fmtNumber(p.red_ratio, 2)} · b
+                              {fmtNumber(p.broken_ratio, 2)}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </InlineField>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setNotesOpen((v) => !v)}
+              className="h-8 gap-1.5 text-[11px]"
+              title={hasNotes ? 'Notas preenchidas' : 'Adicionar notas'}
+            >
+              <FileText
+                className={cn(
+                  'h-3.5 w-3.5',
+                  hasNotes ? 'text-primary' : 'text-muted-foreground',
+                )}
+              />
+              Notas
+              {notesOpen ? (
+                <ChevronUp className="h-3 w-3" />
+              ) : (
+                <ChevronDown className="h-3 w-3" />
+              )}
+            </Button>
+          </CardContent>
+          {notesOpen && (
+            <div className="border-t border-border/60 px-3 pb-3 pt-2">
               <Textarea
                 {...register('description')}
                 rows={2}
-                placeholder="Notas sobre o caso, condições de projeto, premissas…"
+                placeholder="Notas sobre o caso, condições de projeto, premissas, datas…"
                 className="resize-none text-sm"
               />
-            </InlineField>
-          </CardContent>
+            </div>
+          )}
+          {criteriaProfile === 'UserDefined' && (
+            <div className="grid grid-cols-3 gap-2 border-t border-border/60 bg-muted/10 px-3 py-2">
+              {(['yellow_ratio', 'red_ratio', 'broken_ratio'] as const).map(
+                (k) => (
+                  <InlineField key={k} label={k.replace('_ratio', '')}>
+                    <Input
+                      type="number"
+                      step="0.05"
+                      defaultValue={
+                        watch(`user_defined_limits.${k}`) ??
+                        (k === 'yellow_ratio'
+                          ? 0.5
+                          : k === 'red_ratio'
+                            ? 0.6
+                            : 1.0)
+                      }
+                      onChange={(e) =>
+                        setValue(
+                          `user_defined_limits.${k}`,
+                          parseFloat(e.target.value),
+                          { shouldValidate: true },
+                        )
+                      }
+                      className="h-8 font-mono"
+                    />
+                  </InlineField>
+                ),
+              )}
+            </div>
+          )}
         </Card>
 
-        {/* ───── Linha 2: 3 blocos de parâmetros ───── */}
-        <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-[1.6fr_1fr_1fr]">
+        {/* ───── Linha 2: 2 blocos de parâmetros físicos ───── */}
+        <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
           {/* Segmento */}
           <Section title="Segmento de linha">
             <div className="space-y-2">
@@ -552,68 +637,6 @@ export function CaseFormPage() {
             </div>
           </Section>
 
-          {/* Critério de utilização */}
-          <Section title="Critério de utilização">
-            <div className="space-y-2">
-              <InlineField label="Perfil">
-                <Controller
-                  control={control}
-                  name="criteria_profile"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger className="h-8">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {profiles?.map((p) => (
-                          <SelectItem key={p.name} value={p.name}>
-                            <span className="flex items-center gap-2">
-                              <span>{p.name}</span>
-                              <span className="text-[10px] text-muted-foreground">
-                                y{fmtNumber(p.yellow_ratio, 2)} · r
-                                {fmtNumber(p.red_ratio, 2)} · b
-                                {fmtNumber(p.broken_ratio, 2)}
-                              </span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </InlineField>
-              {criteriaProfile === 'UserDefined' && (
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(['yellow_ratio', 'red_ratio', 'broken_ratio'] as const).map(
-                    (k) => (
-                      <InlineField key={k} label={k.replace('_ratio', '')}>
-                        <Input
-                          type="number"
-                          step="0.05"
-                          defaultValue={
-                            watch(`user_defined_limits.${k}`) ??
-                            (k === 'yellow_ratio'
-                              ? 0.5
-                              : k === 'red_ratio'
-                                ? 0.6
-                                : 1.0)
-                          }
-                          onChange={(e) =>
-                            setValue(
-                              `user_defined_limits.${k}`,
-                              parseFloat(e.target.value),
-                              { shouldValidate: true },
-                            )
-                          }
-                          className="h-8 font-mono"
-                        />
-                      </InlineField>
-                    ),
-                  )}
-                </div>
-              )}
-            </div>
-          </Section>
         </div>
 
         {/* ───── Middle: gráfico ───── */}
@@ -815,7 +838,7 @@ function MetricsRow({
       <div className="grid shrink-0 grid-cols-4 gap-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i} className="bg-muted/10">
-            <CardContent className="flex h-[132px] flex-col justify-center gap-1 p-3">
+            <CardContent className="flex h-[156px] flex-col justify-center gap-1 p-3">
               <div className="h-2.5 w-16 rounded bg-muted/40" />
               <div className="h-5 w-24 rounded bg-muted/30" />
               <div className="h-2 w-20 rounded bg-muted/30" />
@@ -935,7 +958,7 @@ function MetricCard({
 }) {
   return (
     <Card>
-      <CardContent className="flex h-[132px] flex-col gap-1.5 p-3">
+      <CardContent className="flex h-[156px] flex-col gap-1.5 p-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {label}
         </p>
@@ -968,7 +991,10 @@ function MetricCard({
           </div>
         )}
         {footer && (
-          <p className="mt-1 truncate font-mono text-[9.5px] text-muted-foreground">
+          <p
+            className="mt-1 line-clamp-2 font-mono text-[9.5px] leading-tight text-muted-foreground"
+            title={footer}
+          >
             {footer}
           </p>
         )}

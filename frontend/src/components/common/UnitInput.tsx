@@ -132,7 +132,7 @@ export function UnitInput({
         }
         className={cn(
           'flex shrink-0 items-center justify-center whitespace-nowrap border-l border-input',
-          'min-w-[3rem] px-2 bg-muted/40 font-mono text-[10px] font-semibold uppercase tracking-tight',
+          'min-w-[3rem] px-2 bg-muted/40 font-mono text-[10px] font-semibold tracking-tight',
           'text-muted-foreground transition-colors',
           'hover:bg-muted hover:text-foreground',
           'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-inset',
