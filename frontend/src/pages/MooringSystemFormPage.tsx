@@ -272,10 +272,16 @@ export function MooringSystemFormPage() {
           </CardContent>
         </Card>
 
-        {/* Body: lines + plan view */}
-        <div className="flex min-h-0 flex-1 gap-3">
-          {/* Left: line tabs + form */}
-          <Card className="min-h-0 flex-1 overflow-hidden">
+        {/* Body: lines + plan view.
+            Mudou de `flex-1` para `shrink-0` — deixa o conteúdo fluir
+            naturalmente em altura, sem competir com os cards de
+            análise abaixo. Scroll de página global cuida do overflow
+            (já configurado no outer container). */}
+        <div className="flex shrink-0 gap-3">
+          {/* Left: line tabs + form. Sem overflow interno — todo o
+              conteúdo da linha (segmentos + boias + clumps + boundary)
+              fica visível, scroll é da página. */}
+          <Card className="flex-1">
             <div className="flex items-center gap-1 border-b border-border/60 bg-muted/20 px-2 py-1.5">
               <span className="px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 Linhas ({linesArray.fields.length})
@@ -328,7 +334,7 @@ export function MooringSystemFormPage() {
               </div>
             </div>
 
-            <div className="overflow-y-auto p-3">
+            <div className="p-3">
               {linesArray.fields.map((field, idx) => (
                 <div
                   key={field.id}
@@ -346,9 +352,14 @@ export function MooringSystemFormPage() {
             </div>
           </Card>
 
-          {/* Right: plan view + aggregate */}
-          <Card className="min-h-0 w-[420px] shrink-0 overflow-hidden">
-            <CardContent className="flex h-full flex-col gap-3 p-3">
+          {/* Right: plan view + aggregate.
+              `sticky top-0` mantém o plan view visível enquanto o
+              usuário rola a página por entre os campos longos da
+              linha sendo editada (segmentos + boias + clumps +
+              boundary). `self-start` evita que o card estique até
+              a altura do card esquerdo (que pode ser muito alto). */}
+          <Card className="sticky top-0 w-[420px] shrink-0 self-start overflow-hidden">
+            <CardContent className="flex flex-col gap-3 p-3">
               <div className="aspect-square shrink-0">
                 <MooringSystemPlanView
                   result={previewQuery.data}
