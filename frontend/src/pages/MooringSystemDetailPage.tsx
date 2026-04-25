@@ -12,15 +12,19 @@ import {
   FileText,
   Loader2,
   Minus,
+  Pause,
+  Play,
   RotateCcw,
+  Target,
   Wind,
   Zap,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import {
+  computeWatchcircle,
   exportMooringSystemJsonUrl,
   exportMooringSystemPdfUrl,
   getMooringSystem,
@@ -30,6 +34,7 @@ import {
 import type {
   MooringSystemResult,
   PlatformEquilibriumResult,
+  WatchcircleResult,
 } from '@/api/types'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -120,6 +125,58 @@ export function MooringSystemDetailPage() {
     setEnvFxKn(0)
     setEnvFyKn(0)
     setEquilibrium(null)
+  }
+
+  // F5.6 — Watchcircle (varredura azimutal de carga ambiental).
+  const [wcMagnitudeKn, setWcMagnitudeKn] = useState<number>(50)
+  const [wcSteps, setWcSteps] = useState<number>(36)
+  const [watchcircle, setWatchcircle] = useState<WatchcircleResult | null>(
+    null,
+  )
+  // Animação: índice do ponto da varredura sendo "tocado" (também
+  // dirige o equilíbrio mostrado na plan view).
+  const [wcAnimIdx, setWcAnimIdx] = useState<number>(0)
+  const [wcPlaying, setWcPlaying] = useState<boolean>(false)
+
+  const watchcircleMutation = useMutation({
+    mutationFn: () =>
+      computeWatchcircle(msysId, wcMagnitudeKn * 1000, wcSteps),
+    onSuccess: (res) => {
+      setWatchcircle(res)
+      setWcAnimIdx(0)
+      // Sincroniza equilíbrio inicial com o ponto 0 da varredura
+      if (res.points[0]) setEquilibrium(res.points[0].equilibrium)
+      toast.success(
+        `Watchcircle calculado em ${res.n_steps} passos`,
+        {
+          description: `Offset máximo ${res.max_offset_magnitude.toFixed(2)} m @ ${res.max_offset_load_azimuth_deg.toFixed(0)}° · ${res.n_failed} falhas`,
+        },
+      )
+    },
+    onError: (err) => {
+      const msg = err instanceof ApiError ? err.message : String(err)
+      toast.error('Falha no watchcircle', { description: msg })
+    },
+  })
+
+  // Animação automática (play/pause): avança 1 passo a cada 250 ms
+  useEffect(() => {
+    if (!wcPlaying || !watchcircle) return
+    const id = setInterval(() => {
+      setWcAnimIdx((prev) => {
+        const next = (prev + 1) % watchcircle.points.length
+        const nextEq = watchcircle.points[next]?.equilibrium
+        if (nextEq) setEquilibrium(nextEq)
+        return next
+      })
+    }, 250)
+    return () => clearInterval(id)
+  }, [wcPlaying, watchcircle])
+
+  function resetWatchcircle() {
+    setWatchcircle(null)
+    setWcPlaying(false)
+    setWcAnimIdx(0)
   }
 
   const breadcrumbs = [
@@ -219,6 +276,7 @@ export function MooringSystemDetailPage() {
                 platformRadius={data.input.platform_radius}
                 previewLines={previewLines}
                 equilibrium={equilibrium ?? undefined}
+                watchcircle={watchcircle ?? undefined}
               />
             </CardContent>
           </Card>
@@ -383,6 +441,174 @@ export function MooringSystemDetailPage() {
                   Nenhum equilíbrio calculado ainda. Defina F<sub>x</sub> e
                   F<sub>y</sub> e clique em <strong>Calcular</strong>. O
                   plan view mostrará a plataforma na posição deslocada.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* F5.6 — Watchcircle (envelope de offsets sob carga rotacionada) */}
+        <Card className="mt-4 overflow-hidden">
+          <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/20 px-4 py-2">
+            <span className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <Target className="h-3 w-3" />
+              Watchcircle — envelope de offset
+            </span>
+            {watchcircle && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetWatchcircle}
+                className="h-7 gap-1 text-[11px]"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Resetar
+              </Button>
+            )}
+          </div>
+          <CardContent className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_1fr]">
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Varre a direção da carga em 360° com magnitude fixa,
+                gerando o envelope de offsets que a plataforma traça.
+                Identifica direções de fragilidade do sistema.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-0.5">
+                  <Label className="text-[10px] font-medium text-muted-foreground">
+                    Magnitude (kN)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="5"
+                    min="0"
+                    value={wcMagnitudeKn}
+                    onChange={(e) =>
+                      setWcMagnitudeKn(Number(e.target.value) || 0)
+                    }
+                    className="h-8 font-mono"
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <Label className="text-[10px] font-medium text-muted-foreground">
+                    Passos (n_steps)
+                  </Label>
+                  <Input
+                    type="number"
+                    step="4"
+                    min="4"
+                    max="180"
+                    value={wcSteps}
+                    onChange={(e) =>
+                      setWcSteps(
+                        Math.min(180, Math.max(4, Number(e.target.value) || 4)),
+                      )
+                    }
+                    className="h-8 font-mono"
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => watchcircleMutation.mutate()}
+                disabled={watchcircleMutation.isPending || wcMagnitudeKn <= 0}
+                className="w-full"
+              >
+                {watchcircleMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Target className="h-4 w-4" />
+                )}
+                Calcular watchcircle
+              </Button>
+            </div>
+
+            <div className="border-l border-border/40 pl-4">
+              {watchcircle ? (
+                <div className="space-y-2 font-mono text-xs">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-muted-foreground">Magnitude</span>
+                    <span className="font-medium">
+                      {(watchcircle.magnitude_n / 1000).toFixed(1)} kN
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-muted-foreground">Offset máx</span>
+                    <span className="font-medium">
+                      {watchcircle.max_offset_magnitude.toFixed(2)} m @{' '}
+                      {watchcircle.max_offset_load_azimuth_deg.toFixed(0)}°
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-muted-foreground">
+                      Máx. utilização
+                    </span>
+                    <span className="font-medium">
+                      {fmtPercent(watchcircle.max_utilization, 1)}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-muted-foreground">Falhas</span>
+                    <span
+                      className={`font-medium ${
+                        watchcircle.n_failed > 0
+                          ? 'text-warning'
+                          : 'text-success'
+                      }`}
+                    >
+                      {watchcircle.n_failed} / {watchcircle.n_steps}
+                    </span>
+                  </div>
+
+                  {/* Animation controls */}
+                  <div className="space-y-2 border-t border-border/40 pt-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setWcPlaying((p) => !p)}
+                        className="h-7 gap-1 px-2 text-[11px]"
+                      >
+                        {wcPlaying ? (
+                          <Pause className="h-3 w-3" />
+                        ) : (
+                          <Play className="h-3 w-3" />
+                        )}
+                        {wcPlaying ? 'Pausar' : 'Animar'}
+                      </Button>
+                      <span className="text-[10px] text-muted-foreground">
+                        Direção da carga:{' '}
+                        <span className="font-mono text-foreground">
+                          {watchcircle.points[wcAnimIdx]?.azimuth_deg.toFixed(
+                            0,
+                          )}
+                          °
+                        </span>
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={watchcircle.points.length - 1}
+                      step={1}
+                      value={wcAnimIdx}
+                      onChange={(e) => {
+                        const idx = Number(e.target.value)
+                        setWcAnimIdx(idx)
+                        const eq = watchcircle.points[idx]?.equilibrium
+                        if (eq) setEquilibrium(eq)
+                        setWcPlaying(false)
+                      }}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Defina magnitude (kN) e passos (default 36 = passo de
+                  10°) e clique em <strong>Calcular watchcircle</strong>.
+                  O plan view mostrará o envelope (curva fechada
+                  conectando os offsets de cada azimuth).
                 </p>
               )}
             </div>

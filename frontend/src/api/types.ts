@@ -43,6 +43,10 @@ export type PaginatedResponse_MooringSystemSummary_ =
 export type EnvironmentalLoad = S['EnvironmentalLoad']
 export type PlatformEquilibriumResult = S['PlatformEquilibriumResult']
 
+// Watchcircle (F5.6)
+export type WatchcirclePoint = S['WatchcirclePoint']
+export type WatchcircleResult = S['WatchcircleResult']
+
 export type LineCategory =
   | 'Wire'
   | 'StuddedChain'

@@ -20,6 +20,7 @@ import type {
   PaginatedResponse_MooringSystemSummary_,
   PlatformEquilibriumResult,
   VersionResponse,
+  WatchcircleResult,
 } from './types'
 
 // ─────────────────────────────── metadata ──────────────────────────────────
@@ -196,6 +197,19 @@ export const previewEquilibrium = (
     .post<PlatformEquilibriumResult>(
       `/mooring-systems/equilibrium-preview`,
       { system, env },
+    )
+    .then((r) => r.data)
+
+// Watchcircle (F5.6)
+export const computeWatchcircle = (
+  msysId: number,
+  magnitude_n: number,
+  n_steps: number = 36,
+) =>
+  apiClient
+    .post<WatchcircleResult>(
+      `/mooring-systems/${msysId}/watchcircle`,
+      { magnitude_n, n_steps },
     )
     .then((r) => r.data)
 

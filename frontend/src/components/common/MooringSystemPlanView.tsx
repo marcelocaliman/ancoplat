@@ -2,6 +2,7 @@ import type {
   MooringLineResult,
   MooringSystemResult,
   PlatformEquilibriumResult,
+  WatchcircleResult,
 } from '@/api/types'
 
 export interface MooringSystemPlanViewProps {
@@ -29,6 +30,13 @@ export interface MooringSystemPlanViewProps {
    * estiverem presentes.
    */
   equilibrium?: PlatformEquilibriumResult
+  /**
+   * F5.6 — Watchcircle envelope. Quando informado, traça uma curva
+   * fechada conectando os offsets de cada azimuth da varredura.
+   * Combinado com `equilibrium` (que é um ponto no envelope), dá
+   * uma visão integrada: forma do envelope + posição corrente.
+   */
+  watchcircle?: WatchcircleResult
   className?: string
 }
 
@@ -49,6 +57,7 @@ export function MooringSystemPlanView({
   platformRadius,
   previewLines,
   equilibrium,
+  watchcircle,
   className,
 }: MooringSystemPlanViewProps) {
   // F5.5 tem precedência sobre o resultado neutro: usa as linhas do
@@ -215,6 +224,35 @@ export function MooringSystemPlanView({
       {lines.map((lr, i) => (
         <LineSegment key={i} lineResult={lr} toSvg={toSvg} />
       ))}
+
+      {/* F5.6 — Watchcircle envelope. Offsets típicos são sub-métricos
+          enquanto a área plotada é de centenas de metros — escalamos
+          visualmente para o envelope ocupar ~15% do raio do plot.
+          Texto na própria curva reporta o fator de escala. */}
+      {watchcircle && watchcircle.points.length >= 4 && (
+        <WatchcircleOverlay
+          watchcircle={watchcircle}
+          cx={cx}
+          cy={cy}
+          maxRadius={maxRadius}
+          scale={scale}
+          activeAzimuthDeg={
+            equilibrium && equilibrium.environmental_load.Fx ** 2 +
+              equilibrium.environmental_load.Fy ** 2 >
+            1
+              ? (() => {
+                  const az =
+                    Math.atan2(
+                      equilibrium.environmental_load.Fy,
+                      equilibrium.environmental_load.Fx,
+                    ) *
+                    (180 / Math.PI)
+                  return az < 0 ? az + 360 : az
+                })()
+              : null
+          }
+        />
+      )}
 
       {/* ── Linhas em modo preview (sem resultado) ── */}
       {lines.length === 0 &&
@@ -529,6 +567,119 @@ function EnvironmentalLoadArrow({
         opacity={0.9}
         className="msys-animated"
       />
+    </g>
+  )
+}
+
+/**
+ * F5.6 — Overlay do watchcircle: traça curva fechada conectando os
+ * offsets de cada azimuth da varredura. Como offsets são tipicamente
+ * sub-métricos enquanto o plot mede centenas de metros, escalamos
+ * para o envelope ocupar ~15% do raio do plot. Reportamos o fator
+ * de escala como label na própria curva.
+ *
+ * Quando `activeAzimuthDeg` é informado, destacamos o ponto da
+ * varredura mais próximo dele (visualização sincronizada com o
+ * equilíbrio corrente).
+ */
+function WatchcircleOverlay({
+  watchcircle,
+  cx,
+  cy,
+  maxRadius,
+  scale,
+  activeAzimuthDeg,
+}: {
+  watchcircle: import('@/api/types').WatchcircleResult
+  cx: number
+  cy: number
+  maxRadius: number
+  scale: number
+  activeAzimuthDeg: number | null
+}) {
+  const points = watchcircle.points
+  if (points.length < 4) return null
+
+  // Offset máximo na varredura — base para o fator de escala visual.
+  const maxOffset = watchcircle.max_offset_magnitude
+  if (maxOffset <= 1e-6) return null
+
+  // Visual exaggeration: envelope ocupa ~15% do raio do plot.
+  const targetVis = maxRadius * 0.15
+  const visScale = targetVis / maxOffset
+
+  // Constrói path da curva fechada
+  const pathPoints = points.map((p) => {
+    const dx = p.equilibrium.offset_xy[0] * visScale * scale
+    const dy = p.equilibrium.offset_xy[1] * visScale * scale
+    return [cx + dx, cy - dy] as const
+  })
+  const pathD =
+    pathPoints
+      .map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
+      .join(' ') + ' Z'
+
+  // Encontra ponto mais próximo de activeAzimuthDeg
+  let activeIdx: number | null = null
+  if (activeAzimuthDeg != null) {
+    let bestDiff = Infinity
+    for (let i = 0; i < points.length; i++) {
+      let d = Math.abs(points[i]!.azimuth_deg - activeAzimuthDeg)
+      d = Math.min(d, 360 - d)
+      if (d < bestDiff) {
+        bestDiff = d
+        activeIdx = i
+      }
+    }
+  }
+
+  // Anota fator de escala perto da curva
+  const labelX = cx + targetVis * 1.05
+  const labelY = cy - targetVis * 0.9
+
+  return (
+    <g>
+      {/* Envelope */}
+      <path
+        d={pathD}
+        fill="#A78BFA"
+        fillOpacity={0.12}
+        stroke="#A78BFA"
+        strokeWidth={1.5}
+        strokeOpacity={0.85}
+        strokeDasharray="4 3"
+      />
+      {/* Pontos da varredura — bolinhas pequenas */}
+      {pathPoints.map(([px, py], i) => (
+        <circle
+          key={i}
+          cx={px}
+          cy={py}
+          r={i === activeIdx ? 5 : 2.2}
+          fill={i === activeIdx ? '#EC4899' : '#A78BFA'}
+          opacity={i === activeIdx ? 1 : 0.7}
+        />
+      ))}
+      {/* Label do fator de escala — informa "envelope ×N" */}
+      <text
+        x={labelX}
+        y={labelY}
+        fontSize={11}
+        fill="#A78BFA"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >
+        envelope ×{visScale.toFixed(0)}
+      </text>
+      <text
+        x={labelX}
+        y={labelY + 14}
+        fontSize={10}
+        fill="currentColor"
+        fillOpacity={0.55}
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >
+        máx {maxOffset.toFixed(2)} m
+      </text>
     </g>
   )
 }

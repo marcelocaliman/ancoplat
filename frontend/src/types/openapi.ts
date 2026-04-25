@@ -488,6 +488,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mooring-systems/{msys_id}/watchcircle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Watchcircle: envelope de offset sob carga rotacionada (F5.6)
+         * @description Varre a direção da carga ambiental em 360° (passo `360/n_steps`) com magnitude fixa, devolvendo a sequência de equilíbrios. A coleção de offsets forma o envelope geométrico que o centro da plataforma traça — útil para identificar direções de fragilidade do sistema.
+         *
+         *     Otimização: o baseline é computado uma vez e reusado em todos os passos (ganho ~Nx em performance). Tipicamente n_steps=36 (passo de 10°) leva 2–8 s para 4 linhas.
+         */
+        post: operations["watchcircle_api_v1_mooring_systems__msys_id__watchcircle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mooring-systems/equilibrium-preview": {
         parameters: {
             query?: never;
@@ -1859,6 +1881,91 @@ export interface components {
              */
             solver: string;
         };
+        /**
+         * WatchcirclePoint
+         * @description F5.6 — Um ponto da varredura watchcircle.
+         *
+         *     Representa o estado de equilíbrio para uma carga de magnitude
+         *     fixa aplicada num azimuth específico. A coleção de pontos forma
+         *     o envelope (curva fechada) que o centro da plataforma traça
+         *     quando a direção da carga varia em 360°.
+         */
+        WatchcirclePoint: {
+            /** Azimuth Deg */
+            azimuth_deg: number;
+            /** Magnitude N */
+            magnitude_n: number;
+            equilibrium: components["schemas"]["PlatformEquilibriumResult"];
+        };
+        /**
+         * WatchcircleRequest
+         * @description Body do POST /watchcircle (F5.6).
+         */
+        WatchcircleRequest: {
+            /**
+             * Magnitude N
+             * @description Magnitude da carga ambiental (N)
+             */
+            magnitude_n: number;
+            /**
+             * N Steps
+             * @description Passos azimutais (default 36 = passo de 10°)
+             * @default 36
+             */
+            n_steps: number;
+        };
+        /**
+         * WatchcircleResult
+         * @description F5.6 — Resultado da varredura watchcircle.
+         *
+         *     Engenharia offshore: o "watchcircle" é o envelope geométrico
+         *     das posições que o centro da plataforma assume conforme a
+         *     direção da carga ambiental varia mantida magnitude constante.
+         *     Útil para identificar:
+         *
+         *       - Direção em que o sistema é mais "mole" (offset máximo)
+         *       - Direção em que linhas saturam primeiro
+         *       - Buracos de cobertura no spread
+         *
+         *     `points` é uma lista ordenada por `azimuth_deg`. Para fechar
+         *     visualmente a curva, o consumidor concatena o primeiro ponto
+         *     no fim.
+         */
+        WatchcircleResult: {
+            /** Magnitude N */
+            magnitude_n: number;
+            /** N Steps */
+            n_steps: number;
+            /** Points */
+            points: components["schemas"]["WatchcirclePoint"][];
+            /**
+             * Max Offset Magnitude
+             * @default 0
+             */
+            max_offset_magnitude: number;
+            /**
+             * Max Offset Load Azimuth Deg
+             * @default 0
+             */
+            max_offset_load_azimuth_deg: number;
+            /**
+             * Max Utilization
+             * @default 0
+             */
+            max_utilization: number;
+            /** @default ok */
+            worst_alert_level: components["schemas"]["AlertLevel"];
+            /**
+             * N Failed
+             * @default 0
+             */
+            n_failed: number;
+            /**
+             * Solver Version
+             * @default
+             */
+            solver_version: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -2988,6 +3095,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformEquilibriumResult"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    watchcircle_api_v1_mooring_systems__msys_id__watchcircle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                msys_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WatchcircleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchcircleResult"];
                 };
             };
             /** @description Not Found */
