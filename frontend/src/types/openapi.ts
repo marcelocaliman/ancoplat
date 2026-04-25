@@ -437,7 +437,7 @@ export interface components {
             description?: string | null;
             /**
              * Segments
-             * @description Lista com UM segmento (MVP v1). Multi-segmento em v2.1.
+             * @description Lista de segmentos (1 ou mais, F5.1). Para uma linha composta típica use 3 segmentos (chain pendant inferior + wire + chain pendant superior). Ordem do segmento 0 (mais próximo da âncora) ao último (mais próximo do fairlead).
              */
             segments: components["schemas"]["LineSegment"][];
             boundary: components["schemas"]["BoundaryConditions"];
@@ -1117,6 +1117,13 @@ export interface components {
              * @default 0
              */
             startpoint_depth: number;
+            /**
+             * Solver Version
+             * @default
+             */
+            solver_version: string;
+            /** Segment Boundaries */
+            segment_boundaries?: number[];
         };
         /**
          * UtilizationLimits

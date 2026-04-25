@@ -292,56 +292,92 @@ export function CatenaryPlot({
       })
     }
 
-    // ── Trechos: separar suspenso vs grounded ──
-    const groundedX: number[] = []
-    const groundedY: number[] = []
-    const groundedT: number[] = []
-    const suspendedX: number[] = []
-    const suspendedY: number[] = []
-    const suspendedT: number[] = []
-    for (let i = 0; i < curve.plotX.length; i += 1) {
-      if (curve.onGround[i]) {
-        groundedX.push(curve.plotX[i]!)
-        groundedY.push(curve.plotY[i]!)
-        groundedT.push(curve.tensions[i]!)
-      } else {
-        suspendedX.push(curve.plotX[i]!)
-        suspendedY.push(curve.plotY[i]!)
-        suspendedT.push(curve.tensions[i]!)
-      }
-    }
-    // Costura visual no touchdown: junta o último ponto suspenso ao primeiro grounded.
-    if (suspendedX.length > 0 && groundedX.length > 0) {
-      suspendedX.push(groundedX[0]!)
-      suspendedY.push(groundedY[0]!)
-      suspendedT.push(groundedT[0]!)
-    }
+    // ── Trechos da linha ──
+    // Com multi-segmento (F5.1, segment_boundaries com mais de 2 entradas),
+    // colorimos por segmento. Caso contrário, mantemos split suspenso vs
+    // apoiado (single-segmento ou laid line).
+    const segBounds = result.segment_boundaries ?? []
+    const isMulti = segBounds.length > 2
 
-    if (suspendedX.length > 0) {
-      traces.push({
-        type: 'scatter',
-        mode: 'lines',
-        x: suspendedX,
-        y: suspendedY,
-        line: { color: palette.suspended, width: 3.5 },
-        name: 'Trecho suspenso',
-        text: suspendedT.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
-        hovertemplate:
-          'x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>',
-      })
-    }
-    if (groundedX.length > 0) {
-      traces.push({
-        type: 'scatter',
-        mode: 'lines',
-        x: groundedX,
-        y: groundedY,
-        line: { color: palette.grounded, width: 3.5 },
-        name: 'Trecho apoiado',
-        text: groundedT.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
-        hovertemplate:
-          'x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>',
-      })
+    if (isMulti) {
+      // Boundaries vêm do solver em frame anchor-first. Após o reverse() em
+      // `curve`, índices ficam fairlead-first → remappeamos.
+      const N = curve.plotX.length
+      const segPalette = theme === 'dark'
+        ? ['#60A5FA', '#FBBF24', '#34D399', '#A78BFA', '#F472B6']
+        : ['#1E3A5F', '#D97706', '#047857', '#7C3AED', '#BE185D']
+
+      for (let s = 0; s < segBounds.length - 1; s += 1) {
+        const startA = segBounds[s]!
+        const endA = segBounds[s + 1]!
+        // mapeia para fairlead-first
+        const startF = N - 1 - endA
+        const endF = N - 1 - startA
+        const sx = curve.plotX.slice(startF, endF + 1)
+        const sy = curve.plotY.slice(startF, endF + 1)
+        const st = curve.tensions.slice(startF, endF + 1)
+        const segIdx = (segBounds.length - 2) - s  // segmento original 0..N-1
+        traces.push({
+          type: 'scatter',
+          mode: 'lines',
+          x: sx,
+          y: sy,
+          line: { color: segPalette[segIdx % segPalette.length]!, width: 3.5 },
+          name: `Segmento ${segIdx + 1}`,
+          text: st.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
+          hovertemplate:
+            `Seg ${segIdx + 1}<br>x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>`,
+        })
+      }
+    } else {
+      const groundedX: number[] = []
+      const groundedY: number[] = []
+      const groundedT: number[] = []
+      const suspendedX: number[] = []
+      const suspendedY: number[] = []
+      const suspendedT: number[] = []
+      for (let i = 0; i < curve.plotX.length; i += 1) {
+        if (curve.onGround[i]) {
+          groundedX.push(curve.plotX[i]!)
+          groundedY.push(curve.plotY[i]!)
+          groundedT.push(curve.tensions[i]!)
+        } else {
+          suspendedX.push(curve.plotX[i]!)
+          suspendedY.push(curve.plotY[i]!)
+          suspendedT.push(curve.tensions[i]!)
+        }
+      }
+      if (suspendedX.length > 0 && groundedX.length > 0) {
+        suspendedX.push(groundedX[0]!)
+        suspendedY.push(groundedY[0]!)
+        suspendedT.push(groundedT[0]!)
+      }
+      if (suspendedX.length > 0) {
+        traces.push({
+          type: 'scatter',
+          mode: 'lines',
+          x: suspendedX,
+          y: suspendedY,
+          line: { color: palette.suspended, width: 3.5 },
+          name: 'Trecho suspenso',
+          text: suspendedT.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
+          hovertemplate:
+            'x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>',
+        })
+      }
+      if (groundedX.length > 0) {
+        traces.push({
+          type: 'scatter',
+          mode: 'lines',
+          x: groundedX,
+          y: groundedY,
+          line: { color: palette.grounded, width: 3.5 },
+          name: 'Trecho apoiado',
+          text: groundedT.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
+          hovertemplate:
+            'x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>',
+        })
+      }
     }
 
     // ── Marker do fairlead (em x=0) ──

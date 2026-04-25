@@ -12,7 +12,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Controller, useForm } from 'react-hook-form'
+import { Controller, useFieldArray, useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
@@ -24,9 +24,9 @@ import {
   solveCase,
   updateCase,
 } from '@/api/endpoints'
-import type { LineTypeOutput, SolverResult } from '@/api/types'
+import type { SolverResult } from '@/api/types'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
-import { LineTypePicker } from '@/components/common/LineTypePicker'
+import { SegmentEditor } from '@/components/common/SegmentEditor'
 import { UnitInput } from '@/components/common/UnitInput'
 import {
   AlertBadge,
@@ -61,7 +61,6 @@ import {
 import {
   cn,
   fmtAngleDeg,
-  fmtDiameterMM,
   fmtMeters,
   fmtNumber,
   fmtPercent,
@@ -106,6 +105,9 @@ export function CaseFormPage() {
     reset,
     formState: { errors, isValid, isSubmitting },
   } = form
+
+  // Lista dinâmica de segmentos (F5.1). useFieldArray cuida do estado.
+  const segmentsArray = useFieldArray({ control, name: 'segments' })
 
   useEffect(() => {
     if (existing) {
@@ -218,39 +220,6 @@ export function CaseFormPage() {
       })
       navigate(`/cases/${saved.id}`)
     } catch { /* noop */ }
-  }
-
-  function applyLineTypeToSegment(lt: LineTypeOutput | null) {
-    if (!lt) return
-    setValue('segments.0.line_type', lt.line_type, { shouldValidate: true })
-    setValue(
-      'segments.0.category',
-      lt.category as CaseFormValues['segments'][number]['category'],
-      { shouldValidate: true },
-    )
-    setValue('segments.0.w', roundTo(lt.wet_weight, 2), { shouldValidate: true })
-    setValue('segments.0.EA', roundTo(lt.qmoor_ea ?? lt.gmoor_ea ?? 0, 0), {
-      shouldValidate: true,
-    })
-    setValue('segments.0.MBL', roundTo(lt.break_strength, 0), {
-      shouldValidate: true,
-    })
-    // Metadados técnicos do catálogo — não entram no solver mas aparecem
-    // nos memoriais e no card de propriedades.
-    setValue('segments.0.diameter', roundTo(lt.diameter, 5), {
-      shouldValidate: true,
-    })
-    setValue('segments.0.dry_weight', roundTo(lt.dry_weight, 2), {
-      shouldValidate: true,
-    })
-    if (lt.modulus) {
-      setValue('segments.0.modulus', roundTo(lt.modulus, 0), {
-        shouldValidate: true,
-      })
-    }
-    toast.success(`${lt.line_type} aplicado`, {
-      description: `Ø ${fmtDiameterMM(lt.diameter, 0)} · MBL ${fmtNumber(lt.break_strength / 1000, 0)} kN`,
-    })
   }
 
   if (isEdit && loadingExisting) {
@@ -408,142 +377,57 @@ export function CaseFormPage() {
 
         {/* ───── Linha 2: 2 blocos de parâmetros físicos ───── */}
         <div className="grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-[1.5fr_1fr]">
-          {/* Segmento */}
-          <Section title="Segmento de linha">
+          {/* Segmento(s) — F5.1 multi-segmento */}
+          <Section
+            title={
+              segmentsArray.fields.length === 1
+                ? 'Segmento de linha'
+                : `Segmentos da linha (${segmentsArray.fields.length})`
+            }
+          >
             <div className="space-y-2">
-              <Controller
-                control={control}
-                name="segments.0.line_type"
-                render={({ field }) => (
-                  <LineTypePicker
-                    value={
-                      field.value
-                        ? ({
-                            id: 0,
-                            line_type: field.value,
-                            category: watch('segments.0.category') ?? 'Wire',
-                            diameter: watch('segments.0.diameter') ?? 0,
-                            dry_weight: watch('segments.0.dry_weight') ?? 0,
-                            wet_weight: watch('segments.0.w'),
-                            break_strength: watch('segments.0.MBL'),
-                            qmoor_ea: watch('segments.0.EA'),
-                            data_source: 'legacy_qmoor',
-                          } as LineTypeOutput)
-                        : null
-                    }
-                    onChange={applyLineTypeToSegment}
-                  />
-                )}
-              />
-              <div className="grid grid-cols-3 gap-2">
-                <InlineField label="Comp." unit="m">
-                  <Input
-                    type="number"
-                    step="1"
-                    {...register('segments.0.length', { valueAsNumber: true })}
-                    className="h-8 font-mono"
-                  />
-                </InlineField>
-                <InlineField label="Diâmetro" unit="m">
-                  <Input
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    {...register('segments.0.diameter', { valueAsNumber: true })}
-                    className="h-8 font-mono"
-                  />
-                </InlineField>
-                <InlineField label="Categoria">
-                  <Controller
-                    control={control}
-                    name="segments.0.category"
-                    render={({ field }) => (
-                      <Select
-                        value={field.value ?? undefined}
-                        onValueChange={field.onChange}
-                      >
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="—" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Wire">Wire</SelectItem>
-                          <SelectItem value="StuddedChain">Studded</SelectItem>
-                          <SelectItem value="StudlessChain">Studless</SelectItem>
-                          <SelectItem value="Polyester">Poliéster</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </InlineField>
-                <InlineField label="Peso submerso">
-                  <Controller
-                    control={control}
-                    name="segments.0.w"
-                    render={({ field }) => (
-                      <UnitInput
-                        value={field.value}
-                        onChange={field.onChange}
-                        quantity="force_per_m"
-                        digits={2}
-                        className="h-8"
-                      />
-                    )}
-                  />
-                </InlineField>
-                <InlineField label="Peso seco">
-                  <Controller
-                    control={control}
-                    name="segments.0.dry_weight"
-                    render={({ field }) => (
-                      <UnitInput
-                        value={field.value ?? null}
-                        onChange={field.onChange}
-                        quantity="force_per_m"
-                        digits={2}
-                        className="h-8"
-                      />
-                    )}
-                  />
-                </InlineField>
-                <InlineField label="EA">
-                  <Controller
-                    control={control}
-                    name="segments.0.EA"
-                    render={({ field }) => (
-                      <UnitInput
-                        value={field.value}
-                        onChange={field.onChange}
-                        quantity="force"
-                        digits={2}
-                        className="h-8"
-                      />
-                    )}
-                  />
-                </InlineField>
-                <InlineField label="MBL" className="col-span-2">
-                  <Controller
-                    control={control}
-                    name="segments.0.MBL"
-                    render={({ field }) => (
-                      <UnitInput
-                        value={field.value}
-                        onChange={field.onChange}
-                        quantity="force"
-                        digits={2}
-                        className="h-8"
-                      />
-                    )}
-                  />
-                </InlineField>
-                <InlineField label="Módulo" unit="Pa">
-                  <Input
-                    type="number"
-                    step="1e9"
-                    {...register('segments.0.modulus', { valueAsNumber: true })}
-                    className="h-8 font-mono"
-                  />
-                </InlineField>
-              </div>
+              {segmentsArray.fields.map((field, idx) => (
+                <SegmentEditor
+                  key={field.id}
+                  index={idx}
+                  total={segmentsArray.fields.length}
+                  control={control}
+                  register={register}
+                  watch={watch}
+                  setValue={setValue}
+                  onMoveUp={
+                    idx > 0 ? () => segmentsArray.move(idx, idx - 1) : undefined
+                  }
+                  onMoveDown={
+                    idx < segmentsArray.fields.length - 1
+                      ? () => segmentsArray.move(idx, idx + 1)
+                      : undefined
+                  }
+                  onRemove={
+                    segmentsArray.fields.length > 1
+                      ? () => segmentsArray.remove(idx)
+                      : undefined
+                  }
+                />
+              ))}
+              {segmentsArray.fields.length < 10 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full gap-1.5 border-dashed text-[11px]"
+                  onClick={() => {
+                    // Clona o último segmento para acelerar a entrada de
+                    // configurações típicas (chain pendant em cima de chain pendant).
+                    const last = segmentsArray.fields[
+                      segmentsArray.fields.length - 1
+                    ] as unknown as CaseFormValues['segments'][number]
+                    segmentsArray.append({ ...last, length: 100 })
+                  }}
+                >
+                  + Adicionar segmento (próximo do fairlead)
+                </Button>
+              )}
             </div>
           </Section>
 
@@ -1003,8 +887,3 @@ function MetricCard({
   )
 }
 
-/** Arredonda para N casas decimais (N=0 vira inteiro). */
-function roundTo(value: number, digits: number): number {
-  const f = 10 ** digits
-  return Math.round(value * f) / f
-}

@@ -50,7 +50,7 @@ export const caseInputSchema = z
     segments: z
       .array(lineSegmentSchema)
       .min(1, 'Informe ao menos 1 segmento')
-      .max(1, 'MVP v1 aceita apenas 1 segmento (multi-segmento virá em v2.1)'),
+      .max(10, 'Até 10 segmentos por linha. Para mais, divida em casos.'),
     boundary: boundarySchema,
     seabed: seabedSchema,
     criteria_profile: z.enum([
