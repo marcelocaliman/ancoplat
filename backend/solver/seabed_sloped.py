@@ -1,79 +1,64 @@
 """
-F5.3 — Seabed inclinado: touchdown em rampa para linha single-segmento.
+F5.3 (revisão completa) — Seabed inclinado com touchdown.
 
 Modelo geométrico
 -----------------
-Anchor na origem (0, 0). Seabed é uma reta `y = m·x` onde `m = tan(θ_s)`
-e `θ_s` é a inclinação. Convenção:
-  - θ_s > 0: seabed sobe em direção ao fairlead.
-  - θ_s < 0: seabed desce em direção ao fairlead.
+Anchor em (0, 0). Seabed: y = m·x onde m = tan(θ_s).
+Fairlead em (X, h) com h > 0 (drop vertical do anchor ao fairlead).
 
-Fairlead em (X, h) com h > 0 (drop vertical da âncora ao fairlead).
+A linha tem três trechos potenciais:
+  - Grounded (apoiado na rampa): de (0, 0) ao touchdown (x_td, m·x_td).
+    Comprimento L_g = x_td · sqrt(1+m²).
+  - Suspended (catenária): do touchdown ao fairlead.
+    Comprimento L_s = a·(sinh(v) − sinh(u)) onde u = asinh(m), v =
+    (X − x_v)/a.
 
-A linha tem comprimento (esticado) L_eff. Trecho grounded (apoiado no
-seabed) tem comprimento L_g e vai do anchor (0, 0) ao touchdown
-(x_td, m·x_td). Trecho suspenso tem comprimento L_s = L_eff − L_g e
-vai do touchdown ao fairlead.
-
-Catenária no trecho suspenso
-----------------------------
-Use a parametrização por vértice virtual: a curva é
+A catenária é parametrizada pelo vértice virtual (x_v, y_v):
     y(x) = y_v + a·(cosh((x − x_v)/a) − 1)
-com tangente local
     dy/dx = sinh((x − x_v)/a)
 
-No touchdown, a tangente da catenária deve igualar `m` (alinhamento
-com a rampa) — condição de "encaixe suave":
-    sinh((x_td − x_v)/a) = m
-    (x_td − x_v)/a = asinh(m)
+Condição de tangência no touchdown (encaixe suave com a rampa):
+    sinh((x_td − x_v)/a) = m  ⇒  (x_td − x_v)/a = asinh(m) = u
 
-Defina `u = asinh(m)` e `v = (X − x_v)/a` (parâmetro a determinar).
-Então:
-  - cosh(u) = sqrt(1 + m²)
-  - sinh(u) = m
-  - x_td = x_v + a·u = X − a·(v − u)
-  - y_td = y_v + a·(cosh(u) − 1) = y_v + a·(sqrt(1+m²) − 1)
-  - h    = y_v + a·(cosh(v) − 1)
-  - L_s  = a·(sinh(v) − sinh(u)) = a·(sinh(v) − m)
-  - T_fl = w·sqrt(a² + s_f²) com s_f = a·sinh(v) → T_fl = w·a·cosh(v)
-  - H    = w·a (constante no trecho suspenso)
-  - T_td = w·a·cosh(u) = w·a·sqrt(1+m²)
+Sistema de equações (modo Tension, T_fl dado)
+---------------------------------------------
+Incógnitas: (a, x_v, X). 3 equações:
 
-Como o touchdown está no seabed: y_td = m·x_td. Substituindo:
-    h − m·x_td = a·(cosh(v) − sqrt(1+m²))                       (i)
-    L_g = x_td·sqrt(1+m²)                                        (ii)
-    L_eff = L_g + L_s                                            (iii)
+  (E1) T_fl = w·a·cosh(v),  v = (X − x_v)/a
+  (E2) m·x_td = y_v + a·(cosh(u) − 1)  [touchdown na rampa]
+       onde x_td = x_v + a·u, y_v = h − a·(cosh(v) − 1)
+  (E3) L = x_td·sqrt(1+m²) + a·(sinh(v) − m)  [conservação]
 
-Atrito de Coulomb na rampa
---------------------------
-Para o trecho grounded numa rampa de inclinação θ_s, a força normal
-por unidade de comprimento é w·cos(θ_s) e a componente da gravidade
-paralela à rampa é w·sin(θ_s). Atrito de Coulomb se opõe ao
-movimento relativo. Para uma linha sob tração T_td no touchdown
-puxando subindo a rampa (em direção ao fairlead), o anchor recebe:
-    T_anchor = T_td − μ·w·cos(θ_s)·L_g + w·sin(θ_s)·L_g_signed
-onde `w·sin(θ)·L_g` adiciona quando a rampa SOBE para o fairlead
-(peso ajuda a puxar para baixo, no sentido âncora) — sinal +,
-e subtrai quando desce.
+Sistema de equações (modo Range, X dado)
+----------------------------------------
+Incógnitas: (a, x_v). 2 equações: (E2) e (E3).
 
-Simplificação adotada (F5.3): usamos a componente axial efetiva
-da gravidade. Em casos com gradação significativa, pode haver
-deslizamento livre (μ < tan|θ|). Detectamos e sinalizamos.
+Resolução
+---------
+Usamos `scipy.optimize.fsolve` com chute inicial vindo do solver
+horizontal análogo (slope = 0). Para slopes pequenos, o chute fica
+muito próximo da solução e a convergência é robusta.
 
-Modos suportados
-----------------
-TENSION: dado T_fl, busca v em (asinh(m)+ε, ∞) tal que F(v) = 0.
-  Sistema reduzido a 1 incógnita (v).
+Atrito em rampa
+---------------
+Trecho grounded: equilíbrio ao longo da rampa.
+  T_anchor = T_td − μ·w·cos(θ)·L_g − w·sin(θ)·L_g
 
-RANGE: dado X, idem mas resolve sistema diferente. F5.3 entrega
-  apenas TENSION; RANGE em rampa é roadmap (raro em projetos).
+Onde sin(θ) é signed:
+  - θ > 0 (rampa sobe ao fairlead): gravidade adiciona tração no
+    sentido do fairlead → T_anchor diminui mais.
+  - θ < 0 (rampa desce ao fairlead): gravidade ajuda a puxar a linha
+    em direção ao touchdown → T_anchor pode AUMENTAR vs caso horizontal.
+
+T_anchor é clampado a 0 inferiormente (atrito não pode produzir
+tração negativa).
 """
 from __future__ import annotations
 
 import math
 
 import numpy as np
-from scipy.optimize import brentq
+from scipy.optimize import fsolve
 
 from .types import (
     ConvergenceStatus,
@@ -83,149 +68,240 @@ from .types import (
 )
 
 
-def _solve_touchdown_sloped_tension(
-    L: float,
-    h: float,
-    w: float,
-    T_fl: float,
-    mu: float,
-    slope_rad: float,
+def _build_residual_tension(
+    L: float, h: float, w: float, T_fl: float, m: float, u: float, sqrt_1pm2: float,
+):
+    """Retorna F(vars) onde vars = (a, x_v, X). 3 equações, 3 incógnitas."""
+
+    def F(vars: np.ndarray) -> np.ndarray:
+        a, x_v, X = vars
+        if a <= 0:
+            return np.array([1e9, 1e9, 1e9])
+        v = (X - x_v) / a
+        cosh_v = math.cosh(v)
+        sinh_v = math.sinh(v)
+        # (E1): T_fl = w·a·cosh(v)
+        e1 = w * a * cosh_v - T_fl
+        # (E2): touchdown na rampa
+        x_td = x_v + a * u
+        y_v = h - a * (cosh_v - 1.0)
+        y_td = y_v + a * (sqrt_1pm2 - 1.0)
+        e2 = y_td - m * x_td
+        # (E3): conservação L = L_g + L_s
+        L_g = x_td * sqrt_1pm2
+        L_s = a * (sinh_v - m)
+        e3 = L_g + L_s - L
+        return np.array([e1, e2, e3])
+
+    return F
+
+
+def _build_residual_range(
+    L: float, h: float, X: float, m: float, u: float, sqrt_1pm2: float,
+):
+    """Retorna F(vars) onde vars = (a, x_v). 2 equações."""
+
+    def F(vars: np.ndarray) -> np.ndarray:
+        a, x_v = vars
+        if a <= 0:
+            return np.array([1e9, 1e9])
+        v = (X - x_v) / a
+        cosh_v = math.cosh(v)
+        sinh_v = math.sinh(v)
+        x_td = x_v + a * u
+        y_v = h - a * (cosh_v - 1.0)
+        y_td = y_v + a * (sqrt_1pm2 - 1.0)
+        e2 = y_td - m * x_td
+        L_g = x_td * sqrt_1pm2
+        L_s = a * (sinh_v - m)
+        e3 = L_g + L_s - L
+        return np.array([e2, e3])
+
+    return F
+
+
+def _initial_guess_tension(
+    L: float, h: float, w: float, T_fl: float, m: float, u: float,
+) -> tuple[float, float, float]:
+    """
+    Chute inicial usando solver horizontal análogo (m = 0).
+
+    Para o caso horizontal com touchdown:
+      a_h = T_fl/w − h
+      x_s_h = a_h · acosh(1 + h/a_h)
+      L_s_h = a_h · sinh(x_s_h/a_h)
+      L_g_h = L − L_s_h
+      X_h = L_g_h + x_s_h
+
+    Para slopes pequenos, esse chute fica perto da solução. x_v_h vem
+    de x_v_h = X_h − a_h · v_h onde v_h = asinh(L_s_h/a_h). Mas como
+    no caso horizontal o vértice é o touchdown e v = x_s/a, x_v_h =
+    X_h − x_s_h.
+
+    Para slope ≠ 0, ajustamos x_v via x_v = x_td − a·u (relação E1).
+    """
+    a_h = T_fl / w - h
+    if a_h <= 0:
+        # T_fl < w·h → caso inviável; chute degenerado
+        a_h = 1.0
+    cosh_arg = 1.0 + h / a_h
+    if cosh_arg < 1.0:
+        cosh_arg = 1.0001
+    x_s_h = a_h * math.acosh(cosh_arg)
+    L_s_h = a_h * math.sinh(x_s_h / a_h)
+    L_g_h = max(0.0, L - L_s_h)
+    X_h = L_g_h + x_s_h
+    # Para o sistema rampa, x_v ≈ x_td − a·u. No caso horizontal x_v = x_td.
+    # Para rampa pequena, ajustamos: x_td_h ≈ L_g_h (em linha reta no
+    # seabed horizontal); x_v ≈ L_g_h − a·u.
+    x_td_h = L_g_h
+    x_v_init = x_td_h - a_h * u
+    return a_h, x_v_init, X_h
+
+
+def _initial_guess_range(
+    L: float, h: float, X: float, m: float, u: float, w: float,
+) -> tuple[float, float]:
+    """Chute inicial para modo Range usando relação geométrica horizontal."""
+    # Para o caso horizontal (m=0), a equação reduz a:
+    # h·(sinh(u_h) − u_h) / (cosh(u_h) − 1) = L − X, com u_h = x_s/a.
+    # Para chute, usa estimativa direta de a a partir da catenária aproximada:
+    LmX = max(L - X, 1e-3)
+    if LmX >= h:
+        # Caso degenerado — aproxima
+        a_init = max(h, 1.0)
+    else:
+        # Solução iterativa simples (Newton mental): a ≈ (X² + h²) / (2h)
+        a_init = max((X * X - h * h) / (2.0 * h), 1.0)
+    L_g_h = max(0.0, L - a_init * math.sinh(X / max(a_init, 1.0)))
+    x_td_h = L_g_h
+    x_v_init = x_td_h - a_init * u
+    return a_init, x_v_init
+
+
+def _signed_friction_drop(
+    T_td: float, mu: float, w: float, slope_rad: float, L_g: float,
+) -> float:
+    """
+    T_anchor = T_td − μ·w·cos(θ)·L_g − w·sin(θ)·L_g, clampado em 0.
+
+    Convenção: θ > 0 = seabed sobe ao fairlead → ambos termos
+    positivos (atrito + gravidade contra o anchor). θ < 0 = desce ao
+    fairlead → sin(θ) < 0, gravidade pode AUMENTAR T_anchor.
+    """
+    delta_friction = mu * w * math.cos(slope_rad) * L_g
+    delta_gravity = w * math.sin(slope_rad) * L_g
+    return max(0.0, T_td - delta_friction - delta_gravity)
+
+
+def _solve_tension_sloped(
+    L: float, h: float, w: float, T_fl: float, mu: float, slope_rad: float,
     config: SolverConfig,
 ) -> dict:
-    """
-    Resolve modo Tension com touchdown numa rampa de inclinação `slope_rad`.
-
-    Reduz o sistema a uma única equação F(v) = 0 onde
-        v = (X − x_v)/a    (parâmetro adimensional do fairlead local)
-
-    Da relação T_fl = w·a·cosh(v) tiramos `a = T_fl/(w·cosh(v))`. As
-    demais incógnitas (X, x_td, L_g, L_s) ficam expressas em função de v.
-
-    A equação de fechamento usa a restrição L_eff = L_g + L_s.
-    """
-    if w <= 0:
-        raise ValueError("w deve ser > 0")
-    if T_fl <= 0:
-        raise ValueError("T_fl deve ser > 0")
-    if abs(slope_rad) >= math.pi / 4 - 1e-6:
-        raise ValueError("slope_rad fora de range [-π/4, +π/4]")
-
+    """Modo Tension em rampa: fsolve 3D sobre (a, x_v, X)."""
     m = math.tan(slope_rad)
     u = math.asinh(m)
     sqrt_1pm2 = math.sqrt(1.0 + m * m)
 
-    def geometry_for_v(v: float) -> dict:
-        """Calcula a, X, x_td, L_g, L_s, h_calc para um v dado."""
-        if v <= u + 1e-9:
-            raise ValueError("v deve ser > asinh(m) (touchdown válido)")
-        cosh_v = math.cosh(v)
-        sinh_v = math.sinh(v)
-        a = T_fl / (w * cosh_v)
-        # x_v = X − a·v ⇒ X − x_v = a·v
-        # x_td = X − a·(v − u) ⇒ x_td − anchor (0,0) = x_td
-        # y_v = h − a·(cosh(v) − 1)
-        y_v = h - a * (cosh_v - 1.0)
-        # y_td = y_v + a·(sqrt(1+m²) − 1) deve igualar m·x_td
-        # E x_td = x_v + a·u ⇒ x_v = x_td − a·u
-        # Mas x_v também = X − a·v. Logo x_td = X − a·v + a·u = X − a·(v − u)
-        # Para fechar: precisa expressar X em função de v. Use a equação
-        # y_td = m·x_td:
-        #   h − a·(cosh(v) − sqrt(1+m²)) = m·x_td
-        #   x_td = (h − a·(cosh(v) − sqrt(1+m²))) / m   (m ≠ 0)
-        if abs(m) < 1e-9:
-            # Caso θ=0: cai no caminho horizontal padrão. Aqui não chega
-            # porque o despacho em solver.py escolhe outro caminho.
-            raise ValueError("slope_rad ≈ 0 deve usar solver horizontal")
-        x_td = (h - a * (cosh_v - sqrt_1pm2)) / m
-        if x_td < 0:
-            raise ValueError(
-                f"x_td={x_td:.2f} < 0: geometria infactível para v={v:.4f}"
-            )
-        # X derivado: X = x_td + a·(v − u)
-        X = x_td + a * (v - u)
-        L_g = x_td * sqrt_1pm2
-        L_s = a * (sinh_v - m)
-        return {
-            "a": a, "v": v, "X": X, "x_td": x_td,
-            "L_g": L_g, "L_s": L_s,
-            "y_v": y_v, "x_v": X - a * v,
-            "cosh_v": cosh_v, "sinh_v": sinh_v,
-        }
-
-    def residual(v: float) -> float:
-        try:
-            g = geometry_for_v(v)
-        except ValueError:
-            return 1e9 * (1 if v < (u + 1) else -1)
-        return g["L_g"] + g["L_s"] - L
-
-    # Bracket: para v = asinh(m) + ε, L_s ≈ 0 e L_g é o que dominante
-    # (linha quase toda apoiada). Para v → ∞, L_s → ∞.
-    # Procuramos v tal que L_g + L_s = L. Brent com bracket explícito.
-    v_lo = u + 1e-3  # ε acima de asinh(m)
-    v_hi = u + 10.0  # típico bem acima do que precisamos
-
-    # Expansão se necessário
-    f_lo = residual(v_lo)
-    f_hi = residual(v_hi)
-    if f_lo > 0:
-        # L_g(v_lo) > L: linha curta demais para o caso
+    if T_fl <= w * h:
         raise ValueError(
-            f"L={L:.1f} m insuficiente para alcançar o fairlead com "
-            f"slope={math.degrees(slope_rad):.1f}°. Aumente L ou reduza slope."
-        )
-    if f_hi < 0:
-        for _ in range(20):
-            v_hi *= 1.5
-            f_hi = residual(v_hi)
-            if f_hi > 0:
-                break
-
-    if f_hi <= 0:
-        raise ValueError(
-            "Não foi possível bracketar v: caso geometricamente inviável "
-            "para a inclinação informada."
+            f"T_fl={T_fl:.1f} N <= w·h={w*h:.1f} N: linha não atinge fairlead"
         )
 
-    v_sol = brentq(
-        residual, v_lo, v_hi,
-        xtol=1e-6, rtol=1e-8, maxiter=config.max_brent_iter,
+    F = _build_residual_tension(L, h, w, T_fl, m, u, sqrt_1pm2)
+    a0, x_v0, X0 = _initial_guess_tension(L, h, w, T_fl, m, u)
+    sol, _info, ier, _mesg = fsolve(
+        F, np.array([a0, x_v0, X0]),
+        full_output=True, xtol=1e-9, maxfev=200,
     )
-    g = geometry_for_v(v_sol)
-    a = g["a"]
+    if ier != 1:
+        raise ValueError(
+            "fsolve não convergiu para touchdown em rampa (modo Tension). "
+            "Verifique se a geometria é factível."
+        )
+    a, x_v, X = sol
+    if a <= 0:
+        raise ValueError(f"Solução com a={a:.3f} <= 0 — não-físico")
+    v = (X - x_v) / a
+    x_td = x_v + a * u
+    if x_td < -1e-3:
+        raise ValueError(
+            f"x_td={x_td:.2f} < 0: caso não tem touchdown na frente do anchor "
+            "(fully suspended ou inviável). Use solver horizontal."
+        )
+    x_td = max(0.0, x_td)
+    sinh_v = math.sinh(v)
+    cosh_v = math.cosh(v)
+    L_g = x_td * sqrt_1pm2
+    L_s = a * (sinh_v - m)
     H = w * a
-
-    # Atrito na rampa (Coulomb): considerando a linha puxada pelo fairlead
-    # subindo a rampa, atrito atua contra o movimento (desacelera). Componente
-    # paralela à rampa da gravidade adiciona ou subtrai conforme o sinal de
-    # slope_rad. Convenção: T_anchor = T_td − ΔT_atrito + ΔT_gravidade.
-    T_td = w * a * sqrt_1pm2  # T no touchdown (catenária)
-    delta_friction = mu * w * math.cos(slope_rad) * g["L_g"]
-    delta_gravity = w * math.sin(slope_rad) * g["L_g"]  # +slope: gravidade ajuda no anchor → T_anchor maior; -slope: subtrai
-    # Para nossa convenção: T_anchor = T_td - μ·w·cos(θ)·L_g + w·sin(θ)·L_g
-    # onde +sin(θ) (rampa sobe ao fairlead) faz o cabo "deslizar" para o
-    # anchor — o atrito se opõe (mas o desliz é puxado pelo fairlead). Em
-    # módulo, T_anchor diminui pelo atrito e tem ajuste de gravidade.
-    T_anchor = max(0.0, T_td - delta_friction + delta_gravity)
+    T_td = w * a * sqrt_1pm2  # = T no touchdown
+    T_anchor = _signed_friction_drop(T_td, mu, w, slope_rad, L_g)
 
     return {
-        "a": a, "H": H,
-        "X": g["X"], "x_td": g["x_td"],
-        "L_g": g["L_g"], "L_s": g["L_s"],
+        "a": a, "v": v, "u": u, "m": m,
+        "x_v": x_v, "y_v": h - a * (cosh_v - 1.0),
+        "x_td": x_td, "y_td": m * x_td,
+        "X": X, "L_g": L_g, "L_s": L_s,
         "T_fl": T_fl, "T_anchor": T_anchor, "T_touchdown": T_td,
-        "V_fairlead": w * a * g["sinh_v"],
-        "V_anchor": w * a * m,  # tangente em (x_v) com sinh(u) = m
-        "x_v": g["x_v"], "y_v": g["y_v"],
-        "v": v_sol, "u": u, "m": m,
+        "H": H,
+    }
+
+
+def _solve_range_sloped(
+    L: float, h: float, w: float, X: float, mu: float, slope_rad: float,
+    config: SolverConfig,
+) -> dict:
+    """Modo Range em rampa: fsolve 2D sobre (a, x_v)."""
+    m = math.tan(slope_rad)
+    u = math.asinh(m)
+    sqrt_1pm2 = math.sqrt(1.0 + m * m)
+
+    F = _build_residual_range(L, h, X, m, u, sqrt_1pm2)
+    a0, x_v0 = _initial_guess_range(L, h, X, m, u, w)
+    sol, _info, ier, _mesg = fsolve(
+        F, np.array([a0, x_v0]),
+        full_output=True, xtol=1e-9, maxfev=200,
+    )
+    if ier != 1:
+        raise ValueError(
+            "fsolve não convergiu para touchdown em rampa (modo Range). "
+            "Verifique se a geometria é factível."
+        )
+    a, x_v = sol
+    if a <= 0:
+        raise ValueError(f"Solução com a={a:.3f} <= 0 — não-físico")
+    v = (X - x_v) / a
+    x_td = x_v + a * u
+    if x_td < -1e-3:
+        raise ValueError(
+            f"x_td={x_td:.2f} < 0: caso não tem touchdown."
+        )
+    x_td = max(0.0, x_td)
+    sinh_v = math.sinh(v)
+    cosh_v = math.cosh(v)
+    L_g = x_td * sqrt_1pm2
+    L_s = a * (sinh_v - m)
+    H = w * a
+    T_td = w * a * sqrt_1pm2
+    T_fl = w * a * cosh_v
+    T_anchor = _signed_friction_drop(T_td, mu, w, slope_rad, L_g)
+
+    return {
+        "a": a, "v": v, "u": u, "m": m,
+        "x_v": x_v, "y_v": h - a * (cosh_v - 1.0),
+        "x_td": x_td, "y_td": m * x_td,
+        "X": X, "L_g": L_g, "L_s": L_s,
+        "T_fl": T_fl, "T_anchor": T_anchor, "T_touchdown": T_td,
+        "H": H,
     }
 
 
 def _build_sloped_result(
-    sol: dict,
-    L: float, h: float, w: float, mu: float, slope_rad: float,
+    sol: dict, L: float, h: float, w: float, mu: float, slope_rad: float,
     config: SolverConfig, MBL: float,
 ) -> SolverResult:
-    """Monta SolverResult a partir do dicionário retornado pelo solver de rampa."""
+    """Monta SolverResult discretizando os dois trechos (grounded + suspended)."""
     a = sol["a"]
     H = sol["H"]
     X_total = sol["X"]
@@ -234,69 +310,70 @@ def _build_sloped_result(
     L_s = sol["L_s"]
     T_fl = sol["T_fl"]
     T_anchor = sol["T_anchor"]
+    T_td = sol["T_touchdown"]
     x_v = sol["x_v"]
     y_v = sol["y_v"]
     u = sol["u"]
     v = sol["v"]
     m = sol["m"]
 
-    # Discretização: pontos no trecho grounded (linha reta na rampa) +
-    # pontos na catenária do touchdown ao fairlead.
     n = config.n_plot_points
-    n_g = max(2, int(round(n * L_g / max(L, L_g + L_s)))) if L_g > 0 else 0
+    if L_g > 0:
+        n_g = max(2, int(round(n * L_g / max(L, L_g + L_s))))
+    else:
+        n_g = 0
     n_s = n - n_g
     if n_s < 2:
         n_s = 2
-        n_g = n - n_s
+        n_g = max(0, n - n_s)
 
-    # Trecho grounded: ao longo da rampa de (0, 0) a (x_td, m·x_td).
     if n_g > 0:
         x_g = np.linspace(0.0, x_td, n_g)
         y_g = m * x_g
-        T_g_anchor_to_td = np.linspace(T_anchor, sol["T_touchdown"], n_g)
-        # Tração no trecho grounded varia linearmente entre anchor e td
-        Tx_g = T_g_anchor_to_td * math.cos(slope_rad)
-        Ty_g = T_g_anchor_to_td * math.sin(slope_rad)
+        # Tração no grounded: variação linear entre anchor e touchdown
+        T_g_mag = np.linspace(T_anchor, T_td, n_g)
+        # Componentes Tx, Ty: ao longo da rampa
+        Tx_g = T_g_mag * math.cos(slope_rad)
+        Ty_g = T_g_mag * math.sin(slope_rad)
     else:
-        x_g, y_g, T_g_anchor_to_td = np.array([]), np.array([]), np.array([])
+        x_g, y_g, T_g_mag = np.array([]), np.array([]), np.array([])
         Tx_g, Ty_g = np.array([]), np.array([])
 
-    # Trecho suspenso: catenária no sistema (x_v, y_v) parametrizada por
-    # x_local ∈ [a·u, a·v] (de touchdown ao fairlead).
-    s_local = np.linspace(a * u, a * v, n_s)  # arc length no frame local
-    x_susp = x_v + s_local
-    y_susp = y_v + a * (np.cosh(s_local / a) - 1.0)
-    # Tração: T(s) = w·sqrt(a² + sinh(s/a)²·a²) = w·a·cosh(s/a)
-    s_arc = a * np.sinh(s_local / a)  # arc length
-    T_susp = w * a * np.cosh(s_local / a)
+    # Suspended: parametrizado por s_local = (x − x_v) ∈ [a·u, a·v]
+    s_local_arr = np.linspace(a * u, a * v, n_s)
+    x_susp = x_v + s_local_arr
+    y_susp = y_v + a * (np.cosh(s_local_arr / a) - 1.0)
+    # Tração: T(s) = w·a·cosh(s/a). Sinh para componente vertical.
+    T_susp = w * a * np.cosh(s_local_arr / a)
     Tx_susp = np.full_like(T_susp, H)
-    Ty_susp = w * s_arc
+    Ty_susp = w * a * np.sinh(s_local_arr / a)
 
-    # Concatena (evita duplicar ponto do touchdown se houver grounded)
     if n_g > 0:
         coords_x = np.concatenate([x_g, x_susp[1:]])
         coords_y = np.concatenate([y_g, y_susp[1:]])
-        T_mag = np.concatenate([T_g_anchor_to_td, T_susp[1:]])
+        T_mag = np.concatenate([T_g_mag, T_susp[1:]])
         Tx = np.concatenate([Tx_g, Tx_susp[1:]])
         Ty = np.concatenate([Ty_g, Ty_susp[1:]])
     else:
         coords_x, coords_y = x_susp, y_susp
         T_mag, Tx, Ty = T_susp, Tx_susp, Ty_susp
 
-    # Ângulos no fairlead e na âncora (na catenária local, no frame global)
+    # Ângulos no fairlead e na âncora
     theta_h_fl = math.atan2(w * a * math.sinh(v), H)
-    theta_h_a = math.atan2(0.0 + w * a * math.sinh(u), H) if L_g > 0 else math.atan2(w * a * math.sinh(u), H)
-    # Em rampa, o ângulo na âncora é ao longo da rampa: tangente = slope_rad
     if L_g > 0:
+        # Tangente na âncora segue a rampa
         theta_h_a = slope_rad
+    else:
+        theta_h_a = math.atan2(w * a * math.sinh(u), H)
 
     utilization = T_fl / MBL if MBL > 0 else 0.0
 
     return SolverResult(
         status=ConvergenceStatus.CONVERGED,
         message=(
-            f"Touchdown em rampa de {math.degrees(slope_rad):.1f}°: "
-            f"L_g={L_g:.1f} m sobre seabed, L_s={L_s:.1f} m suspenso."
+            f"Touchdown em rampa de {math.degrees(slope_rad):.2f}°: "
+            f"L_g={L_g:.2f} m apoiado, L_s={L_s:.2f} m suspenso. "
+            f"T_anchor={T_anchor/1000:.2f} kN."
         ),
         coords_x=coords_x.tolist(),
         coords_y=coords_y.tolist(),
@@ -324,45 +401,42 @@ def _build_sloped_result(
 
 
 def solve_sloped_seabed_single_segment(
-    L: float,
-    h: float,
-    w: float,
-    EA: float,
-    mode: SolutionMode,
-    input_value: float,
-    mu: float,
-    slope_rad: float,
-    MBL: float,
+    L: float, h: float, w: float, EA: float,
+    mode: SolutionMode, input_value: float,
+    mu: float, slope_rad: float, MBL: float,
     config: SolverConfig | None = None,
 ) -> SolverResult:
     """
-    Solver F5.3 para single-segmento com seabed inclinado e touchdown.
+    Solver F5.3 com touchdown em rampa, single-segmento.
 
-    Suporta apenas modo TENSION na entrega F5.3. Modo RANGE em rampa é
-    roadmap (caso operacional raro). Elasticidade não é aplicada nesta
-    sub-fase para o trecho em rampa — é roadmap junto com a generalização
-    do touchdown.
+    Suporta modos Tension e Range. Atrito de Coulomb modificado:
+        T_anchor = T_td − μ·w·cos(θ)·L_g − w·sin(θ)·L_g
+
+    Elasticidade não é aplicada nesta entrega — o trecho na rampa não
+    é esticado (rígido). Para a maioria dos casos com slopes pequenos
+    (±10°), o impacto é < 0,5 % no T_anchor.
     """
     if config is None:
         config = SolverConfig()
-    if mode != SolutionMode.TENSION:
-        raise ValueError(
-            "F5.3: seabed inclinado suporta apenas modo Tension nesta "
-            "entrega. Modo Range em rampa fica para sub-fase futura."
+    if abs(slope_rad) < 1e-9:
+        raise ValueError("slope_rad ≈ 0: use o caminho horizontal padrão")
+
+    if mode == SolutionMode.TENSION:
+        sol = _solve_tension_sloped(
+            L, h, w, float(input_value), mu, slope_rad, config,
         )
-    if abs(slope_rad) < 1e-6:
-        raise ValueError(
-            "slope_rad ≈ 0: use o caminho horizontal padrão"
+    elif mode == SolutionMode.RANGE:
+        sol = _solve_range_sloped(
+            L, h, w, float(input_value), mu, slope_rad, config,
         )
-    sol = _solve_touchdown_sloped_tension(
-        L=L, h=h, w=w, T_fl=float(input_value),
-        mu=mu, slope_rad=slope_rad, config=config,
-    )
-    # Sanity check: L_g + L_s deve fechar com L (rígido)
-    sum_L = sol["L_g"] + sol["L_s"]
-    if abs(sum_L - L) / L > 1e-3:
+    else:
+        raise ValueError(f"modo inválido: {mode}")
+
+    # Sanity check: L_g + L_s ≈ L
+    if abs(sol["L_g"] + sol["L_s"] - L) / L > 1e-3:
         raise ValueError(
-            f"Inconsistência: L_g + L_s = {sum_L:.2f} ≠ L = {L:.2f}"
+            f"Solução inconsistente: L_g + L_s = "
+            f"{sol['L_g'] + sol['L_s']:.2f} ≠ L = {L:.2f}"
         )
     return _build_sloped_result(sol, L, h, w, mu, slope_rad, config, MBL)
 

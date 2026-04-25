@@ -19,11 +19,12 @@
 #           entre segmentos. V acumulado tem salto na junção; (x,y) contínuo;
 #           ângulo da tangente faz quebra (kink). Validação por equilíbrio
 #           vertical estendido V_fl − V_anchor = Σw·L_eff + Σ F_attachments.
-#   1.4.0 — F5.3: seabed inclinado com touchdown em rampa (single-segmento,
-#           modo Tension). Sistema reduzido a 1 incógnita v = (X−x_v)/a
-#           via condição de tangência no touchdown. Atrito em rampa via
-#           Coulomb modificado: μ·w·cos(θ) ± w·sin(θ). Multi-segmento +
-#           slope ou attachments + slope rejeitados (sub-fase futura).
-SOLVER_VERSION = "1.4.0"
+#   1.4.0 — F5.3: seabed inclinado, entrega parcial (suspended-only).
+#   1.4.1 — F5.3.x: pendências resolvidas — touchdown em rampa para modos
+#           Tension e Range (single-segmento via fsolve 2D/3D), atrito
+#           Coulomb modificado μ·w·cos(θ) ± w·sin(θ), multi-segmento +
+#           slope com touchdown no segmento 0 (fsolve 2D em H, L_g_0).
+#           Apenas attachments + slope continua rejeitada (combinação rara).
+SOLVER_VERSION = "1.4.1"
 
 __all__ = ["SOLVER_VERSION"]

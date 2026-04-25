@@ -23,9 +23,7 @@ from . import SOLVER_VERSION
 from .elastic import solve_elastic_iterative
 from .laid_line import solve_laid_line
 from .multi_segment import solve_multi_segment
-# Nota: seabed_sloped contém um solver de touchdown em rampa que é base para
-# a próxima evolução (não convergiu robustamente em F5.3 — vide relatório).
-# Mantido no repositório como fundação; não despachado em produção.
+from .seabed_sloped import solve_sloped_seabed_single_segment
 from .types import (
     PROFILE_LIMITS,
     AlertLevel,
@@ -156,14 +154,12 @@ def solve(
         slope = seabed.slope_rad
         slope_is_significant = abs(slope) > 1e-6
 
-        if slope_is_significant and (n_segments > 1 or attachments):
-            # F5.3 entrega: seabed inclinado só para single-segmento sem
-            # attachments. Multi-segmento + slope ou attachments + slope
-            # ficam para sub-fase futura.
+        if slope_is_significant and attachments:
+            # F5.3.x: combinação attachments + slope ainda não suportada.
             raise ValueError(
-                "Seabed inclinado (slope_rad ≠ 0) é suportado apenas para "
-                "linha single-segmento sem attachments nesta sub-fase. "
-                "Use slope = 0 para casos multi-segmento ou com boias/clumps."
+                "Combinação de attachments (boias/clumps) com seabed "
+                "inclinado ainda não é suportada. Use uma das duas, ou "
+                "slope = 0."
             )
 
         if n_segments > 1 or attachments:
@@ -186,50 +182,60 @@ def solve(
                 mu=seabed.mu,
                 config=config,
                 attachments=attachments,
+                slope_rad=slope,
             )
         elif slope_is_significant:
-            # F5.3: seabed inclinado em single-segmento.
+            # F5.3 completa: single-segmento em rampa.
             #
-            # Escopo entregue: fully-suspended em rampa (slope é metadado
-            # visual; cálculo é o mesmo do solver horizontal padrão pois
-            # a linha não toca o seabed).
-            #
-            # Touchdown em rampa exige sistema de equações com tangência
-            # no touchdown e atrito modificado (μ·w·cos(θ) ± w·sin(θ)).
-            # Implementação não convergiu de forma robusta nesta sub-fase
-            # — fica como roadmap explícito (vide docs/relatorio_F5_3.md).
-            from .seabed import critical_tension_for_touchdown
-
-            if boundary.mode == SolutionMode.RANGE:
-                raise ValueError(
-                    "F5.3: seabed inclinado suporta apenas modo Tension. "
-                    "Modo Range em rampa fica para sub-fase futura."
-                )
-
-            T_crit = critical_tension_for_touchdown(
-                segment.length, h_drop, segment.w,
+            # Despacho:
+            # - Fully-suspended (T_fl ≥ T_crit_horizontal): linha não toca
+            #   o seabed; cálculo idêntico ao horizontal.
+            # - Touchdown (T_fl < T_crit_horizontal): solver específico
+            #   `solve_sloped_seabed_single_segment` com atrito modificado
+            #   na rampa.
+            from .seabed import (
+                critical_range_for_touchdown,
+                critical_tension_for_touchdown,
             )
-            if boundary.input_value < T_crit:
-                raise ValueError(
-                    f"Touchdown em seabed inclinado ({math.degrees(slope):.1f}°) "
-                    "ainda não é suportado. Casos com T_fl >= T_fl_crit "
-                    f"({T_crit:.0f} N) ficam fully-suspended e funcionam — use "
-                    "T_fl maior, comprimento menor, ou slope = 0 para casos "
-                    "com touchdown."
+
+            if boundary.mode == SolutionMode.TENSION:
+                T_crit = critical_tension_for_touchdown(
+                    segment.length, h_drop, segment.w,
                 )
-            # Fully suspended: usa o solver horizontal (slope é só metadado
-            # visual no plot — a linha não toca o seabed).
-            result = solve_elastic_iterative(
-                L=segment.length,
-                h=h_drop,
-                w=segment.w,
-                EA=segment.EA,
-                mode=boundary.mode,
-                input_value=boundary.input_value,
-                config=config,
-                mu=seabed.mu,
-                MBL=segment.MBL,
-            )
+                if boundary.input_value >= T_crit:
+                    # Fully suspended: usa solver horizontal (slope só visual)
+                    result = solve_elastic_iterative(
+                        L=segment.length, h=h_drop, w=segment.w, EA=segment.EA,
+                        mode=boundary.mode, input_value=boundary.input_value,
+                        config=config, mu=seabed.mu, MBL=segment.MBL,
+                    )
+                else:
+                    # Touchdown em rampa
+                    result = solve_sloped_seabed_single_segment(
+                        L=segment.length, h=h_drop, w=segment.w, EA=segment.EA,
+                        mode=boundary.mode, input_value=boundary.input_value,
+                        mu=seabed.mu, slope_rad=slope, MBL=segment.MBL,
+                        config=config,
+                    )
+            elif boundary.mode == SolutionMode.RANGE:
+                X_crit = critical_range_for_touchdown(segment.length, h_drop)
+                if boundary.input_value >= X_crit:
+                    # Fully suspended em modo Range
+                    result = solve_elastic_iterative(
+                        L=segment.length, h=h_drop, w=segment.w, EA=segment.EA,
+                        mode=boundary.mode, input_value=boundary.input_value,
+                        config=config, mu=seabed.mu, MBL=segment.MBL,
+                    )
+                else:
+                    # Touchdown em rampa, modo Range
+                    result = solve_sloped_seabed_single_segment(
+                        L=segment.length, h=h_drop, w=segment.w, EA=segment.EA,
+                        mode=boundary.mode, input_value=boundary.input_value,
+                        mu=seabed.mu, slope_rad=slope, MBL=segment.MBL,
+                        config=config,
+                    )
+            else:
+                raise ValueError(f"modo inválido: {boundary.mode}")
         elif h_drop <= 1e-6:
             # Caso degenerado: fairlead e âncora no mesmo nível (ambos no fundo).
             # Sem catenária — linha horizontal no seabed, só atrito + elasticidade.
