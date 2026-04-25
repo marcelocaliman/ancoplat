@@ -175,7 +175,8 @@ class MooringSystemRecord(Base):
 
     Armazena a configuração completa em `config_json` (mesma estratégia
     de `cases.input_json`) e desnormaliza só `line_count` + nome da
-    plataforma para queries de listagem. Solver e execuções vêm em F5.4.2.
+    plataforma para queries de listagem. Execuções vivem na tabela
+    `mooring_system_executions` (F5.4.2).
     """
 
     __tablename__ = "mooring_systems"
@@ -199,6 +200,14 @@ class MooringSystemRecord(Base):
         nullable=False,
     )
 
+    executions: Mapped[list["MooringSystemExecutionRecord"]] = relationship(
+        "MooringSystemExecutionRecord",
+        back_populates="mooring_system",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="MooringSystemExecutionRecord.executed_at.desc()",
+    )
+
     __table_args__ = (
         CheckConstraint("length(name) >= 1", name="ck_msys_name_nonempty"),
         CheckConstraint("platform_radius > 0", name="ck_msys_platform_radius_positive"),
@@ -208,10 +217,53 @@ class MooringSystemRecord(Base):
     )
 
 
+class MooringSystemExecutionRecord(Base):
+    """
+    Histórico de execuções do solver multi-linha (F5.4.2).
+
+    Mesma política de retenção de `executions`: apenas as 10 mais
+    recentes por sistema são mantidas. Truncagem ocorre no service após
+    cada solve bem-sucedido.
+    """
+
+    __tablename__ = "mooring_system_executions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    mooring_system_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("mooring_systems.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # MooringSystemResult completo serializado em JSON.
+    result_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Desnormalizações para listagem e badge na UI.
+    aggregate_force_magnitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    aggregate_force_azimuth_deg: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_utilization: Mapped[float | None] = mapped_column(Float, nullable=True)
+    worst_alert_level: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    n_converged: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    n_invalid: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    executed_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False
+    )
+
+    mooring_system: Mapped[MooringSystemRecord] = relationship(
+        "MooringSystemRecord", back_populates="executions"
+    )
+
+    __table_args__ = (
+        Index("idx_msys_exec_msys", "mooring_system_id", "executed_at"),
+    )
+
+
 __all__ = [
     "AppConfigRecord",
     "CaseRecord",
     "ExecutionRecord",
     "LineTypeRecord",
+    "MooringSystemExecutionRecord",
     "MooringSystemRecord",
 ]

@@ -425,6 +425,100 @@ class SolverResult(BaseModel):
     depth_at_fairlead: float = 0.0
 
 
+# ───────────────────────────────────────────────────────────────────────
+# F5.4 — Tipos para mooring system multi-linha
+# ───────────────────────────────────────────────────────────────────────
+
+
+class MooringLineResult(BaseModel):
+    """
+    Resultado de uma linha individual dentro de um mooring system (F5.4).
+
+    Encapsula o `SolverResult` completo da linha mais informações de
+    posicionamento no plano da plataforma: posição do fairlead, posição
+    da âncora e força horizontal sentida pela plataforma a partir desta
+    linha. Toda geometria em metros, força em Newtons.
+
+    Convenção: o fairlead está em
+      `(R · cos(θ), R · sin(θ))`
+    onde θ = azimuth em rad e R = `fairlead_radius`. A linha sai
+    radialmente, então a âncora fica em
+      `((R + X) · cos(θ), (R + X) · sin(θ))`
+    com X = `solver_result.total_horz_distance`.
+
+    A força horizontal sobre a plataforma vinda desta linha é a
+    componente horizontal da tração no fairlead, apontando do fairlead
+    em direção à âncora (ou seja, +θ — radialmente para fora):
+      `horz_force_xy = H · (cos(θ), sin(θ))`
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    line_name: str = Field(..., min_length=1, max_length=80)
+    fairlead_azimuth_deg: float = Field(..., ge=0.0, lt=360.0)
+    fairlead_radius: float = Field(..., gt=0.0)
+
+    fairlead_xy: tuple[float, float] = Field(
+        ..., description="Posição do fairlead no plano da plataforma (m)."
+    )
+    anchor_xy: tuple[float, float] = Field(
+        ..., description="Posição da âncora no plano da plataforma (m)."
+    )
+    horz_force_xy: tuple[float, float] = Field(
+        ...,
+        description=(
+            "Componentes Fx, Fy (N) da força horizontal exercida pela "
+            "linha sobre a plataforma no plano XY do casco."
+        ),
+    )
+
+    solver_result: SolverResult
+
+
+class MooringSystemResult(BaseModel):
+    """
+    Resultado agregado de um mooring system multi-linha (F5.4).
+
+    Cada linha é resolvida independentemente (sem equilíbrio de
+    plataforma). A agregação aqui é informativa: reporta o resultante
+    horizontal das forças sobre o casco e, em equilíbrio sem cargas
+    externas, deve ser próximo de zero para um spread balanceado.
+
+    `worst_alert_level` segue a hierarquia broken > red > yellow > ok;
+    útil pra colorir a plan view. `n_invalid` conta linhas que não
+    convergiram e portanto NÃO entram no agregado de forças.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    lines: list[MooringLineResult]
+
+    aggregate_force_xy: tuple[float, float] = Field(
+        ...,
+        description=(
+            "Soma vetorial das forças horizontais sobre a plataforma (N), "
+            "ignorando linhas que não convergiram."
+        ),
+    )
+    aggregate_force_magnitude: float = Field(..., ge=0.0)
+    aggregate_force_azimuth_deg: float = Field(
+        default=0.0,
+        ge=0.0,
+        lt=360.0,
+        description=(
+            "Direção do resultante. Sem significado quando "
+            "`aggregate_force_magnitude` é numericamente zero."
+        ),
+    )
+
+    max_utilization: float = Field(default=0.0, ge=0.0)
+    worst_alert_level: AlertLevel = Field(default=AlertLevel.OK)
+    n_converged: int = Field(default=0, ge=0)
+    n_invalid: int = Field(default=0, ge=0)
+
+    solver_version: str = Field(default="")
+
+
 __all__ = [
     "AlertLevel",
     "AttachmentKind",
@@ -434,6 +528,8 @@ __all__ = [
     "LineAttachment",
     "LineCategory",
     "LineSegment",
+    "MooringLineResult",
+    "MooringSystemResult",
     "PROFILE_LIMITS",
     "SeabedConfig",
     "SolutionMode",

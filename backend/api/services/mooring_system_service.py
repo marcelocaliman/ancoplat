@@ -14,12 +14,22 @@ from typing import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.api.db.models import MooringSystemRecord
+from backend.api.db.models import (
+    MooringSystemExecutionRecord,
+    MooringSystemRecord,
+)
 from backend.api.schemas.mooring_systems import (
+    MooringSystemExecutionOutput,
     MooringSystemInput,
     MooringSystemOutput,
     MooringSystemSummary,
 )
+from backend.solver.multi_line import solve_mooring_system as solve_msys
+from backend.solver.types import MooringSystemResult
+
+
+# Política de retenção de execuções (mesmo número de cases.executions).
+EXECUTION_RETENTION = 10
 
 logger = logging.getLogger("qmoor.api.mooring_systems")
 
@@ -47,11 +57,29 @@ def mooring_system_record_to_output(
     rec: MooringSystemRecord,
 ) -> MooringSystemOutput:
     config = MooringSystemInput.model_validate_json(rec.config_json)
+    executions: list[MooringSystemExecutionOutput] = []
+    for e in rec.executions:
+        try:
+            executions.append(
+                MooringSystemExecutionOutput(
+                    id=e.id,
+                    mooring_system_id=e.mooring_system_id,
+                    result=MooringSystemResult.model_validate_json(e.result_json),
+                    executed_at=e.executed_at,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "execução id=%s do mooring system id=%s ignorada "
+                "(result_json corrompido): %s",
+                e.id, rec.id, exc,
+            )
     return MooringSystemOutput(
         id=rec.id,
         name=rec.name,
         description=rec.description,
         input=config,
+        latest_executions=executions,
         created_at=rec.created_at,
         updated_at=rec.updated_at,
     )
@@ -142,12 +170,101 @@ def delete_mooring_system(db: Session, msys_id: int) -> bool:
     return True
 
 
+# ==============================================================================
+# Solve + persistência de execuções
+# ==============================================================================
+
+
+def _prune_old_executions(db: Session, msys_id: int) -> int:
+    """
+    Mantém só as `EXECUTION_RETENTION` execuções mais recentes do
+    mooring system. Retorna a quantidade removida.
+    """
+    keep_ids = db.scalars(
+        select(MooringSystemExecutionRecord.id)
+        .where(MooringSystemExecutionRecord.mooring_system_id == msys_id)
+        .order_by(MooringSystemExecutionRecord.executed_at.desc())
+        .limit(EXECUTION_RETENTION)
+    ).all()
+    if not keep_ids:
+        return 0
+    delete_q = (
+        select(MooringSystemExecutionRecord)
+        .where(MooringSystemExecutionRecord.mooring_system_id == msys_id)
+        .where(MooringSystemExecutionRecord.id.notin_(keep_ids))
+    )
+    to_remove = db.scalars(delete_q).all()
+    for rec in to_remove:
+        db.delete(rec)
+    if to_remove:
+        db.commit()
+    return len(to_remove)
+
+
+def solve_and_persist(
+    db: Session, msys_id: int
+) -> tuple[MooringSystemRecord, MooringSystemExecutionRecord] | None:
+    """
+    Resolve um mooring system existente, persiste a execução e aplica
+    retenção de 10. Retorna (record do sistema, record da execução) ou
+    None se o sistema não existir.
+
+    A solver `solve_mooring_system` nunca lança — linhas que falham
+    aparecem com status diferente de CONVERGED dentro do resultado, mas
+    a execução é persistida normalmente. O decisão é por reportar o
+    resultado parcial em vez de descartar tudo.
+    """
+    rec = db.get(MooringSystemRecord, msys_id)
+    if rec is None:
+        return None
+
+    msys_input = MooringSystemInput.model_validate_json(rec.config_json)
+    result = solve_msys(msys_input)
+
+    exec_rec = MooringSystemExecutionRecord(
+        mooring_system_id=msys_id,
+        result_json=result.model_dump_json(),
+        aggregate_force_magnitude=result.aggregate_force_magnitude,
+        aggregate_force_azimuth_deg=result.aggregate_force_azimuth_deg,
+        max_utilization=result.max_utilization,
+        worst_alert_level=result.worst_alert_level.value,
+        n_converged=result.n_converged,
+        n_invalid=result.n_invalid,
+    )
+    db.add(exec_rec)
+    db.commit()
+    db.refresh(exec_rec)
+
+    pruned = _prune_old_executions(db, msys_id)
+    if pruned:
+        logger.info(
+            "Mooring system id=%s: %d execução(ões) antigas removidas (retenção %d).",
+            msys_id, pruned, EXECUTION_RETENTION,
+        )
+
+    db.refresh(rec)
+    logger.info(
+        "Mooring system resolvido: id=%s name=%r mag=%.1f kN converged=%d/%d alert=%s",
+        rec.id, rec.name, result.aggregate_force_magnitude / 1000.0,
+        result.n_converged, len(result.lines), result.worst_alert_level.value,
+    )
+    return rec, exec_rec
+
+
+def preview_solve(msys_input: MooringSystemInput) -> MooringSystemResult:
+    """Resolve sem persistir — usado pela UI para preview live."""
+    return solve_msys(msys_input)
+
+
 __all__ = [
+    "EXECUTION_RETENTION",
     "create_mooring_system",
     "delete_mooring_system",
     "get_mooring_system",
     "list_mooring_systems",
     "mooring_system_record_to_output",
     "mooring_system_record_to_summary",
+    "preview_solve",
+    "solve_and_persist",
     "update_mooring_system",
 ]

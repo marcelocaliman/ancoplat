@@ -15,8 +15,8 @@ Faseamento adotado:
 | Slice    | Conteúdo                                                            | Status |
 |----------|---------------------------------------------------------------------|--------|
 | F5.4.1   | Modelo + persistência (Pydantic, SQLAlchemy, CRUD service, testes)  | ✅ |
-| F5.4.2   | Solver dispatcher + agregação de forças + endpoints API             | ⬜ |
-| F5.4.3   | BCs de validação (BC-MS-LINE-01..05, simetria/equilíbrio)           | ⬜ |
+| F5.4.2   | Solver dispatcher + agregação de forças + endpoints API + retenção  | ✅ |
+| F5.4.3   | BCs de validação adicionais (simetria/equilíbrio, asymm extremos)   | ⬜ |
 | F5.4.4   | Frontend: lista + edição                                            | ⬜ |
 | F5.4.5   | Frontend: plan view polar                                           | ⬜ |
 
@@ -111,17 +111,130 @@ Suite total backend: **206 testes verde** (190 da F5.3.y + 1 já existente desde
 
 ---
 
-## Próximo passo: F5.4.2
+---
 
-Solver dispatcher + agregação:
+## F5.4.2 — entrega
 
-1. `MooringSystemSolver.solve_all(msys)` chama o solver de cada linha,
-   transforma o resultado para o frame da plataforma (rotação por
-   `fairlead_azimuth_deg`).
-2. Agregado: `H_total_xy = Σ H_i · (cos(az_i+180), sin(az_i+180))`,
-   `M_z = Σ r_fl_i × H_i`. Magnitude da força resultante e azimuth.
-3. Persiste em `mooring_system_executions` (JSON dos resultados +
-   agregados desnormalizados).
-4. Endpoints `POST /mooring-systems/solve` e
-   `GET /mooring-systems/{id}` retornando `MooringSystemOutput +
-   latest_execution`.
+### Tipos de resultado
+
+[`backend/solver/types.py`](../backend/solver/types.py) ganhou:
+
+- **`MooringLineResult`** — encapsula `SolverResult` + posição polar
+  (`fairlead_xy`, `anchor_xy`) + força horizontal sobre o casco
+  (`horz_force_xy`).
+- **`MooringSystemResult`** — lista de `MooringLineResult` + agregados:
+  `aggregate_force_xy`, `aggregate_force_magnitude`,
+  `aggregate_force_azimuth_deg`, `max_utilization`, `worst_alert_level`,
+  `n_converged`, `n_invalid`, `solver_version`.
+
+### Solver dispatcher
+
+[`backend/solver/multi_line.py`](../backend/solver/multi_line.py) — função
+`solve_mooring_system(msys_input)`. Pseudocódigo:
+
+```python
+for line in msys.lines:
+    res = solver.solve(line.segments, line.boundary, line.seabed, ...)
+    θ = radians(line.fairlead_azimuth_deg)
+    fairlead_xy = R · (cos θ, sin θ)
+    anchor_xy   = (R + X_solver) · (cos θ, sin θ)
+    H_xy        = res.H · (cos θ, sin θ)        # 0 se não convergiu
+F_total = Σ H_xy_i              # ignora linhas inválidas
+```
+
+Convenção: força horizontal sobre a plataforma aponta radialmente para
+fora (do fairlead em direção à âncora). Em spread simétrico balanceado,
+soma vetorial cancela.
+
+### Persistência (executions)
+
+Nova tabela `mooring_system_executions` em
+[`backend/api/db/models.py`](../backend/api/db/models.py):
+
+- FK `mooring_system_id` → `mooring_systems.id` com `ON DELETE CASCADE`.
+- `result_json` (MooringSystemResult completo) + desnormalizações:
+  `aggregate_force_magnitude`, `aggregate_force_azimuth_deg`,
+  `max_utilization`, `worst_alert_level`, `n_converged`, `n_invalid`.
+- Índice em `(mooring_system_id, executed_at)`.
+- Política de retenção: 10 mais recentes por sistema, truncagem aplicada
+  após cada `solve_and_persist`.
+
+### Service
+
+[`backend/api/services/mooring_system_service.py`](../backend/api/services/mooring_system_service.py)
+ganhou:
+
+- `solve_and_persist(db, msys_id) -> tuple[record, exec_record] | None`
+- `preview_solve(msys_input) -> MooringSystemResult` (sem persistir)
+- `_prune_old_executions(db, msys_id)` aplicando retenção de 10
+- Hidratação de `latest_executions` em `mooring_system_record_to_output`
+
+### Endpoints REST
+
+[`backend/api/routers/mooring_systems.py`](../backend/api/routers/mooring_systems.py)
+montado em `/api/v1`:
+
+| Método  | Rota                                  | Função |
+|---------|---------------------------------------|--------|
+| GET     | `/mooring-systems`                    | Listar (paginado + busca) |
+| POST    | `/mooring-systems`                    | Criar |
+| GET     | `/mooring-systems/{id}`               | Detalhar (inclui últimas 10 execuções) |
+| PUT     | `/mooring-systems/{id}`               | Atualizar |
+| DELETE  | `/mooring-systems/{id}`               | Remover (cascade) |
+| POST    | `/mooring-systems/{id}/solve`         | Resolver e persistir |
+| POST    | `/mooring-systems/preview-solve`      | Resolver sem persistir (preview UI) |
+
+Tag `mooring-systems` registrada em `main.py` para o OpenAPI.
+
+### Testes
+
+[`backend/api/tests/test_mooring_systems_f5_4_2.py`](../backend/api/tests/test_mooring_systems_f5_4_2.py) — 15 testes verde.
+
+| Categoria          | Cobertura |
+|--------------------|-----------|
+| Solver puro        | spread simétrico 4× → resultante ≈ 0; assimétrico 2× → magnitude H·√2 a 45°; linha inválida fica fora do agregado; posição radial; alert hierarchy; solver_version propagado |
+| Service            | solve_and_persist cria execução com desnormalizações corretas; sistema inexistente → None; retenção de 10 (rodando 12 solves restam 10) |
+| API                | POST create → 201; POST /solve → execução persistida + GET vê em latest_executions; 404 em id inexistente; preview não persiste; PUT recalcula line_count; DELETE cascade |
+
+Suite total backend após F5.4.2: **221 testes verde** (206 da F5.4.1 + **15 desta entrega**).
+
+### Decisões técnicas
+
+1. **Força aponta radialmente para fora.** A linha pesa contra a
+   plataforma puxando-a em direção à âncora. Em spread balanceado, as
+   contribuições cancelam — `aggregate_force_magnitude ≈ 0` é o sinal
+   de que o sistema está em equilíbrio com cargas externas zero. Isso
+   coincide com a convenção do MoorPy quando a plataforma está na
+   posição de offset zero.
+
+2. **Linhas inválidas entram no resultado mas não no agregado.** Se uma
+   das N linhas não converge, persistimos a execução com `n_invalid > 0`
+   e mantemos as forças das linhas que convergiram. Alternativa
+   (rejeitar a execução inteira) seria mais agressiva e impediria a UI
+   de mostrar parcialmente o sistema.
+
+3. **`Mz = 0` por construção.** Como cada linha sai radialmente,
+   `r_fairlead × F_horz = 0` (vetores paralelos). Não exposto no
+   `MooringSystemResult` para não confundir; vira útil só em F5.4 v2+
+   se permitirmos linhas tangenciais (ex.: turret com fairleads não
+   centrados).
+
+4. **Preview separado de solve.** Mesma lógica de cases: `/preview-solve`
+   recebe o input completo e devolve o resultado sem tocar no banco.
+   Útil pra UI live (mudar azimuth e ver o resultante atualizar).
+
+---
+
+## Próximo passo: F5.4.4 — Frontend
+
+(F5.4.3 — BCs analíticos extras — ficou implícito na cobertura BC-MS-LINE-01..03
+do F5.4.2; pode ganhar BCs adicionais em iterações futuras se preciso.)
+
+1. Página `/mooring-systems` com listagem (cards mostrando nome,
+   line_count, último resultante).
+2. Página de edição reaproveitando `SegmentEditor` e `BoundaryConditions`
+   por linha (tabs ou accordion por linha).
+3. Plan view polar (Plotly ou SVG nativo): círculo da plataforma +
+   linhas radiais até as âncoras, color-coded por
+   `worst_alert_level`/utilização individual.
+4. Tela de detalhe com tabela de execuções e métricas agregadas.

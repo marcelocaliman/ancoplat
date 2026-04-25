@@ -29,7 +29,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from backend.api.db import session as db_session
 from backend.api.db.migrations import run_migrations
 from backend.api.logging_config import configure_logging
-from backend.api.routers import cases, health, line_types, moor_io, reports, solve
+from backend.api.routers import (
+    cases,
+    health,
+    line_types,
+    moor_io,
+    mooring_systems,
+    reports,
+    solve,
+)
 from backend.api.schemas.errors import ErrorDetail, ErrorResponse
 
 # Logging estruturado: console + arquivo rotativo. Configurado uma única
@@ -96,6 +104,15 @@ TAGS_METADATA = [
             "`.moor` (JSON), JSON normalizado e PDF técnico."
         ),
     },
+    {
+        "name": "mooring-systems",
+        "description": (
+            "Sistemas de ancoragem multi-linha (F5.4). Cada sistema "
+            "contém N linhas com posição polar (azimuth + raio) no "
+            "frame do casco. O solver resolve cada linha "
+            "independentemente e agrega o resultante horizontal."
+        ),
+    },
 ]
 
 
@@ -157,6 +174,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(line_types.router, prefix="/api/v1")
     app.include_router(moor_io.router, prefix="/api/v1")
     app.include_router(reports.router, prefix="/api/v1")
+    app.include_router(mooring_systems.router, prefix="/api/v1")
 
 
 def _register_exception_handlers(app: FastAPI) -> None:

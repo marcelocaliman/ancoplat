@@ -23,6 +23,7 @@ from backend.solver.types import (
     CriteriaProfile,
     LineAttachment,
     LineSegment,
+    MooringSystemResult,
     SeabedConfig,
     UtilizationLimits,
 )
@@ -175,6 +176,15 @@ class MooringSystemSummary(BaseModel):
     updated_at: datetime
 
 
+class MooringSystemExecutionOutput(BaseModel):
+    """Representação de uma execução persistida do mooring system."""
+
+    id: int
+    mooring_system_id: int
+    result: MooringSystemResult
+    executed_at: datetime
+
+
 class MooringSystemOutput(BaseModel):
     """Representação detalhada (para GET /mooring-systems/{id})."""
 
@@ -182,11 +192,19 @@ class MooringSystemOutput(BaseModel):
     name: str
     description: Optional[str]
     input: MooringSystemInput
+    latest_executions: list[MooringSystemExecutionOutput] = Field(
+        default_factory=list,
+        description=(
+            "Últimas 10 execuções (mais recente primeiro). Vazio se "
+            "nunca foi resolvido."
+        ),
+    )
     created_at: datetime
     updated_at: datetime
 
 
 __all__ = [
+    "MooringSystemExecutionOutput",
     "MooringSystemInput",
     "MooringSystemOutput",
     "MooringSystemSummary",
