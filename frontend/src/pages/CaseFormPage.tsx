@@ -34,6 +34,7 @@ import { AttachmentsEditor } from '@/components/common/AttachmentsEditor'
 import { BathymetryPopover } from '@/components/common/BathymetryPopover'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
 import { SegmentEditor } from '@/components/common/SegmentEditor'
+import { SolverDiagnosticsCard } from '@/components/common/SolverDiagnosticsCard'
 import { UnitInput } from '@/components/common/UnitInput'
 import {
   AlertBadge,
@@ -749,6 +750,17 @@ export function CaseFormPage() {
                 attachments={debouncedValues.attachments ?? []}
                 seabedSlopeRad={debouncedValues.seabed?.slope_rad ?? 0}
                 segments={debouncedValues.segments ?? []}
+                onApplyChange={(field, value) => {
+                  // F5.7.4 — aplica sugestão do diagnóstico no form.
+                  // O field vem em notação dotted compatível com
+                  // react-hook-form (ex: "attachments[0].submerged_force").
+                  // O value já está em SI (Newtons, metros).
+                  setValue(
+                    field as Parameters<typeof setValue>[0],
+                    value as Parameters<typeof setValue>[1],
+                    { shouldValidate: true, shouldDirty: true },
+                  )
+                }}
               />
             </CardContent>
           </Card>
@@ -864,6 +876,7 @@ function PlotArea({
   attachments,
   seabedSlopeRad,
   segments,
+  onApplyChange,
 }: {
   isFetching: boolean
   result?: SolverResult
@@ -874,6 +887,8 @@ function PlotArea({
     category?: 'Wire' | 'StuddedChain' | 'StudlessChain' | 'Polyester' | null
     line_type?: string | null
   }>
+  /** F5.7.4 — callback do botão "Aplicar" no card de diagnósticos. */
+  onApplyChange?: (field: string, value: number) => void
 }) {
   if (!previewReady && !result) {
     return (
@@ -904,24 +919,50 @@ function PlotArea({
   const hasGeom = (result.coords_x?.length ?? 0) > 1
   if (!hasGeom) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+      <div className="flex h-full flex-col items-center justify-center gap-3 overflow-y-auto p-4 text-center">
         <AlertCircle className="h-6 w-6 text-danger" />
-        <p className="text-sm font-medium text-danger">Sem geometria calculada</p>
-        {result.message && (
-          <p className="max-w-md text-xs text-muted-foreground">
-            {result.message}
-          </p>
-        )}
+        <p className="text-sm font-medium text-danger">
+          Sem geometria calculada
+        </p>
+        {/* F5.7.4 — card de diagnósticos com sugestões. Quando não há
+            geometria, este card substitui a mensagem texto solta. */}
+        <div className="w-full max-w-2xl text-left">
+          <SolverDiagnosticsCard
+            result={result}
+            onApplyChange={onApplyChange}
+          />
+        </div>
+        {/* Mensagem fallback só quando NÃO houver diagnósticos estruturados */}
+        {result.message &&
+          ((result as { diagnostics?: unknown[] }).diagnostics?.length ?? 0) === 0 && (
+            <p className="max-w-md text-xs text-muted-foreground">
+              {result.message}
+            </p>
+          )}
       </div>
     )
   }
   return (
-    <CatenaryPlot
-      result={result}
-      attachments={attachments}
-      seabedSlopeRad={seabedSlopeRad}
-      segments={segments}
-    />
+    <div className="flex h-full flex-col gap-2">
+      {/* F5.7.4 — diagnósticos warning aparecem ACIMA do plot pra
+          chamar atenção sem cobrir o gráfico */}
+      {((result as { diagnostics?: unknown[] }).diagnostics?.length ?? 0) > 0 && (
+        <div className="shrink-0 px-1">
+          <SolverDiagnosticsCard
+            result={result}
+            onApplyChange={onApplyChange}
+          />
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
+        <CatenaryPlot
+          result={result}
+          attachments={attachments}
+          seabedSlopeRad={seabedSlopeRad}
+          segments={segments}
+        />
+      </div>
+    </div>
   )
 }
 

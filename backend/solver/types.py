@@ -529,6 +529,26 @@ class SolverResult(BaseModel):
     depth_at_anchor: float = 0.0
     depth_at_fairlead: float = 0.0
 
+    # --- Validação física pós-solve (F5.7.3) ---
+    # Lista de boias cujo corpo (após aplicar tether/pendant) ficou ACIMA
+    # da superfície da água. Fisicamente, uma boia de superfície flutua
+    # em y=0 — não consegue voar acima da água. Quando isso ocorre, o
+    # empuxo configurado é grande demais pra geometria do caso. O solver
+    # ainda devolve a geometria (CONVERGED) pra inspeção visual, mas
+    # marca aqui pra UI alertar e para o engenheiro reduzir o empuxo
+    # ou aumentar T_fl/clump. Cada item é dict com keys: index (0-based),
+    # name, height_above_surface_m.
+    surface_violations: list[dict] = Field(default_factory=list)
+
+    # --- Diagnósticos estruturados (F5.7.4) ---
+    # Lista de avisos/erros do solver em formato estruturado, com
+    # sugestões de correção que a UI pode renderizar como botões
+    # "Aplicar". Formato: SolverDiagnostic em backend/solver/diagnostics.py.
+    # Vazio quando o caso converge limpo. Para erros, SolverResult vem
+    # com status INVALID_CASE e ESTE campo descreve o problema com
+    # sugestão concreta (substitui mensagens texto soltas).
+    diagnostics: list[dict] = Field(default_factory=list)
+
 
 # ───────────────────────────────────────────────────────────────────────
 # F5.4 — Tipos para mooring system multi-linha

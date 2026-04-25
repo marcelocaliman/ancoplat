@@ -1820,6 +1820,32 @@ export interface components {
              * @default 0
              */
             depth_at_fairlead: number;
+            /**
+             * Surface Violations
+             * @description Lista de boias cujo corpo ficou ACIMA da superfície da água.
+             *     Cada item: { index: number; name: string; height_above_surface_m: number }.
+             */
+            surface_violations: Array<{
+                index: number
+                name: string
+                height_above_surface_m: number
+            }>;
+            /**
+             * Diagnostics
+             * @description Lista de diagnósticos estruturados (F5.7.4) com sugestões de correção.
+             */
+            diagnostics: Array<{
+                code: string
+                severity: 'error' | 'warning'
+                title: string
+                cause: string
+                suggestion: string
+                suggested_changes: Array<{
+                    field: string
+                    value: number
+                    label: string
+                }>
+            }>;
         };
         /**
          * SystemLineSpec

@@ -21,6 +21,13 @@ from typing import Optional, Sequence
 
 from . import SOLVER_VERSION
 from .attachment_resolver import resolve_attachments
+from .diagnostics import (
+    D004_buoy_above_surface,
+    D006_cable_too_short,
+    D900_generic_nonconvergence,
+    SolverDiagnostic,
+    diagnostic_from_exception,
+)
 from .elastic import solve_elastic_iterative
 from .laid_line import solve_laid_line
 from .multi_segment import solve_multi_segment
@@ -271,8 +278,24 @@ def solve(
                 MBL=segment.MBL,
             )
     except ValueError as exc:
-        # Erros físicos previsíveis — incrementamos com sugestões concretas
-        # de correção (em vez de só "INVALID_CASE: <texto técnico>").
+        # Erros físicos previsíveis — F5.7.4 extrai diagnóstico
+        # estruturado quando a exceção é SolverDiagnosticError, ou usa
+        # heurística texto-base como fallback.
+        diag = diagnostic_from_exception(exc)
+        if diag is None:
+            # Tenta inferir um diagnóstico simples a partir da mensagem
+            raw = str(exc)
+            if (
+                "lâmina d'água" in raw.lower()
+                or "linha mais curta" in raw.lower()
+                or "fairlead inalcanç" in raw.lower()
+            ):
+                diag = D006_cable_too_short(
+                    cable_length=segment.length,
+                    water_depth=boundary.h,
+                )
+            else:
+                diag = D900_generic_nonconvergence(raw_message=raw)
         friendly = _friendly_invalid_message(str(exc), segment, boundary)
         return SolverResult(
             status=ConvergenceStatus.INVALID_CASE,
@@ -280,6 +303,7 @@ def solve(
             water_depth=boundary.h,
             startpoint_depth=boundary.startpoint_depth,
             solver_version=SOLVER_VERSION,
+            diagnostics=[diag.model_dump()],
         )
     except Exception as exc:  # noqa: BLE001
         # Erros numéricos (overflow, div/0) caem aqui.
@@ -316,6 +340,61 @@ def solve(
     else:
         uplift_severity = "critical"
 
+    # F5.7.3 — detecta boias que ficaram ACIMA da superfície da água.
+    # Convenção solver: y=0 na âncora, y=h no fairlead (superfície),
+    # com fairlead a startpoint_depth da superfície. Surface y_solver =
+    # h - startpoint_depth. Se y_solver_da_boia + tether > surface, a
+    # boia "voou" — geometria fisicamente impossível com boia real.
+    surface_violations: list[dict] = []
+    if (
+        result.status == ConvergenceStatus.CONVERGED
+        and resolved_attachments
+        and result.coords_y
+        and result.segment_boundaries
+    ):
+        surface_y_solver = boundary.h - boundary.startpoint_depth
+        for idx, att in enumerate(resolved_attachments):
+            if att.kind != "buoy" or att.position_index is None:
+                continue
+            j = att.position_index + 1  # junção = boundary[position_index + 1]
+            if j >= len(result.segment_boundaries):
+                continue
+            coord_idx = result.segment_boundaries[j]
+            if coord_idx >= len(result.coords_y):
+                continue
+            cable_y = result.coords_y[coord_idx]
+            tether = att.tether_length or 0.0
+            # Boia: corpo está ACIMA do ponto de attachment pelo
+            # comprimento do pendant (convenção da UI). Se o cabo
+            # já está acima da superfície, mesmo sem tether o corpo
+            # estaria fora da água.
+            body_y_solver = cable_y + tether
+            height_above = body_y_solver - surface_y_solver
+            if height_above > 0.5:  # tolerância de 0.5m pra ruído numérico
+                surface_violations.append({
+                    "index": idx,
+                    "name": att.name or f"Boia #{idx + 1}",
+                    "height_above_surface_m": round(height_above, 2),
+                })
+
+    # F5.7.4 — gera diagnósticos D004 (warning) para cada violação
+    # de superfície. Popula `result.diagnostics` em paralelo a
+    # `surface_violations` (que mantemos por compatibilidade com a
+    # banner do plot).
+    diagnostics_list: list[dict] = []
+    if surface_violations:
+        for v in surface_violations:
+            buoy_idx = v["index"]
+            if buoy_idx < len(resolved_attachments):
+                att = resolved_attachments[buoy_idx]
+                diag = D004_buoy_above_surface(
+                    buoy_index=buoy_idx,
+                    buoy_name=v["name"],
+                    height_above_m=v["height_above_surface_m"],
+                    submerged_force_n=att.submerged_force,
+                )
+                diagnostics_list.append(diag.model_dump())
+
     result = result.model_copy(update={
         "water_depth": boundary.h,
         "startpoint_depth": boundary.startpoint_depth,
@@ -323,7 +402,27 @@ def solve(
         "depth_at_anchor": boundary.h,
         "depth_at_fairlead": depth_at_fairlead,
         "anchor_uplift_severity": uplift_severity,
+        "surface_violations": surface_violations,
+        "diagnostics": diagnostics_list,
     })
+
+    # Se houver violations, anexa um aviso ao final da mensagem
+    # (status continua CONVERGED — a geometria está matemáticamente
+    # correta para os F_b configurados; só a INTERPRETAÇÃO física
+    # é problemática).
+    if surface_violations:
+        viol_str = ", ".join(
+            f"{v['name']} (+{v['height_above_surface_m']:.1f}m acima da superfície)"
+            for v in surface_violations
+        )
+        warning_msg = (
+            f" ⚠ AVISO: {len(surface_violations)} boia(s) com corpo "
+            f"ACIMA da superfície da água ({viol_str}). Boias reais "
+            "não conseguem flutuar acima da água — o empuxo configurado "
+            "é maior do que a geometria suporta. Reduza o empuxo da boia, "
+            "aumente T_fl, ou compense com clump weight."
+        )
+        result = result.model_copy(update={"message": result.message + warning_msg})
 
     # Pós-classificação (Camada 7 + alert_level da Seção 5 Documento A).
     if result.status == ConvergenceStatus.CONVERGED:

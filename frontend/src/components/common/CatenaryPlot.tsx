@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LineAttachment, SolverResult } from '@/api/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useThemeStore, resolveTheme } from '@/store/theme'
@@ -280,6 +280,16 @@ export function CatenaryPlot({
     : { width: '100%', height }
   const theme = resolveTheme(useThemeStore((s) => s.theme))
 
+  // Hover highlight bidirecional (legenda ↔ traço): quando o usuário
+  // passa o mouse sobre um chip da legenda OU sobre um segmento no plot,
+  // aquele segmento "acende" (linha mais grossa) e os demais ficam
+  // dimmed para reforçar o foco. Só aplicável em multi-segmento.
+  const [hoveredUserIdx, setHoveredUserIdx] = useState<number | null>(null)
+  // Mapeamento traceIndex (curveNumber do Plotly) → userIdx do segmento
+  // do form. Ref em vez de state pra não disparar re-render quando o
+  // useMemo de data atualiza (já estamos no mesmo ciclo).
+  const traceUserIdxRef = useRef<Array<number | null>>([])
+
   // Mede o canvas do plot para que os ícones SVG (fairlead, âncora,
   // boia, clump) tenham tamanho **constante em pixels** independente do
   // range dos eixos. Sem isso, em catenárias longas (X grande) os
@@ -379,18 +389,35 @@ export function CatenaryPlot({
     const allGrounded =
       (result.total_grounded_length ?? 0) > 0 &&
       (result.total_suspended_length ?? 0) < 1e-6
+    // F5.7.1 — para casos com arches no grounded (boia levantando o
+    // cabo no meio da zona apoiada), `td > 0 && sx <= td` é insuficiente:
+    // pontos no PICO do arco têm sx < td mas y_solver > seabed (não estão
+    // apoiados). Detectamos grounded ponto-a-ponto por proximidade ao
+    // seabed line (sy ≈ m·sx).
+    const m = Math.tan(seabedSlopeRad)
+    // Tolerância: 1% da water_depth ou 0.5m, o que for maior. Suficiente
+    // pra discriminar pontos colados no seabed dos picos dos arches
+    // (que tipicamente medem 0.5–5m em catenárias offshore reais).
+    const yTol = Math.max(0.5, (waterDepth || 1) * 0.01)
     for (let i = 0; i < xs.length; i += 1) {
       const sx = xs[i]!
       const sy = ys[i]!
       plotX.push(Xtotal - sx)
       plotY.push(sy - waterDepth)
       tensions.push(ts[i]!)
-      // grounded se: (a) caso degenerado horizontal (laid line); ou
-      // (b) ponto antes do touchdown no frame solver. F5.3.x: removemos
-      // o filtro `sy < 0.01` (que assumia seabed horizontal) — em rampa
-      // os pontos grounded estão sobre y_solver = m·sx, não em y=0.
+      // F5.7.1 — `sy ≈ m·sx`: ponto está sobre a rampa (apoiado).
+      // Para slope=0, isso é simplesmente `sy ≈ 0`. Substitui o teste
+      // antigo `sx ≤ td` que era incorreto na presença de arches.
+      const seabedYLocal = m * sx
+      const isOnSeabedByY = Math.abs(sy - seabedYLocal) < yTol
+      // Sanity: também precisa estar antes (ou aproximadamente em) do
+      // touchdown principal — depois do main_td, o cabo entra no
+      // suspended principal (não pode estar grounded). Para cases sem
+      // touchdown (td=0), nenhum ponto está apoiado a menos que seja
+      // laid line.
+      const beforeMainTd = td > 0 && sx <= td + 1e-6
       onGround.push(
-        allGrounded || (td > 0 && sx <= td + 1e-6),
+        allGrounded || (beforeMainTd && isOnSeabedByY),
       )
     }
     plotX.reverse()
@@ -398,7 +425,7 @@ export function CatenaryPlot({
     tensions.reverse()
     onGround.reverse()
     return { plotX, plotY, tensions, onGround }
-  }, [xs, ys, ts, td, Xtotal, waterDepth, result.total_grounded_length, result.total_suspended_length])
+  }, [xs, ys, ts, td, Xtotal, waterDepth, seabedSlopeRad, result.total_grounded_length, result.total_suspended_length])
 
   // Ranges para definir layout/ticks
   const ranges = useMemo(() => {
@@ -417,9 +444,17 @@ export function CatenaryPlot({
 
   const data = useMemo(() => {
     const traces: Plotly.Data[] = []
+    // Acumula em paralelo qual user-segment cada trace representa.
+    // null para traces que não correspondem a nenhum segmento (água,
+    // seabed, fairlead/âncora, attachments). Sincronizado com `traces`.
+    const userIdxList: Array<number | null> = []
+    const pushTrace = (t: Plotly.Data, uIdx: number | null = null) => {
+      traces.push(t)
+      userIdxList.push(uIdx)
+    }
 
     // ── Faixa "água" (entre superfície y=0 e seabed y=-water_depth) ──
-    traces.push({
+    pushTrace({
       type: 'scatter',
       mode: 'lines',
       x: [ranges.xRange[0], ranges.xRange[1], ranges.xRange[1], ranges.xRange[0]],
@@ -432,7 +467,7 @@ export function CatenaryPlot({
     })
 
     // ── Linha da superfície (y=0) ──
-    traces.push({
+    pushTrace({
       type: 'scatter',
       mode: 'lines',
       x: [ranges.xRange[0], ranges.xRange[1]],
@@ -455,7 +490,7 @@ export function CatenaryPlot({
     const seabedXHi = ranges.xRange[1]!
     const seabedYLo = seabedY(seabedXLo)
     const seabedYHi = seabedY(seabedXHi)
-    traces.push({
+    pushTrace({
       type: 'scatter',
       mode: 'lines',
       x: [seabedXLo, seabedXHi, seabedXHi, seabedXLo],
@@ -466,7 +501,7 @@ export function CatenaryPlot({
       hoverinfo: 'skip',
       showlegend: false,
     })
-    traces.push({
+    pushTrace({
       type: 'scatter',
       mode: 'lines',
       x: [seabedXLo, seabedXHi],
@@ -482,7 +517,7 @@ export function CatenaryPlot({
 
     // ── Linha de mergulho do fairlead (vertical da superfície ao fairlead) ──
     if (startpointDepth > 0.5) {
-      traces.push({
+      pushTrace({
         type: 'scatter',
         mode: 'lines',
         x: [0, 0],
@@ -551,22 +586,28 @@ export function CatenaryPlot({
           labelParts.push(CATEGORY_STYLE[meta.category]!.label)
         }
         const traceName = labelParts.join(' · ')
-        traces.push({
+        // Hover highlight: este segmento "acende" (largura ↑) quando é
+        // o user-segment hovereado; outros user-segments ficam dimmed
+        // (opacity ↓) pra criar contraste e direcionar o foco.
+        const isHovered = hoveredUserIdx === userIdx
+        const isOther = hoveredUserIdx != null && hoveredUserIdx !== userIdx
+        pushTrace({
           type: 'scatter',
           mode: 'lines',
           x: sx,
           y: sy,
           line: {
             color: segPalette[userIdx % segPalette.length]!,
-            width: catStyle.width,
+            width: isHovered ? catStyle.width * 1.7 : catStyle.width,
             dash: catStyle.dash,
           },
+          opacity: isOther ? 0.3 : 1,
           name: traceName,
           text: st.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
           showlegend: false, // legenda HTML dedupa por user-segment
           hovertemplate:
             `${traceName}<br>x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>`,
-        })
+        }, userIdx)
       }
 
       // Overlay do trecho apoiado em vermelho (sobrepõe a cor do
@@ -574,25 +615,45 @@ export function CatenaryPlot({
       // depois dos traces dos segmentos para ficar por cima na ordem
       // de empilhamento. Sem touchdown, onGround é tudo false e nada
       // é renderizado.
-      const gXm: number[] = []
-      const gYm: number[] = []
-      const gTm: number[] = []
+      //
+      // F5.7.1 — quando o trecho apoiado tem GAPS (e.g., um arco de
+      // boia no meio que levanta o cabo), inserimos `null` entre as
+      // zonas para que Plotly QUEBRE a linha. Sem isso, plotly
+      // conecta as zonas com uma reta horizontal por baixo do arco,
+      // criando um overlay vermelho falso embaixo da seção lifted.
+      const gXm: (number | null)[] = []
+      const gYm: (number | null)[] = []
+      const gTm: (number | null)[] = []
+      let prevWasGrounded = false
       for (let i = 0; i < curve.plotX.length; i += 1) {
         if (curve.onGround[i]) {
           gXm.push(curve.plotX[i]!)
           gYm.push(curve.plotY[i]!)
           gTm.push(curve.tensions[i]!)
+          prevWasGrounded = true
+        } else if (prevWasGrounded) {
+          // Saiu da zona apoiada — insere null pra quebrar a linha
+          gXm.push(null)
+          gYm.push(null)
+          gTm.push(null)
+          prevWasGrounded = false
         }
       }
       if (gXm.length > 0) {
-        traces.push({
+        // Overlay do trecho apoiado: dimmed quando outro segmento está
+        // sendo hovereado pra não competir com o destaque do segmento.
+        pushTrace({
           type: 'scatter',
           mode: 'lines',
           x: gXm,
           y: gYm,
           line: { color: palette.grounded, width: 4 },
+          opacity: hoveredUserIdx != null ? 0.5 : 1,
+          connectgaps: false,
           name: 'Trecho apoiado',
-          text: gTm.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
+          text: gTm.map((t) =>
+            t == null ? '' : `|T| = ${(t / 1000).toFixed(1)} kN`,
+          ),
           hovertemplate:
             'Apoiado<br>x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>',
         })
@@ -621,7 +682,7 @@ export function CatenaryPlot({
         suspendedT.push(groundedT[0]!)
       }
       if (suspendedX.length > 0) {
-        traces.push({
+        pushTrace({
           type: 'scatter',
           mode: 'lines',
           x: suspendedX,
@@ -634,7 +695,7 @@ export function CatenaryPlot({
         })
       }
       if (groundedX.length > 0) {
-        traces.push({
+        pushTrace({
           type: 'scatter',
           mode: 'lines',
           x: groundedX,
@@ -653,7 +714,7 @@ export function CatenaryPlot({
     // markers transparentes para o hover funcionar (Plotly não captura
     // hover em images). showlegend=false: a legenda usa os SVGs num
     // componente HTML separado, não os markers Plotly.
-    traces.push({
+    pushTrace({
       type: 'scatter',
       mode: 'markers',
       x: [0],
@@ -665,7 +726,7 @@ export function CatenaryPlot({
         `Fairlead<br>x = 0<br>y = ${fairleadY.toFixed(2)} m<br>` +
         `T_fl = ${(result.fairlead_tension / 1000).toFixed(1)} kN<extra></extra>`,
     })
-    traces.push({
+    pushTrace({
       type: 'scatter',
       mode: 'markers',
       x: [Xtotal],
@@ -762,7 +823,7 @@ export function CatenaryPlot({
         // Linha do pendant (cabo de conexão) — só desenhada quando
         // tether_length > 0; conecta o ponto na linha ao corpo.
         if (tetherLen > 0) {
-          traces.push({
+          pushTrace({
             type: 'scatter',
             mode: 'lines',
             x: [px, px],
@@ -781,7 +842,7 @@ export function CatenaryPlot({
         }
       }
       if (buoyX.length > 0) {
-        traces.push({
+        pushTrace({
           type: 'scatter',
           mode: 'markers',
           x: buoyX,
@@ -794,7 +855,7 @@ export function CatenaryPlot({
         })
       }
       if (clumpX.length > 0) {
-        traces.push({
+        pushTrace({
           type: 'scatter',
           mode: 'markers',
           x: clumpX,
@@ -815,7 +876,7 @@ export function CatenaryPlot({
       // marcador acompanha a inclinação.
       const tdPlotX = Xtotal - td
       const tdPlotY = seabedY(tdPlotX)
-      traces.push({
+      pushTrace({
         type: 'scatter',
         mode: 'markers',
         x: [tdPlotX],
@@ -832,6 +893,11 @@ export function CatenaryPlot({
       })
     }
 
+    // Persiste o map traceIdx → userIdx pro handler onHover do Plotly.
+    // O ref é lido do callback onHover (estável), enquanto o data fica
+    // no rendering do Plot (passado por value). Mantemos os dois em sync
+    // ao escrever aqui no mesmo ciclo do useMemo.
+    traceUserIdxRef.current = userIdxList
     return traces
   }, [
     curve,
@@ -847,7 +913,9 @@ export function CatenaryPlot({
     result.segment_boundaries,
     attachments,
     seabedSlopeRad,
+    segments,
     theme,
+    hoveredUserIdx,
   ])
 
   // ── Imagens SVG sobrepostas (fairlead + âncora + attachments) ──
@@ -1074,6 +1142,24 @@ export function CatenaryPlot({
     [],
   )
 
+  // Hover do Plotly: pega o curveNumber do trace sob o mouse e mapeia
+  // pelo ref pra encontrar o user-segment correspondente. Set apenas
+  // se realmente é um trace de segmento (userIdx != null) — passar o
+  // mouse pelo overlay grounded ou markers de attachment não dispara
+  // highlight de segmento.
+  const handlePlotHover = useCallback(
+    (e: { points?: Array<{ curveNumber?: number }> }) => {
+      const cn = e.points?.[0]?.curveNumber
+      if (cn == null) return
+      const idx = traceUserIdxRef.current[cn]
+      if (idx != null) setHoveredUserIdx(idx)
+    },
+    [],
+  )
+  const handlePlotUnhover = useCallback(() => {
+    setHoveredUserIdx(null)
+  }, [])
+
   // Composição da legenda HTML: detecta quais traces da linha aparecem
   // no plot atual. SVGs de fairlead e âncora estão sempre presentes
   // (ícones via layout.images). Touchdown só quando td > 0.5.
@@ -1111,6 +1197,7 @@ export function CatenaryPlot({
           label: labelParts.join(' · '),
           dash: catStyle.dash,
           width: catStyle.width,
+          userIdx: k,
         })
       }
       // Mesmo em multi-segmento, mostra o chip "Trecho apoiado" quando
@@ -1166,6 +1253,17 @@ export function CatenaryPlot({
     return items
   }, [result, palette, theme, attachments, segments])
 
+  // F5.7.3 — banner de aviso quando há boias acima da superfície.
+  // Solver detecta no post-process e expõe em result.surface_violations.
+  const surfaceViolations =
+    (result as unknown as {
+      surface_violations?: Array<{
+        index: number
+        name: string
+        height_above_surface_m: number
+      }>
+    }).surface_violations ?? []
+
   return (
     <div ref={plotContainerRef} className="relative h-full w-full">
       {/* Legenda HTML flutuante no topo do plot, com SVGs inline para
@@ -1173,10 +1271,35 @@ export function CatenaryPlot({
       <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center px-2">
         <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-md border border-border/40 bg-background/70 px-3 py-1 text-[11px] backdrop-blur-sm">
           {legendItems.map((item, i) => (
-            <LegendChip key={i} item={item} />
+            <LegendChip
+              key={i}
+              item={item}
+              hoveredUserIdx={hoveredUserIdx}
+              onHoverChange={setHoveredUserIdx}
+            />
           ))}
         </div>
       </div>
+      {/* Banner de aviso de boia voadora — sobreposto ao topo do plot,
+          abaixo da legenda. Cor amarelo/âmbar (warning, não error). */}
+      {surfaceViolations.length > 0 && (
+        <div className="pointer-events-none absolute inset-x-0 top-9 z-10 flex justify-center px-2">
+          <div className="pointer-events-auto max-w-[90%] rounded-md border border-amber-500/50 bg-amber-500/15 px-3 py-1.5 text-[11px] text-amber-200 backdrop-blur-sm shadow-lg">
+            <span className="font-semibold">
+              ⚠ {surfaceViolations.length === 1 ? 'Boia' : 'Boias'} acima da
+              superfície:
+            </span>{' '}
+            {surfaceViolations
+              .map(
+                (v) =>
+                  `${v.name} (+${v.height_above_surface_m.toFixed(1)} m)`,
+              )
+              .join(', ')}
+            . Boias reais não flutuam acima da água — reduza o empuxo,
+            aumente T_fl ou compense com clump.
+          </div>
+        </div>
+      )}
       <Suspense fallback={<Skeleton style={plotStyle} />}>
         <Plot
           data={data}
@@ -1184,6 +1307,8 @@ export function CatenaryPlot({
           config={config}
           style={plotStyle}
           useResizeHandler
+          onHover={handlePlotHover}
+          onUnhover={handlePlotUnhover}
         />
       </Suspense>
     </div>
@@ -1197,16 +1322,40 @@ interface LegendItem {
   svg?: string
   dash?: string
   width?: number
+  /**
+   * Para chips de segmento da linha (multi-seg): permite hover highlight
+   * bidirecional com o trace correspondente. `null` para chips estáticos
+   * (fairlead, âncora, touchdown, etc).
+   */
+  userIdx?: number
 }
 
-function LegendChip({ item }: { item: LegendItem }) {
+function LegendChip({
+  item,
+  hoveredUserIdx,
+  onHoverChange,
+}: {
+  item: LegendItem
+  hoveredUserIdx: number | null
+  onHoverChange: (idx: number | null) => void
+}) {
+  const isInteractive = item.userIdx != null
+  const isActive = isInteractive && hoveredUserIdx === item.userIdx
+  const isDimmed =
+    isInteractive && hoveredUserIdx != null && hoveredUserIdx !== item.userIdx
   return (
-    <span className="flex items-center gap-1.5">
+    <span
+      onMouseEnter={isInteractive ? () => onHoverChange(item.userIdx!) : undefined}
+      onMouseLeave={isInteractive ? () => onHoverChange(null) : undefined}
+      className={`flex items-center gap-1.5 transition-opacity ${
+        isInteractive ? 'cursor-pointer' : ''
+      } ${isDimmed ? 'opacity-40' : ''} ${isActive ? 'font-semibold' : ''}`}
+    >
       {item.kind === 'line' && (
         <LegendLineSwatch
           color={item.color ?? 'currentColor'}
           dash={item.dash ?? 'solid'}
-          width={item.width ?? 3}
+          width={isActive ? (item.width ?? 3) * 1.4 : item.width ?? 3}
         />
       )}
       {item.kind === 'diamond' && (

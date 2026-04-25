@@ -32,6 +32,7 @@ import {
 } from '@/api/endpoints'
 import type { ExecutionOutput, SolverResult } from '@/api/types'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
+import { SolverDiagnosticsCard } from '@/components/common/SolverDiagnosticsCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { SensitivityPanel } from '@/components/common/SensitivityPanel'
 import {
@@ -416,6 +417,12 @@ export function CaseDetailPage() {
                     pending={solveMutation.isPending}
                   />
                 )}
+                {/* F5.7.4 — diagnósticos do solver no topo, antes do plot.
+                    No CaseDetailPage não há form (só visualização), então
+                    onApplyChange não é fornecido — botões "Aplicar" não
+                    aparecem aqui. Para aplicar sugestões, o usuário vai
+                    pra página de edição. */}
+                <SolverDiagnosticsCard result={result} />
                 <Card className="mb-4">
                   <CardContent className="h-[480px] p-2">
                     <CatenaryPlot
