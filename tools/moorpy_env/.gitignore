@@ -1,0 +1,8 @@
+# Bench env é regenerado a partir do README e de requirements-bench.txt.
+# Não versionamos venv (binários nativos por OS) nem o clone do MoorPy
+# (third-party com sua própria licença e tamanho considerável).
+venv/
+MoorPy/
+__pycache__/
+*.pyc
+.pytest_cache/
