@@ -116,10 +116,31 @@ def test_no_raise_a4_mu_zero():
     assert r.status == ConvergenceStatus.CONVERGED
 
 
-def test_raise_a5_endpoint_grounded_false():
-    """solver.py L124: endpoint_grounded=False (anchor uplift fora do escopo MVP v1)."""
-    bc = _bc(endpoint_grounded=False)
+def test_raise_a5_endpoint_grounded_false_sem_endpoint_depth_rejeita_no_pydantic():
+    """
+    Fase 7: validação cruzada Pydantic — endpoint_grounded=False sem
+    endpoint_depth é rejeitado no schema, ANTES do solver (falha rápido,
+    mensagem clara).
+    """
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError, match="endpoint_depth é obrigatório"):
+        _bc(endpoint_grounded=False)
+
+
+def test_raise_a5_endpoint_grounded_false_com_endpoint_depth_invalido_uplift_diagnostic():
+    """
+    Fase 7: solver pré-Commit-3 retorna INVALID_CASE quando recebe
+    endpoint_grounded=False (NotImplementedError interno). Após Commit 3
+    (dispatcher uplift) este teste será atualizado para expectar CONVERGED.
+
+    Validação de domínio (endpoint_depth=h+ε ou ≤0) é Pydantic; aqui
+    cobrimos um caso DENTRO do domínio que o solver ainda não suporta.
+    """
+    bc = _bc(endpoint_grounded=False, endpoint_depth=150.0)  # h=200, uplift=50m
     r = solve([_seg()], bc)
+    # Pré-Commit-3: NotImplementedError interno → INVALID_CASE.
+    # Pós-Commit-3 (dispatcher uplift): CONVERGED. Quando F7 fechar,
+    # atualizar este teste para `assert r.status == CONVERGED`.
     assert r.status == ConvergenceStatus.INVALID_CASE
     assert "endpoint_grounded" in r.message or "uplift" in r.message.lower() or "âncora" in r.message.lower()
 

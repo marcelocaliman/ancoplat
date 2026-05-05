@@ -84,10 +84,30 @@ def test_solve_caso_rompido_retorna_422(client: TestClient) -> None:
     assert body["error"]["detail"]["alert_level"] == "broken"
 
 
-def test_solve_ancora_elevada_retorna_422(client: TestClient) -> None:
-    """endpoint_grounded=false → INVALID_CASE."""
+def test_create_case_ancora_elevada_sem_endpoint_depth_retorna_422(client: TestClient) -> None:
+    """
+    Fase 7: POST /cases com endpoint_grounded=false sem endpoint_depth
+    → 422 (validação Pydantic falha rápido antes do solver).
+    """
     payload = deepcopy(BC01_LIKE_INPUT)
     payload["boundary"]["endpoint_grounded"] = False
+    # Sem endpoint_depth — Pydantic deve rejeitar.
+    resp = client.post("/api/v1/cases", json=payload)
+    assert resp.status_code == 422
+
+
+def test_solve_ancora_elevada_pre_commit3_retorna_422(client: TestClient) -> None:
+    """
+    Fase 7 / pré-Commit-3: caso com endpoint_grounded=false +
+    endpoint_depth válido é criado (201) mas solve interno ainda
+    bloqueado por NotImplementedError → 422 INVALID_CASE.
+
+    Pós-Commit-3 (dispatcher uplift), este teste será atualizado
+    para expectar 200 + CONVERGED.
+    """
+    payload = deepcopy(BC01_LIKE_INPUT)
+    payload["boundary"]["endpoint_grounded"] = False
+    payload["boundary"]["endpoint_depth"] = 250.0  # h=300 → uplift=50m
     case_id = _create_case(client, payload)
     resp = client.post(f"/api/v1/cases/{case_id}/solve")
     assert resp.status_code == 422
