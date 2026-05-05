@@ -151,3 +151,94 @@
     }
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────
+ * F9 / Q7 — Print stylesheet A4 portrait para CaseDetailPage.
+ *
+ * Escopo: páginas que opt-in via classe `.print-area` no wrapper raiz
+ * do conteúdo a imprimir. Tudo fora dessa classe é escondido em
+ * @media print (sidebar, topbar, footer, botões de ação).
+ *
+ * Validação: Chrome/Safari DevTools → "Print preview" → A4 portrait.
+ * Conteúdo deve caber em ≤2 páginas para um caso típico, sem corte
+ * lateral do plot e com tabelas legíveis.
+ *
+ * Pendência v1.1+: print stylesheet de MooringSystemDetailPage (se
+ * houver demanda — Memorial PDF cobre a saída formal).
+ * ───────────────────────────────────────────────────────────────── */
+@media print {
+  /* Esconde shell (sidebar + topbar + footer disclaimer + botões de ação) */
+  body * {
+    visibility: hidden;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+  .print-area {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 0;
+    margin: 0;
+    background: white !important;
+    color: black !important;
+    overflow: visible !important;
+  }
+
+  /* Elementos explicitamente marcados para esconder na impressão.
+     Use em botões de ação ("Recalcular", "Exportar"), banners
+     interativos, command palette etc. */
+  .print-hide {
+    display: none !important;
+  }
+
+  /* Plot Plotly: largura fixa A4 (180mm = 210mm − margens),
+     altura proporcional. Evita quebra horizontal. */
+  .print-plot,
+  .js-plotly-plot {
+    width: 180mm !important;
+    max-width: 180mm !important;
+    height: auto !important;
+    page-break-inside: avoid;
+  }
+
+  /* Cards e tabelas: forçar contraste para impressão B&W */
+  .print-area .bg-card,
+  .print-area .bg-muted,
+  .print-area .bg-warning\/10,
+  .print-area .bg-primary\/10 {
+    background: white !important;
+    border: 1px solid #ccc !important;
+    color: black !important;
+  }
+  .print-area .text-muted-foreground {
+    color: #555 !important;
+  }
+  .print-area a {
+    color: black !important;
+    text-decoration: underline;
+  }
+  .print-area .text-warning,
+  .print-area .text-danger {
+    color: #b00 !important;
+  }
+  .print-area .text-success {
+    color: #060 !important;
+  }
+
+  /* Quebra de página: preferir manter cards inteiros */
+  .print-area > section,
+  .print-area .print-page-break-before {
+    page-break-before: always;
+  }
+  .print-area > * {
+    page-break-inside: avoid;
+  }
+
+  /* Página A4 portrait com margens razoáveis */
+  @page {
+    size: A4 portrait;
+    margin: 15mm 12mm;
+  }
+}
