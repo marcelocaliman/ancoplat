@@ -186,5 +186,91 @@
         "rtol_used": 1e-09
       }
     }
+  },
+  {
+    "vv_id": "VV-09",
+    "source": "manual (buoy V-eq invariant)",
+    "kind": "manual",
+    "rtol": 0.01,
+    "status": "converged",
+    "errors": {
+      "H_invariance": {
+        "rel": 0.0,
+        "rtol_used": 1e-06
+      },
+      "V_balance": {
+        "rel": 1.364215974041145e-07,
+        "rtol_used": 0.01
+      }
+    }
+  },
+  {
+    "vv_id": "VV-10",
+    "source": "manual (clump V-eq invariant)",
+    "kind": "manual",
+    "rtol": 0.01,
+    "status": "converged",
+    "errors": {
+      "H_invariance": {
+        "rel": 0.0,
+        "rtol_used": 1e-06
+      },
+      "V_balance": {
+        "rel": 2.5357017417309723e-08,
+        "rtol_used": 0.01
+      }
+    }
+  },
+  {
+    "vv_id": "VV-11",
+    "source": "manual (lifted arch H-invariance)",
+    "kind": "manual",
+    "rtol": 0.03,
+    "status": "converged",
+    "errors": {
+      "H_invariance": {
+        "rel": 0.027705990052232107,
+        "rtol_used": 0.03
+      }
+    }
+  },
+  {
+    "vv_id": "VV-12",
+    "source": "manual (equilibrium residual)",
+    "kind": "manual",
+    "rtol": 0.05,
+    "status": "converged",
+    "errors": {
+      "residual_normalized": {
+        "rel": 5.271929340781832e-10,
+        "rtol_used": 0.05
+      }
+    }
+  },
+  {
+    "vv_id": "VV-13",
+    "source": "manual (watchcircle 4-fold symmetry)",
+    "kind": "manual",
+    "rtol": 0.01,
+    "status": "converged",
+    "errors": {
+      "offset_magnitude_symmetry": {
+        "rel": 1.107365486640775e-08,
+        "rtol_used": 0.01
+      }
+    }
+  },
+  {
+    "vv_id": "VV-14",
+    "source": "BC-UP-01 (uplift baseline)",
+    "kind": "moorpy",
+    "rtol": 0.02,
+    "status": "converged",
+    "errors": {
+      "T_fl_horz_vs_FxB": {
+        "rel": 0.0008931613724141009,
+        "rtol_used": 0.02
+      }
+    }
   }
 ]
