@@ -1,0 +1,190 @@
+[
+  {
+    "vv_id": "VV-01",
+    "source": "BC-MOORPY-01",
+    "kind": "moorpy",
+    "rtol": 0.0001,
+    "status": "converged",
+    "errors": {
+      "fAH": {
+        "abs": 0.0,
+        "rtol_used": "1e-3 (abs)"
+      },
+      "fAV": {
+        "abs": 0.0,
+        "rtol_used": "1e-3 (abs)"
+      },
+      "fBH": {
+        "rel": 3.855854414024862e-08,
+        "rtol_used": 0.0001
+      },
+      "fBV": {
+        "rel": 6.371153002056657e-09,
+        "rtol_used": 0.0001
+      },
+      "LBot": {
+        "rel": 9.336021383963511e-09,
+        "rtol_used": 0.0001
+      }
+    }
+  },
+  {
+    "vv_id": "VV-02",
+    "source": "BC-MOORPY-02",
+    "kind": "moorpy",
+    "rtol": 0.0001,
+    "status": "converged",
+    "errors": {
+      "fAH": {
+        "rel": 3.8558542659903035e-08,
+        "rtol_used": 0.0001
+      },
+      "fAV": {
+        "abs": 0.0,
+        "rtol_used": "1e-3 (abs)"
+      },
+      "fBH": {
+        "rel": 3.8558542659903035e-08,
+        "rtol_used": 0.0001
+      },
+      "fBV": {
+        "rel": 6.371152023997488e-09,
+        "rtol_used": 0.0001
+      },
+      "LBot": {
+        "rel": 9.3360194367698e-09,
+        "rtol_used": 0.0001
+      }
+    }
+  },
+  {
+    "vv_id": "VV-03",
+    "source": "BC-MOORPY-08",
+    "kind": "moorpy",
+    "rtol": 0.02,
+    "status": "ill_conditioned",
+    "errors": {
+      "fAH": {
+        "rel": 0.004912594681552442,
+        "rtol_used": 0.02
+      },
+      "fAV": {
+        "rel": 0.01404573969657423,
+        "rtol_used": 0.02
+      },
+      "fBH": {
+        "rel": 0.004912594681552442,
+        "rtol_used": 0.02
+      },
+      "fBV": {
+        "rel": 0.004268028083518466,
+        "rtol_used": 0.02
+      },
+      "LBot": {
+        "abs": 0.0,
+        "rtol_used": "1e-3 (abs)"
+      }
+    }
+  },
+  {
+    "vv_id": "VV-04",
+    "source": "BC-MOORPY-09",
+    "kind": "moorpy",
+    "rtol": 0.0001,
+    "status": "ill_conditioned",
+    "errors": {
+      "fAH": {
+        "rel": 6.544891735866659e-07,
+        "rtol_used": 0.0001
+      },
+      "fAV": {
+        "rel": 1.6303323185687432e-06,
+        "rtol_used": 0.0001
+      },
+      "fBH": {
+        "rel": 6.544891735866659e-07,
+        "rtol_used": 0.0001
+      },
+      "fBV": {
+        "rel": 5.585262236008402e-07,
+        "rtol_used": 0.0001
+      },
+      "LBot": {
+        "abs": 0.0,
+        "rtol_used": "1e-3 (abs)"
+      }
+    }
+  },
+  {
+    "vv_id": "VV-05",
+    "source": "BC-MOORPY-04",
+    "kind": "moorpy",
+    "rtol": 0.01,
+    "status": "converged",
+    "errors": {
+      "fAH": {
+        "rel": 7.362060868859223e-09,
+        "rtol_used": 0.01
+      },
+      "fAV": {
+        "rel": 8.095066536262995e-09,
+        "rtol_used": 0.01
+      },
+      "fBH": {
+        "rel": 7.362060868859223e-09,
+        "rtol_used": 0.01
+      },
+      "fBV": {
+        "rel": 2.332096376161526e-09,
+        "rtol_used": 0.01
+      },
+      "LBot": {
+        "abs": 0.0,
+        "rtol_used": "1e-3 (abs)"
+      }
+    }
+  },
+  {
+    "vv_id": "VV-06",
+    "source": "synthesized (slope mirror)",
+    "kind": "internal",
+    "rtol": 0.001,
+    "status": "converged",
+    "errors": {
+      "T_fl_magnitude": {
+        "rel": 0.0,
+        "rtol_used": 0.001
+      }
+    }
+  },
+  {
+    "vv_id": "VV-07",
+    "source": "synthesized (3-seg analytical)",
+    "kind": "manual",
+    "rtol": 0.001,
+    "status": "converged",
+    "errors": {
+      "L_conservation": {
+        "rel": 0.0,
+        "rtol_used": 1e-09
+      },
+      "weight_balance": {
+        "rel": 0.0033033153053873684,
+        "rtol_used": 0.01
+      }
+    }
+  },
+  {
+    "vv_id": "VV-08",
+    "source": "synthesized (3-seg + slope=5\u00b0)",
+    "kind": "manual",
+    "rtol": 1e-09,
+    "status": "converged",
+    "errors": {
+      "L_conservation": {
+        "rel": 0.0,
+        "rtol_used": 1e-09
+      }
+    }
+  }
+]
