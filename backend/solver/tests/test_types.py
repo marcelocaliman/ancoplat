@@ -205,3 +205,70 @@ def test_boundary_payload_legacy_sem_startpoint_type_aceito():
     }
     bc = BoundaryConditions.model_validate(payload)
     assert bc.startpoint_type == "semisub"
+
+
+# ─── ProfileType + SolverResult.profile_type (Fase 4 / Q1) ─────────
+
+
+def test_profile_type_enum_tem_10_valores():
+    """Enum forward-compat com PT_0..PT_8 + PT_U (Fase 4 / Q1)."""
+    from backend.solver.types import ProfileType
+    expected = {"PT_0", "PT_1", "PT_2", "PT_3", "PT_4",
+                "PT_5", "PT_6", "PT_7", "PT_8", "PT_U"}
+    actual = {pt.value for pt in ProfileType}
+    assert actual == expected
+    assert len(ProfileType) == 10
+
+
+def test_solver_result_profile_type_default_none():
+    """SolverResult sem profile_type explícito → None (retro-compat)."""
+    from backend.solver.types import SolverResult, ConvergenceStatus
+    r = SolverResult(status=ConvergenceStatus.CONVERGED)
+    assert r.profile_type is None
+
+
+def test_solver_result_aceita_profile_type():
+    from backend.solver.types import SolverResult, ConvergenceStatus, ProfileType
+    r = SolverResult(
+        status=ConvergenceStatus.CONVERGED,
+        profile_type=ProfileType.PT_2,
+    )
+    assert r.profile_type == ProfileType.PT_2
+
+
+def test_solver_result_payload_legacy_sem_profile_type_aceito():
+    """SolverResult legado (pré-F4) deserializa com profile_type=None."""
+    from backend.solver.types import SolverResult
+    payload = {"status": "converged", "fairlead_tension": 100_000}
+    r = SolverResult.model_validate(payload)
+    assert r.profile_type is None
+
+
+# ─── confidence field no SolverDiagnostic (Fase 4 / Q7) ────────────
+
+
+def test_solver_diagnostic_default_confidence_high():
+    """SolverDiagnostic sem confidence → high (retro-compat)."""
+    from backend.solver.diagnostics import SolverDiagnostic
+    d = SolverDiagnostic(
+        code="TEST", severity="warning", title="t", cause="c",
+    )
+    assert d.confidence == "high"
+
+
+@pytest.mark.parametrize("conf", ["high", "medium", "low"])
+def test_solver_diagnostic_aceita_3_niveis_confidence(conf):
+    from backend.solver.diagnostics import SolverDiagnostic
+    d = SolverDiagnostic(
+        code="TEST", severity="info", title="t", cause="c", confidence=conf,
+    )
+    assert d.confidence == conf
+
+
+def test_solver_diagnostic_rejeita_confidence_invalido():
+    from backend.solver.diagnostics import SolverDiagnostic
+    with pytest.raises(ValidationError):
+        SolverDiagnostic(
+            code="TEST", severity="info", title="t", cause="c",
+            confidence="bogus",  # type: ignore[arg-type]
+        )

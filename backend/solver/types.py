@@ -49,6 +49,51 @@ class AlertLevel(str, Enum):
     BROKEN = "broken"
 
 
+class ProfileType(str, Enum):
+    """
+    Taxonomia de regimes catenários (Fase 4 / Q1) — espelha
+    `MoorPy/Catenary.py:147-163` (NREL, MIT-licensed).
+
+    Vocabulário FORWARD-COMPAT: enumera os 9 regimes do MoorPy + 1
+    extensão para multi-segmento com seabed inclinado (PT_U). Alguns
+    valores podem não ser atingíveis no AncoPlat MVP v1 (ex.: PT_4
+    requer anchor uplift, suportado apenas em Fase 7+) — ficam
+    reservados para forward-compat, mesmo padrão dos outros campos
+    reservados (ea_dynamic_beta, startpoint_offset_*).
+
+    Quando o classificador (`classify_profile_type`) não consegue
+    determinar o regime, retorna None (campo SolverResult.profile_type
+    é Optional).
+
+    Decisões caso-a-caso de mapeamento e divergências documentadas
+    em `docs/relatorio_F4_diagnostics.md` §3.
+
+    Casos:
+      PT_0 — linha inteira no seabed (laid line, F5.3.x)
+      PT_1 — nenhuma porção no seabed (catenária livre, fully suspended)
+      PT_2 — porção no seabed, tensão na âncora não-zero (com atrito)
+      PT_3 — porção no seabed, tensão na âncora = zero (μ saturado / sem atrito)
+      PT_4 — linha negativamente flutuante com seabed (RESERVADO p/ Fase 12)
+      PT_5 — linha em U totalmente slack (RESERVADO p/ Fase 7+)
+      PT_6 — linha completamente vertical (caso degenerado)
+      PT_7 — porção no seabed, seabed inclinado (caso F5.3 do AncoPlat)
+      PT_8 — linha apoiada no seabed inclinado (laid em rampa)
+      PT_U — extensão AncoPlat: ambos extremos fora do seabed, contato
+             intermediário, com slope (F5.3.y multi-segmento misto)
+    """
+
+    PT_0 = "PT_0"
+    PT_1 = "PT_1"
+    PT_2 = "PT_2"
+    PT_3 = "PT_3"
+    PT_4 = "PT_4"
+    PT_5 = "PT_5"
+    PT_6 = "PT_6"
+    PT_7 = "PT_7"
+    PT_8 = "PT_8"
+    PT_U = "PT_U"
+
+
 class CriteriaProfile(str, Enum):
     """
     Perfis de critério de utilização (Seção 5 do Documento A v2.2, resposta P-04).
@@ -682,6 +727,19 @@ class SolverResult(BaseModel):
     # sugestão concreta (substitui mensagens texto soltas).
     diagnostics: list[dict] = Field(default_factory=list)
 
+    # --- ProfileType taxonomy (Fase 4 / Q1) ---
+    # Classificação do regime catenário do solve. Espelha o vocabulário
+    # do MoorPy `Catenary.py:147-163` para cross-comparação. None quando
+    # o classificador não consegue determinar (ex.: case INVALID_CASE
+    # sem geometria), ou em SolverResults legados pré-Fase-4 sem o
+    # classificador rodado. Ver `backend/solver/profile_type.py`.
+    profile_type: Optional[ProfileType] = Field(
+        default=None,
+        description=(
+            "Regime catenário detectado (Fase 4). None se não classificável."
+        ),
+    )
+
 
 # ───────────────────────────────────────────────────────────────────────
 # F5.4 — Tipos para mooring system multi-linha
@@ -939,6 +997,7 @@ __all__ = [
     "MooringSystemResult",
     "PROFILE_LIMITS",
     "PlatformEquilibriumResult",
+    "ProfileType",
     "SeabedConfig",
     "SolutionMode",
     "SolverConfig",

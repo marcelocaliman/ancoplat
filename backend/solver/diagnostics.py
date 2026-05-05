@@ -41,6 +41,34 @@ warning = âmbar, info = azul/cinza.
 """
 
 
+ConfidenceLevel = Literal["high", "medium", "low"]
+"""
+Confiança do diagnóstico (Fase 4 / Q7).
+
+Critério de classificação (registrado no relatorio_F4_diagnostics.md):
+
+- **high**: violação determinística de premissa física ou matemática.
+  Sem ambiguidade — o diagnóstico SEMPRE é correto quando dispara.
+  Exemplos: EA ≤ 0 (impossibilidade matemática), μ < 0 (Coulomb requer
+  ≥ 0), startpoint_depth > h_at_fairlead (geometria inviável), boia
+  acima da superfície (boia real flutua em y=0, não voa).
+
+- **medium**: heurística calibrada com base empírica. O diagnóstico
+  pode ter falso positivo em casos extremos legítimos, mas captura
+  >90% dos cenários problemáticos típicos. Exemplos: P004 T_fl baixo
+  (regra de thumb), D008 safety margin (limite operacional negociável),
+  D013 atrito do catálogo (limiar 0.3 calibrado contra catálogo legacy).
+
+- **low**: pattern detection sem base teórica forte. RESERVADO — ainda
+  não temos diagnósticos nesta categoria. Quando aparecer, exigirá
+  justificativa explícita no docstring do builder.
+
+Default `high` mantém retro-compat: diagnósticos pré-Fase-4 não são
+heurísticos. Heurísticos novos declaram `confidence="medium"` no
+construtor.
+"""
+
+
 class SuggestedChange(BaseModel):
     """
     Uma mudança proposta para o usuário aceitar via botão "Aplicar".
@@ -91,6 +119,15 @@ class SolverDiagnostic(BaseModel):
         description=(
             "Caminhos dotted dos campos culpados (ex: 'attachments[0].submerged_force'). "
             "UI renderiza indicador visual em cada um."
+        ),
+    )
+    confidence: ConfidenceLevel = Field(
+        default="high",
+        description=(
+            "Fase 4 / Q7. Confiança no diagnóstico: high (determinístico), "
+            "medium (heurística calibrada), low (pattern detection — reservado). "
+            "Default 'high' mantém retro-compat. Critério detalhado no docstring "
+            "de ConfidenceLevel."
         ),
     )
 
