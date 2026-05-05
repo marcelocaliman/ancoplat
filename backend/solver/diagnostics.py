@@ -910,6 +910,114 @@ def D017_anchor_uplift_negligible(
 
 
 # =============================================================================
+# Diagnostics novos da Fase 8 — D018, D019 (AHV)
+# =============================================================================
+
+
+def D018_ahv_static_idealization(
+    *,
+    n_ahv: int,
+) -> SolverDiagnostic:
+    """
+    AHV (Anchor Handler Vessel) modelado como força estática — idealização.
+
+    **DECISÃO TÉCNICA ANTECIPADA registrada em CLAUDE.md** (seção
+    "Decisão fechada — Fase 8 antecipada"):
+
+      Análise estática de AHV é idealização — não substitui análise
+      dinâmica de instalação.
+
+    A operação real do AHV é dinâmica: rebocador se move, cabo oscila,
+    hidrodinâmica entra. Modelar como força lateral estática num ponto
+    da linha **é simplificação modelada explicitamente**.
+
+    DISPARA SEMPRE quando há ≥1 AHV no caso (decisão Q6 da Fase 8). Sem
+    opção de esconder — engenheiro precisa ser sempre lembrado da
+    idealização. Case salvo, reaberto meses depois, deve continuar
+    avisando.
+
+    Confidence: medium — heurística (a análise estática É util, mas
+    com domínio limitado documentado).
+    Severity: warning — aviso, não erro; análise prossegue normalmente.
+    """
+    return SolverDiagnostic(
+        code="D018_AHV_STATIC_IDEALIZATION",
+        severity="warning",
+        title=f"AHV — análise estática é idealização ({n_ahv} AHV{'s' if n_ahv > 1 else ''})",
+        cause=(
+            "Análise estática de AHV é idealização — não substitui "
+            "análise dinâmica de instalação. A operação real do AHV é "
+            "dinâmica (rebocador se move, cabo oscila, hidrodinâmica). "
+            "Esta análise modela a força aplicada pelo AHV como uma "
+            "carga estática pontual aplicada à linha."
+        ),
+        suggestion=(
+            "USE para: verificação de tensão de pico em condição "
+            "idealizada, dimensionamento preliminar de geometria, "
+            "avaliação de equilíbrio estático.\n"
+            "NÃO SUBSTITUI: análise dinâmica de instalação, avaliação "
+            "de cargas de impacto (snap loads), estudo de operabilidade "
+            "em condições ambientais reais. Para essas, use software "
+            "dinâmico de instalação (Orcaflex, SIMA, etc.)."
+        ),
+        confidence="medium",
+        affected_fields=[],
+    )
+
+
+def D019_ahv_force_mostly_out_of_plane(
+    *,
+    bollard_pull: float,
+    in_plane_fraction: float,
+    heading_deg: float,
+) -> SolverDiagnostic:
+    """
+    Componente da força AHV no plano da linha é menor que 30% da magnitude.
+
+    AncoPlat solver é 2D (catenária no plano vertical da linha).
+    Componente "fora do plano" da força AHV não tem onde aplicar —
+    solver não modela deflexão lateral da linha. Quando o heading do
+    AHV resulta em força majoritariamente fora do plano, o engenheiro
+    pode digitar bollard pull alto e ver resultado idêntico ao caso
+    sem AHV — confusão.
+
+    Limiar 30% (Q3 ajuste 1 do mini-plano F8): se projeção é >70% da
+    magnitude, é caso típico (heading próximo do alinhamento da linha);
+    abaixo disso, é avisar que a força "desaparece" matematicamente.
+
+    Confidence: high — geometria determinística (in-plane fraction
+    calculado exatamente).
+    Severity: warning — análise prossegue, mas resultado pode confundir.
+    """
+    in_plane_pct = in_plane_fraction * 100
+    out_of_plane_pct = (1 - in_plane_fraction) * 100
+    return SolverDiagnostic(
+        code="D019_AHV_FORCE_OUT_OF_PLANE",
+        severity="warning",
+        title=(
+            f"AHV: componente no plano da linha pequena "
+            f"({in_plane_pct:.1f}% < 30%)"
+        ),
+        cause=(
+            f"Bollard pull = {bollard_pull/1000:.0f} kN com heading "
+            f"{heading_deg:.1f}° resulta em apenas {in_plane_pct:.1f}% "
+            f"da força projetada no plano vertical da linha "
+            f"({out_of_plane_pct:.1f}% fica fora do plano). AncoPlat é "
+            "2D — componente fora do plano NÃO é modelada. A força "
+            "efetivamente aplicada pelo solver é a projeção 2D, não a "
+            "magnitude total."
+        ),
+        suggestion=(
+            "Verifique heading e geometria do caso. Se a operação real "
+            "tem força majoritariamente lateral (perpendicular à linha), "
+            "AncoPlat 2D não captura — considere análise 3D externa."
+        ),
+        confidence="high",
+        affected_fields=["attachments[].ahv_heading_deg"],
+    )
+
+
+# =============================================================================
 # Helper para classes de exceção que carregam diagnóstico
 # =============================================================================
 
@@ -952,6 +1060,8 @@ __all__ = [
     "D015_rare_profile_type",
     "D016_anchor_uplift_invalid",
     "D017_anchor_uplift_negligible",
+    "D018_ahv_static_idealization",
+    "D019_ahv_force_mostly_out_of_plane",
     "D900_generic_nonconvergence",
     "SolverDiagnostic",
     "SolverDiagnosticError",

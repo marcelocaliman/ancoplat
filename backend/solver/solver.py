@@ -315,12 +315,16 @@ def solve(
         # Attachments + uplift barrado aqui com mensagem clara.
         if not boundary.endpoint_grounded:
             if resolved_attachments:
+                # Fase 8: mensagem cobre AHV explicitamente (Q5: AHV +
+                # uplift bloqueado em v1.0).
+                kinds_present = {att.kind for att in resolved_attachments}
+                kinds_str = ", ".join(sorted(kinds_present))
                 raise NotImplementedError(
-                    "Anchor uplift (endpoint_grounded=False) com "
-                    "attachments (boia/clump) ainda não suportado "
-                    "(Fase 7 cobriu single-segment puro; attachments + "
-                    "uplift fica para F7.x). Remova attachments ou "
-                    "use endpoint_grounded=True."
+                    f"Anchor uplift (endpoint_grounded=False) com "
+                    f"attachments ({kinds_str}) ainda não suportado em "
+                    "v1.0. Caso requer modelagem multi-segmento + uplift "
+                    "+ attachments combinados (F7.x/F8.x pós-v1.0). "
+                    "Remova attachments ou use endpoint_grounded=True."
                 )
             from .suspended_endpoint import solve_suspended_endpoint
             result = solve_suspended_endpoint(
@@ -552,6 +556,31 @@ def solve(
     # (ex.: D017 do suspended_endpoint). A lista pode chegar não-vazia
     # quando o caminho upstream emitiu diagnostics próprios.
     diagnostics_list: list[dict] = list(result.diagnostics or [])
+
+    # Fase 8 — D018 (sempre que há AHV) + D019 (componente fora do plano)
+    ahv_attachments = [a for a in resolved_attachments if a.kind == "ahv"]
+    if ahv_attachments and result.status == ConvergenceStatus.CONVERGED:
+        from .diagnostics import (
+            D018_ahv_static_idealization,
+            D019_ahv_force_mostly_out_of_plane,
+        )
+        from .multi_segment import ahv_in_plane_fraction
+        # D018 — sempre dispara (decisão Q6 não-negociável)
+        diagnostics_list.append(
+            D018_ahv_static_idealization(n_ahv=len(ahv_attachments)).model_dump()
+        )
+        # D019 — para cada AHV cuja projeção no plano da linha < 30%
+        for att in ahv_attachments:
+            in_plane = ahv_in_plane_fraction(att, line_azimuth_deg=0.0)
+            if in_plane < 0.30:
+                diagnostics_list.append(
+                    D019_ahv_force_mostly_out_of_plane(
+                        bollard_pull=att.ahv_bollard_pull or 0.0,
+                        in_plane_fraction=in_plane,
+                        heading_deg=att.ahv_heading_deg or 0.0,
+                    ).model_dump()
+                )
+
     if surface_violations:
         for v in surface_violations:
             buoy_idx = v["index"]

@@ -543,20 +543,29 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
   // ───────────────────────────────────────────────────────────────────
   {
     id: 'ahv-pull',
-    name: 'AHV bollard pull (preview F8)',
+    name: 'AHV bollard pull',
     description:
-      'Anchor Handler Vessel aplicando bollard pull lateral durante operação de instalação. Preview da Fase 8 — schema AHV ainda não definido. AHV em solver estático é idealização (não substitui análise dinâmica).',
-    tag: 'preview',
-    requirePhase: 'F8',
-    previewMessage:
-      'Sample preview da Fase 8 (AHV). Schema AHV ainda não disponível. Quando F8 fechar, o sample será atualizado com o payload de bollard pull. Atenção: análise estática de AHV é idealização — não substitui análise dinâmica de instalação.',
+      'Anchor Handler Vessel aplicando bollard pull lateral em junção entre 2 segmentos durante operação de instalação. Caso BC-AHV-01 do gate da Fase 8. Análise estática é idealização — D018 dispara automaticamente.',
+    tag: 'attachment',
     values: {
-      name: 'AHV bollard pull (preview)',
+      name: 'AHV bollard pull — BC-AHV-01',
       description:
-        'Preview F8: catenária wire 3" com AHV aplicando bollard pull lateral em arc length intermediária. Schema AHV pendente.',
+        'AHV puxando lateralmente (heading=0°, alinhado com a linha) em junção 0 entre 2 segmentos wire. Bollard pull = 200 kN (aprox 20 te). Idealização estática, ver Memorial PDF seção "AHV — Domínio de aplicação".',
       segments: [
         {
-          length: 600,
+          length: 300,
+          w: 201.1,
+          EA: 3.425e7,
+          MBL: 3.78e6,
+          category: 'Wire',
+          line_type: null,
+          diameter: 0.0762,
+          dry_weight: 242.3,
+          modulus: 6.76e10,
+          ea_source: 'qmoor',
+        },
+        {
+          length: 300,
           w: 201.1,
           EA: 3.425e7,
           MBL: 3.78e6,
@@ -571,17 +580,38 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
       boundary: {
         h: 300,
         mode: 'Tension',
-        input_value: 700_000,
+        input_value: 850_000,
         startpoint_depth: 0,
         endpoint_grounded: true,
+        endpoint_depth: null,
         startpoint_offset_horz: 0,
         startpoint_offset_vert: 0,
-        startpoint_type: 'ahv', // ícone AHV no plot já existe
+        startpoint_type: 'ahv',
       },
       seabed: { mu: 0.6, slope_rad: 0 },
       criteria_profile: 'MVP_Preliminary',
       user_defined_limits: null,
-      attachments: [],
+      attachments: [
+        {
+          kind: 'ahv',
+          position_index: 0,
+          name: 'AHV-1',
+          submerged_force: 0,
+          tether_length: null,
+          buoy_type: null,
+          buoy_end_type: null,
+          buoy_outer_diameter: null,
+          buoy_length: null,
+          buoy_weight_in_air: null,
+          pendant_line_type: null,
+          pendant_diameter: null,
+          buoy_catalog_id: null,
+          ahv_bollard_pull: 200_000,
+          ahv_heading_deg: 0,
+          ahv_stern_angle_deg: null,
+          ahv_deck_level: null,
+        },
+      ],
     },
   },
 ]

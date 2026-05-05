@@ -1294,16 +1294,24 @@ export interface components {
          *     determinada pelo `kind`:
          *       - `clump_weight`: tende a puxar a linha para BAIXO → V += force
          *       - `buoy`:         tende a empurrar a linha para CIMA  → V −= force
+         *       - `ahv`:          carga horizontal+vertical aplicada por Anchor
+         *                         Handler Vessel durante operação de instalação.
+         *                         Magnitude vem de `ahv_bollard_pull` (não
+         *                         `submerged_force`); direção horizontal de
+         *                         `ahv_heading_deg`. Idealização estática
+         *                         documentada — D018 dispara automaticamente.
+         *                         Fase 8 do plano de profissionalização.
          */
         LineAttachment: {
             /**
              * Kind
              * @enum {string}
              */
-            kind: "clump_weight" | "buoy";
+            kind: "clump_weight" | "buoy" | "ahv";
             /**
              * Submerged Force
-             * @description Força submersa líquida em N (sempre positiva)
+             * @description Força submersa líquida em N (≥ 0). Required > 0 para kind=buoy/clump_weight. Para kind=ahv, este campo é ignorado — magnitude vem de ahv_bollard_pull.
+             * @default 0
              */
             submerged_force: number;
             /**
@@ -1366,6 +1374,33 @@ export interface components {
              * @description ID da boia no catálogo (`buoys.id`). RASTREABILIDADE — NÃO autoritativo em runtime: o solver usa apenas `submerged_force` (e demais campos físicos) para o cálculo. Este campo serve para auditoria ('foi populado a partir do catálogo'). Quando o usuário edita qualquer campo físico após popular do picker, a UI deve setar este campo de volta para None — vide F6 / Q7 (override → null).
              */
             buoy_catalog_id?: number | null;
+            /**
+             * Ahv Bollard Pull
+             * @description Magnitude da força aplicada pelo AHV (N). Required quando kind='ahv'. Conhecido pelo engenheiro como bollard pull do rebocador (ex.: 200 te = 1.96e6 N).
+             */
+            ahv_bollard_pull?: number | null;
+            /**
+             * Ahv Heading Deg
+             * @description Heading da força AHV no plano horizontal global (graus). Required quando kind='ahv'.
+             *
+             *     REFERENCIAL (decisão fechada Fase 8 / Q2):
+             *       - 0° = direção positiva do eixo X global do caso (MESMO referencial usado em F5.5 EnvironmentalLoad).
+             *       - Sentido anti-horário positivo (padrão matemático).
+             *       - Range: [0°, 360°).
+             *
+             *     Exemplo: heading=0° → força puxa na direção +X (eixo da linha caso esta esteja alinhada). heading=90° → força perpendicular ao eixo X (provavelmente fora do plano da linha — D019 alerta nesse cenário).
+             */
+            ahv_heading_deg?: number | null;
+            /**
+             * Ahv Stern Angle Deg
+             * @description (Opcional) Ângulo da popa do rebocador relativo à linha (graus). Metadado para auditoria/PDF — não afeta cálculo. Aparece em relatórios profissionais de operação.
+             */
+            ahv_stern_angle_deg?: number | null;
+            /**
+             * Ahv Deck Level
+             * @description (Opcional) Altura do convés do rebocador acima da linha d'água (m). Metadado — não afeta cálculo. Útil em relatórios para documentação do hardware.
+             */
+            ahv_deck_level?: number | null;
         };
         /**
          * LineSegment
