@@ -308,7 +308,7 @@ class LineSegment(BaseModel):
         return v
 
 
-AttachmentKind = Literal["clump_weight", "buoy"]
+AttachmentKind = Literal["clump_weight", "buoy", "ahv"]
 
 
 class LineAttachment(BaseModel):
@@ -331,14 +331,25 @@ class LineAttachment(BaseModel):
     determinada pelo `kind`:
       - `clump_weight`: tende a puxar a linha para BAIXO → V += force
       - `buoy`:         tende a empurrar a linha para CIMA  → V −= force
+      - `ahv`:          carga horizontal+vertical aplicada por Anchor
+                        Handler Vessel durante operação de instalação.
+                        Magnitude vem de `ahv_bollard_pull` (não
+                        `submerged_force`); direção horizontal de
+                        `ahv_heading_deg`. Idealização estática
+                        documentada — D018 dispara automaticamente.
+                        Fase 8 do plano de profissionalização.
     """
 
     model_config = ConfigDict(frozen=True)
 
     kind: AttachmentKind
     submerged_force: float = Field(
-        ..., gt=0,
-        description="Força submersa líquida em N (sempre positiva)",
+        default=0.0, ge=0.0,
+        description=(
+            "Força submersa líquida em N (≥ 0). Required > 0 para "
+            "kind=buoy/clump_weight. Para kind=ahv, este campo é "
+            "ignorado — magnitude vem de ahv_bollard_pull."
+        ),
     )
     position_index: Optional[int] = Field(
         default=None,
@@ -443,6 +454,53 @@ class LineAttachment(BaseModel):
         ),
     )
 
+    # ─── AHV — Anchor Handler Vessel (Fase 8) ─────────────────
+    # Carga estática aplicada por rebocador num ponto da linha durante
+    # operação de instalação. **IDEALIZAÇÃO** documentada (CLAUDE.md
+    # decisão fechada Fase 8 antecipada): operação real é dinâmica.
+    # D018 dispara obrigatoriamente quando AHV está presente — sem
+    # opção de esconder.
+    ahv_bollard_pull: Optional[float] = Field(
+        default=None, gt=0,
+        description=(
+            "Magnitude da força aplicada pelo AHV (N). Required quando "
+            "kind='ahv'. Conhecido pelo engenheiro como bollard pull do "
+            "rebocador (ex.: 200 te = 1.96e6 N)."
+        ),
+    )
+    ahv_heading_deg: Optional[float] = Field(
+        default=None, ge=0.0, lt=360.0,
+        description=(
+            "Heading da força AHV no plano horizontal global (graus). "
+            "Required quando kind='ahv'.\n\n"
+            "REFERENCIAL (decisão fechada Fase 8 / Q2):\n"
+            "  - 0° = direção positiva do eixo X global do caso "
+            "(MESMO referencial usado em F5.5 EnvironmentalLoad).\n"
+            "  - Sentido anti-horário positivo (padrão matemático).\n"
+            "  - Range: [0°, 360°).\n\n"
+            "Exemplo: heading=0° → força puxa na direção +X (eixo da "
+            "linha caso esta esteja alinhada). heading=90° → força "
+            "perpendicular ao eixo X (provavelmente fora do plano da "
+            "linha — D019 alerta nesse cenário)."
+        ),
+    )
+    ahv_stern_angle_deg: Optional[float] = Field(
+        default=None, ge=-180.0, le=180.0,
+        description=(
+            "(Opcional) Ângulo da popa do rebocador relativo à linha "
+            "(graus). Metadado para auditoria/PDF — não afeta cálculo. "
+            "Aparece em relatórios profissionais de operação."
+        ),
+    )
+    ahv_deck_level: Optional[float] = Field(
+        default=None, ge=0.0,
+        description=(
+            "(Opcional) Altura do convés do rebocador acima da linha "
+            "d'água (m). Metadado — não afeta cálculo. Útil em "
+            "relatórios para documentação do hardware."
+        ),
+    )
+
     @model_validator(mode="after")
     def _exactly_one_position(self) -> "LineAttachment":
         has_idx = self.position_index is not None
@@ -458,6 +516,35 @@ class LineAttachment(BaseModel):
                 "(junção entre segmentos) ou `position_s_from_anchor` "
                 "(distância em m da âncora)"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_kind_specific_fields(self) -> "LineAttachment":
+        """
+        Fase 8 — validação cruzada por `kind`:
+
+        - kind='buoy' ou 'clump_weight': `submerged_force` > 0 obrigatório.
+          Campos AHV (ahv_*) ignorados.
+        - kind='ahv': `ahv_bollard_pull` e `ahv_heading_deg` obrigatórios.
+          Campo `submerged_force` ignorado.
+        """
+        if self.kind in ("buoy", "clump_weight"):
+            if self.submerged_force <= 0:
+                raise ValueError(
+                    f"LineAttachment kind='{self.kind}': submerged_force "
+                    f"deve ser > 0 (recebido {self.submerged_force})."
+                )
+        elif self.kind == "ahv":
+            if self.ahv_bollard_pull is None or self.ahv_bollard_pull <= 0:
+                raise ValueError(
+                    "LineAttachment kind='ahv': ahv_bollard_pull "
+                    "(magnitude da força do AHV em N) é obrigatório e > 0."
+                )
+            if self.ahv_heading_deg is None:
+                raise ValueError(
+                    "LineAttachment kind='ahv': ahv_heading_deg (graus, "
+                    "referencial eixo X global anti-horário) é obrigatório."
+                )
         return self
 
 
