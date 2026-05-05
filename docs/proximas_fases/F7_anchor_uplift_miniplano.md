@@ -1,9 +1,11 @@
-# Mini-plano arquivado — Fase 7 Anchor Uplift (v1.1)
+# Mini-plano ativo — Fase 7 Anchor Uplift (v1.0)
 
-> **Status:** arquivado em **2026-05-05** após decisão de escopo v1.0.
-> **Retomar quando:** demanda explícita de usuário em produção pós-v1.0.
+> **Status:** **ativo** desde 2026-05-05 (revertido escopo de v1.1 para v1.0 — paridade total com QMoor).
+> **Sequência v1.0:** F9 (UI polish) → **F7 (Anchor uplift)** → F8 (AHV) → F10 (V&V) → F11 (lançamento).
 > **Conteúdo abaixo** reflete análise feita no contexto pós-Fase 6 do plano de profissionalização (cases_baseline 3/3, 554 backend + 4 skipped + 66 frontend verde).
-> **Atualizar** Q1–Q9 e cases BC-UP conforme estado do código no momento da retomada.
+> **Antes de retomar:** atualizar Q1–Q9 + cases BC-UP conforme estado do código pós-F9. Em particular, samples preview `anchor-uplift` criados em F9 ([`frontend/src/lib/caseTemplates.ts`](../../frontend/src/lib/caseTemplates.ts)) já trazem payload pronto para os cases canônicos — evita retrabalho de input.
+
+> **Histórico:** Mini-plano originalmente proposto pós-F6 (mesmo dia); arquivado para v1.1 por decisão de escopo enxuto (~30 min depois); reativado para v1.0 (~30 min depois) pela decisão de paridade total. Sem mudança no conteúdo técnico.
 
 ---
 

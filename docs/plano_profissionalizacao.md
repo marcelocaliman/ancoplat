@@ -843,7 +843,19 @@ Cada subitem 12.x ativado independentemente, com base em:
 - ✅ **Fase 4** — fechada em 2026-05-05. Diagnostics maturidade + ProfileType taxonomy: `ProfileType` enum (10 valores forward-compat) + `classify_profile_type()` puro em módulo dedicado; validação vs MoorPy 6/7 match + 1 divergência Cat-3 documentada; 4 diagnostics novos (D012 slope alto + D013 μ=0 com catálogo limiar 0.3 empírico + D014 gmoor sem β + D015 PT raro); cobertura `diagnostics.py` em **100%**; `confidence` field (high/medium/low) com critério documentado; `SurfaceViolationsCard` UI dedicada. 438 backend + 57 frontend verdes. Apply tests: 3 garantidos + 3 best-effort + 9 deferred para Fase 10. Ver [`relatorio_F4_diagnostics.md`](relatorio_F4_diagnostics.md).
 - ✅ **Fase 5** — fechada em 2026-05-05. Reports, memorial e exportação: `case_input_hash()` SHA-256 canonicalizado (sort_keys + separators, exclui name/description) com 16 testes de canonicalização + estabilidade (Ajuste 1); `.moor` v2 schema versionado + migrador v1→v2 com **log estruturado** `{field, old, new, reason}` exposto via `/import/moor` retornando `{case, migration_log}` (Ajuste 2); `build_memorial_pdf()` com rastreabilidade total (hash[:16] + solver_version + timestamp em footer de cada página) + ProfileType + diagnostics estruturados (severity colorida + confidence) — content checks via PyPDF; CSV de geometria ≥ 5000 pontos international format (`,` separator, `.` decimal) com comentários de metadata; Excel `.xlsx` com 3 abas mínimas (Caso/Resultados/Geometria) + Diagnostics opcional consistente com Memorial PDF; UI com 3 botões em CaseDetail e ImportExportPage; 4 endpoints REST novos (`memorial-pdf`, `csv`, `xlsx`, `import/moor` v2). 499 backend + 4 skipped + 57 frontend verdes. Pendência herdada de F2: `.moor` schema sem `slope_rad`/`attachments` — round-trip dos baseline cases skipa quando aplicável. Ver [`relatorio_F5_reports.md`](relatorio_F5_reports.md).
 - ✅ **Fase 6** — fechada em 2026-05-05. Catálogo de boias: tabela `buoys` + `BuoyRecord` + schemas Pydantic com 4 end_types fechados (flat/hemispherical/elliptical/semi_conical); `compute_submerged_force()` ancorado em Excel "Formula Guide" R4-R7 com 23 testes (8 ±1% volume + 8 ±1% empuxo cobrindo 4 end_types × 2 dimensões + 7 sanity); seed canônico de 11 entradas (1 Excel + 10 generic_offshore) com `data_source` documentado por entrada; 5 endpoints REST `/buoys`; `LineAttachment.buoy_catalog_id` opcional rastreável **não-autoritativo em runtime** (solver ignora — verificado); BuoyPicker integrado ao AttachmentsEditor com override automático (`clearCatalogLink` em 6 campos físicos) + indicador visual "do catálogo / modo manual"; tab Boias em /catalog com URL deep-linking `?tab=buoys`. **Library paramétrica MoorPy reservada para F12.x** (decisão Q1 consciente). 554 backend + 4 skipped + 66 frontend verdes. Identidade `V_hemi = V_conic` registrada (propriedade do Excel, não bug). Ver [`relatorio_F6_buoys.md`](relatorio_F6_buoys.md).
-- ⬜ Fases 7–11 — pendentes
+
+#### Decisão de sequência v1.0 (2026-05-05)
+
+AncoPlat v1.0 = **paridade total de features com QMoor**. Sequência ajustada (não segue numeração linear):
+
+```
+F9 (UI polish) → F7 (Anchor uplift) → F8 (AHV) → F10 (V&V completo) → F11 (lançamento 1.0)
+```
+
+Total restante: ~40-55 dias-engenheiro. F12 (features avançadas) fica para pós-v1.0. CLAUDE.md tem a decisão registrada com mitigação obrigatória de F8 (D018 + Memorial PDF + manual).
+
+- ⬜ **Fase 9** — em andamento (próxima na sequência v1.0).
+- ⬜ Fases 7, 8, 10, 11 — pendentes (esta ordem).
 
 ### 4.1 — Correção física
 - [ ] Atrito de seabed per-segmento (Fase 1)

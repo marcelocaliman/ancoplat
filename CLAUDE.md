@@ -179,9 +179,35 @@ MVP v1 **rejeita** `endpointGrounded=false` com INVALID_CASE + mensagem. Casos c
 ### Critérios de utilização: 4 perfis disponíveis desde v1
 Conforme Seção 5 do Documento A: `MVP_Preliminary` (default, 0.60 MBL), `API_RP_2SK` (intacto 0.60 / danificado 0.80), `DNV` (placeholder; formal só em v3+ com análise dinâmica), `UserDefined`. `SolverResult` retorna `alert_level: ok | yellow | red | broken`.
 
+## Sequência v1.0 do plano de profissionalização
+
+**Decisão fechada (2026-05-05):** AncoPlat v1.0 tem **paridade total de features com QMoor**. Sequência de fechamento:
+
+```
+F9 (UI polish, M 4–6 dias)
+ → F7 (Anchor uplift, L 8–12 dias)
+ → F8 (AHV, L 8–12 dias)
+ → F10 (V&V completo, L 10–12 dias)
+ → F11 (lançamento 1.0, M 3–5 dias)
+```
+
+Total restante: **~40–55 dias-engenheiro**. Mini-planos detalhados das próximas fases ficam em [`docs/proximas_fases/`](docs/proximas_fases/).
+
+Pós-v1.0: Fase 12 (features avançadas opcionais — library paramétrica MoorPy, modelo de custo, batimetria 2D, integração RAFT). F12 não entra em v1.0.
+
+### Decisão fechada — Fase 8 antecipada (AHV idealização estática)
+
+AHV (Anchor Handler Vessel) modelado como força lateral estática num ponto da linha **é idealização modelada**, não representação fiel da operação real (rebocador dinâmico, cabo oscila, hidrodinâmica). Mitigação **obrigatória** registrada antes de F8 começar — sem isso F8 não fecha:
+
+1. **Diagnostic D018** (severity warning, confidence medium) ao ativar AHV no caso. Mensagem: "Análise estática de AHV é idealização — não substitui análise dinâmica de instalação."
+2. **Memorial PDF** com parágrafo dedicado ao domínio de aplicação quando AHV está presente.
+3. **Manual de usuário** (Fase 11) com seção sobre quando recomendar análise dinâmica externa.
+
+Plano §F8 será expandido com esses 3 itens como AC obrigatórios quando F8 iniciar. Princípio transversal: features que envolvem idealização explícita carregam ressalva permanente, não opcional.
+
 ## Pendências F1–F6 → Fases futuras
 
-Itens identificados durante as fases F1–F6 que não entraram no escopo da fase original e foram empurrados para fases posteriores. Registro centralizado para não perder no caminho até v1.0.
+Itens identificados durante as fases F1–F6 que não entraram no escopo da fase original e foram empurrados para fases posteriores.
 
 ### Para Fase 9 (UI polish)
 - **Testes E2E do popover BuoyPicker** (F6) — smokes atuais em `frontend/src/test/buoy-picker-smoke.test.tsx` cobrem render + fallback id + callbacks, mas não exercitam o popover Radix (portal + lista clicável). Esperar `@testing-library/user-event` flow completo: abrir popover → digitar busca → selecionar boia → confirmar `onPick` chamado com payload correto.
@@ -190,11 +216,14 @@ Itens identificados durante as fases F1–F6 que não entraram no escopo da fase
 - **Identidade matemática `V_hemi = V_conic`** (F6) — caso onde fórmulas de hemispherical e semi_conical produzem volumes idênticos pela especificação do Excel `Formula Guide` R5/R7. Bug que troque hemi↔conic não é detectável pelo gate ±1% atual de `test_buoy_buoyancy.py`. Adicionar 1 caso na F10 com **dimensão tampa ≠ raio** (ex.: tampa hemisférica com altura customizada h ≠ D/2) onde as duas fórmulas produziriam resultados distintos, garantindo que estão de fato implementadas separadamente. Documentado em `docs/relatorio_F6_buoys.md` §6.
 - **Boias com `manufacturer`** (F6) — catálogo seed atual de 11 boias (1× excel_buoy_calc_v1 + 10× generic_offshore) não inclui modelos comerciais reais. F10 ou pós-v1.0 pode adicionar entradas com `data_source="manufacturer_<X>"` (Crosby, Trelleborg, etc.) quando houver documentação de campo.
 
-### Para v1.1+ (pós-1.0)
-- **Anchor uplift / suspended endpoint** (Fase 7 do plano original) — mini-plano detalhado arquivado em `docs/futuro_F7_anchor_uplift_miniplano.md`. Retomar quando houver demanda explícita de usuário em produção.
-- **AHV** (Fase 8 do plano original) — no-go definitivo para v1.0; revisitar só com demanda explícita.
-- **Library paramétrica MoorPy** (origem F6 / Q1) — schema `material_coefficients` espelhando `MoorProps_default.yaml` + endpoint `POST /line-types/from-parametric` + tab "Calculadora paramétrica" no `LineTypePicker`. Reservada para **Fase 12.x** (features avançadas pós-1.0). Catálogo legacy de 522 entradas cobre uso prático em v1.0.
+### Para Fase 7 (Anchor uplift, próxima após F9)
+- Mini-plano detalhado em [`docs/proximas_fases/F7_anchor_uplift_miniplano.md`](docs/proximas_fases/F7_anchor_uplift_miniplano.md). 8 commits propostos, BC-UP-01..05 vs MoorPy, D016/D017 dedicados.
+
+### Para v1.1+ (pós-v1.0)
+- **Library paramétrica MoorPy** (origem F6 / Q1) — schema `material_coefficients` espelhando `MoorProps_default.yaml` + endpoint `POST /line-types/from-parametric` + tab "Calculadora paramétrica" no `LineTypePicker`. Reservada para **Fase 12.x**. Catálogo legacy de 522 entradas cobre uso prático em v1.0.
 - **`.moor` schema com `slope_rad` + `attachments`** (origem F2 / F5) — `.moor` v2 atual não cobre esses campos. Round-trip dos baseline cases skipa quando aplicável. Reservar bump v3 para fase pós-v1.0 quando houver redemanda real.
+- **Mooring system samples** (origem F9) — `mooringSystemTemplates.ts` + tab dedicada em /samples. Pendência v1.1+.
+- **Print stylesheet de MooringSystemDetailPage** (origem F9) — F9 entrega print apenas para CaseDetailPage. MS detail v1.1+.
 
 ## Convenções de código
 
