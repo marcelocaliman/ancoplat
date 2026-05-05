@@ -143,9 +143,15 @@ def _integrate_segments(
 
     Os coords são em frame anchor-fixo (anchor em (0, 0)).
     """
+    # (b) Defensiva interna: H sai do solver de tração e nunca deveria
+    # ser <= 0 quando _integrate_segments é chamado. Guard mantido para
+    # cair cedo se houver bug na sequência de chamadas.
     if H <= 0:
         raise ValueError(f"H={H} deve ser positivo")
     N = len(segments)
+    # (b) Defensiva interna: invariante de cardinalidade entre segments
+    # e L_effs (uma entrada de comprimento esticado por segmento). Quem
+    # constrói L_effs internamente deveria garantir, mas guard preserva.
     if N == 0 or len(L_effs) != N:
         raise ValueError("segments e L_effs devem ter mesmo tamanho não-vazio")
 
@@ -162,6 +168,9 @@ def _integrate_segments(
     # válidas: 0 .. N-2.
     junction_force: dict[int, float] = {}
     for att in attachments:
+        # (a) Fisicamente justificada: position_index referencia uma
+        # junção entre segmentos consecutivos, válido apenas em [0, N-2].
+        # Fora desse range significa attachment configurado errado.
         if att.position_index < 0 or att.position_index >= len(segments) - 1:
             raise ValueError(
                 f"Attachment '{att.name or att.kind}' tem position_index="
@@ -339,12 +348,20 @@ def _solve_suspended_tension(
                     clump_force_n=clump_force,
                 )
             )
+        # (a) Fisicamente justificada: catenária requer peso suspenso > 0.
+        # Σw·L + Σ F_clump - Σ F_buoy ≤ 0 significa empuxo total >= peso —
+        # cabo flutuaria, geometria inverte. Caso real raro mas detectável
+        # antes do solver. Diagnostic D005 já estruturado acima; o raise
+        # aqui é fallback texto-base para chamadores fora da API.
         raise ValueError(
             f"Somatório de peso suspenso (Σw·L + Σ F_attachments) = "
             f"{sum_total:.1f} N <= 0: empuxo das boias excede o peso da "
             "linha. Geometria invertida não suportada."
         )
     H_max_sq = T_fl * T_fl - sum_total * sum_total
+    # (a) Fisicamente justificada: T_fl² >= V_total² para que H² seja real.
+    # Quando T_fl ≤ Σw·L, o cabo não pode sustentar o peso pendurado e a
+    # equação T² = H² + V² não tem solução com H > 0.
     if H_max_sq <= 0:
         raise ValueError(
             f"T_fl={T_fl:.1f} N <= soma de pesos suspensos {sum_total:.1f} N "
@@ -380,6 +397,10 @@ def _solve_suspended_tension(
                 f_hi = f_test
                 break
 
+    # (c) Numérica/transição: residual não muda sinal entre H_lo e H_hi —
+    # bracket invalido para brentq. Sintoma típico: caso é touchdown (não
+    # fully-suspended) e o caller deveria ter despachado para o motor com
+    # grounded. Mensagem orienta a causa provável.
     if f_lo == float("inf") or f_hi == float("inf") or f_lo * f_hi >= 0:
         raise ValueError(
             f"Bracket de H inválido para fully suspended (f_lo={f_lo}, "
@@ -446,6 +467,9 @@ def _solve_suspended_range(
         system, np.array([H_guess, V_anchor_guess]),
         full_output=True, xtol=1e-6, maxfev=config.max_brent_iter * 4,
     )
+    # (c) Numérica: fsolve falhou em convergir nas 2 incógnitas (H, V_anchor).
+    # Causa típica: X muito próximo do limite físico (slack ou taut extremo)
+    # ou chute inicial ruim.
     if ier != 1:
         raise ValueError(
             "fsolve não convergiu para multi-segmento no modo Range. "
@@ -481,6 +505,8 @@ def _solve_rigid_multi(
             segments, L_effs, h, float(input_value), config, attachments,
         )
     else:
+        # (b) Defensiva: SolutionMode é Enum (Pydantic já valida); este
+        # else só dispararia se o solver fosse chamado com um valor não-enum.
         raise ValueError(f"modo inválido: {mode}")
 
 
@@ -518,6 +544,8 @@ def _integrate_segments_with_grounded(
     sub-segmentos derivados do segmento 0 do usuário (todos do mesmo
     material) — relaxamos a restrição L_g_0 ≤ L_effs[0].
     """
+    # (b) Defensiva interna: H sai do solver de tração; nunca deveria
+    # ser <= 0 ao chamar este integrador.
     if H <= 0:
         raise ValueError(f"H={H} deve ser > 0")
 
@@ -529,6 +557,8 @@ def _integrate_segments_with_grounded(
         # Caminho com arches: relaxa restrição de L_g_0 e dispatch
         # para integrador especializado.
         total_L = sum(L_effs)
+        # (b) Defensiva interna: L_g_0 vem do solver de tração ou da
+        # iteração elástica externa; nunca deveria ser fora de [0, L_total].
         if L_g_0 < 0 or L_g_0 > total_L + 1e-6:
             raise ValueError(
                 f"L_g_0={L_g_0:.2f} fora do range [0, L_total={total_L:.2f}]"
@@ -538,6 +568,8 @@ def _integrate_segments_with_grounded(
             attachments, arches, n_points_per_segment,
         )
 
+    # (b) Defensiva interna: caminho sem arches, restrição mais apertada
+    # (L_g_0 <= L_effs[0] — só segmento 0 grounded).
     if L_g_0 < 0 or L_g_0 > L_effs[0] + 1e-6:
         raise ValueError(
             f"L_g_0={L_g_0:.2f} fora do range [0, L_0={L_effs[0]:.2f}]"
@@ -603,6 +635,10 @@ def _integrate_segments_with_grounded(
     # Pré-tabela de força signada por junção (mesma regra da F5.2).
     junction_force: dict[int, float] = {}
     for att in attachments:
+        # (a) Fisicamente justificada: position_index referencia uma
+        # junção entre segmentos consecutivos. Duplicata do guard em
+        # _integrate_segments mas necessária aqui porque este caminho
+        # (com grounded em rampa) não passa por aquele.
         if att.position_index < 0 or att.position_index >= len(segments) - 1:
             raise ValueError(
                 f"Attachment '{att.name or att.kind}' tem position_index="
@@ -767,6 +803,9 @@ def _integrate_with_grounded_arches(
         if cum[i] - 1e-9 <= L_g_0 <= cum[i + 1] + 1e-9:
             i_main = i
             break
+    # (b) Defensiva interna: L_g_0 deveria sempre cair em algum sub-seg
+    # dado que já passou pela validação L_g_0 ∈ [0, L_total]. Guard de
+    # invariante numérico.
     if i_main is None:
         raise ValueError(
             f"L_g_0={L_g_0:.2f} não cai em nenhum sub-segmento "
@@ -778,6 +817,10 @@ def _integrate_with_grounded_arches(
     # arco com w_local único (= w_seg0) falha.
     w_ref = segments[0].w
     for k in range(i_main + 1):
+        # (a) Fisicamente justificada: limitação do modelo F5.7.1 — arcos
+        # de levantamento exigem material uniforme na zona grounded
+        # (s_arch = F_b/w_local, simétrico). Sub-segmentos com w diferentes
+        # quebram a simetria.
         if abs(segments[k].w - w_ref) > 1e-9:
             raise ValueError(
                 f"Trecho grounded com arches atravessa sub-segmentos de "
@@ -869,6 +912,9 @@ def _integrate_with_grounded_arches(
             # raro; ele ajudaria a fixar o cabo no seabed, mas o modelo atual
             # não usa esse efeito).
             continue
+        # (a) Fisicamente justificada (3ª duplicata — caminho com arches).
+        # Mesma semântica das duas anteriores. Manter aqui evita acoplamento
+        # à ordem de execução interna.
         if att.position_index < 0 or att.position_index >= len(segments) - 1:
             raise ValueError(
                 f"Attachment '{att.name or att.kind}' tem position_index="
@@ -1045,6 +1091,9 @@ def _solve_multi_sloped(
                     clump_force_n=clump_force,
                 )
             )
+        # (a) Fisicamente justificada (caminho touchdown — duplicata do
+        # guard em _solve_suspended_tension). Diagnostic D005 já emitido
+        # acima; raise é fallback texto para chamadas fora da API.
         raise ValueError(
             f"Somatório de peso suspenso (Σw·L + Σ F_attachments) = "
             f"{sum_total:.1f} N <= 0: empuxo das boias excede o peso da "
@@ -1262,12 +1311,17 @@ def solve_multi_segment(
     """
     if config is None:
         config = SolverConfig()
+    # (b) Defensiva interna: h vem do facade (boundary.h - startpoint_depth);
+    # facade já valida h > 0. Guard mantido para chamadas diretas (testes).
     if h <= 0:
         raise ValueError(f"h={h} deve ser > 0 para o solver suspenso")
+    # (b) Defensiva interna: segments vazio é validado pelo facade. Mantém
+    # safety-net para uso direto.
     if not segments:
         raise ValueError("segments vazio")
 
-    # Validação leve: se mu_per_seg fornecido, deve casar em cardinalidade.
+    # (b) Defensiva: cardinalidade de mu_per_seg construída pelo facade
+    # via _resolve_mu_per_seg; mismatch só ocorre por bug de integração.
     if mu_per_seg is not None and len(mu_per_seg) != len(segments):
         raise ValueError(
             f"mu_per_seg tem {len(mu_per_seg)} entradas mas há "
@@ -1337,6 +1391,10 @@ def solve_multi_segment(
     # Sanidade física: strain por segmento — qualquer um > 5 % é implausível.
     for i, (s, Le) in enumerate(zip(segments, L_effs)):
         strain = (Le - s.length) / s.length
+        # (a) Fisicamente justificada: cabos de mooring têm strain de
+        # ruptura típico < 5% (chain ~3%, wire ~5%, polyester pode chegar
+        # a ~10% mas com EA/MBL muito menor). Strain > 5% indica EA
+        # subestimado ou T_fl super-estimado — caso provavelmente errado.
         if strain > 0.05:
             raise ValueError(
                 f"Segmento {i}: strain {strain * 100:.1f} % > 5 % é "

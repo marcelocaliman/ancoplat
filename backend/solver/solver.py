@@ -97,10 +97,19 @@ def _validate_inputs(
     seabed: SeabedConfig,
     config: SolverConfig,
 ) -> LineSegment:
-    """Valida entradas e retorna o segmento único (MVP v1)."""
+    """Valida entradas e retorna o segmento único (MVP v1).
+
+    Categorização dos `raise` desta função (Fase 2 / E4):
+      (a) fisicamente justificada — guard físico que mantém o domínio do solver.
+      (b) defensiva — duplica garantia já dada pelo Pydantic ou camada superior.
+      (c) numérica — erro de convergência/bracket.
+    """
+    # (a) Fisicamente justificada: solver precisa de pelo menos um segmento.
     if not line_segments:
         raise ValueError("line_segments vazia: forneça pelo menos um segmento")
-    # Validação por segmento (Pydantic já garante >0, redundância barata).
+    # (b) Defensiva: Pydantic LineSegment já enforça `length>0, EA>0, MBL>0, w>0`
+    # via @field_validator. Mantemos como rede de segurança caso o solver seja
+    # chamado fora da rota API (testes diretos, scripts).
     for i, s in enumerate(line_segments):
         if s.length <= 0 or s.EA <= 0 or s.MBL <= 0 or s.w <= 0:
             raise ValueError(
@@ -110,24 +119,35 @@ def _validate_inputs(
     # primeiro segmento como conveniência para o caso single (mantém o
     # contrato anterior de _validate_inputs).
     segment = line_segments[0]
+    # (a) Fisicamente justificada: h é a profundidade do seabed sob a âncora.
+    # h=0 implicaria âncora na superfície — caso degenerado fora do escopo.
     if boundary.h <= 0:
         raise ValueError("lâmina d'água h deve ser > 0")
+    # (a) Fisicamente justificada: T_fl/X positivos definem boundary condition
+    # válida. T_fl=0 (linha frouxa absoluta) e X=0 (fairlead sobre a âncora)
+    # são casos degenerados que exigem lógica especial.
     if boundary.input_value <= 0:
         raise ValueError("input_value (T_fl ou X) deve ser > 0")
+    # (a) Fisicamente justificada: atrito de Coulomb por definição é μ ≥ 0.
+    # Pydantic SeabedConfig também enforça via Field(ge=0).
     if seabed.mu < 0:
         raise ValueError("coeficiente de atrito μ deve ser >= 0")
-    # Validações específicas por modo (Seção 8 do MVP v2 PDF):
+    # (b) Defensiva: o Pydantic SolutionMode (Enum) já garante este invariante.
+    # Mantemos por simetria com tratamento textual em logs/diagnostics.
     if boundary.mode not in (SolutionMode.TENSION, SolutionMode.RANGE):
         raise ValueError(f"modo inválido: {boundary.mode}")
-    # Âncora livre do seabed ainda não é suportada (requer modelagem distinta).
+    # (b) Limite explícito de escopo MVP v1 (CLAUDE.md / Decisões F2).
+    # Anchor uplift fica para Fase 7 — não é validação física, é
+    # marcação de feature pendente.
     if not boundary.endpoint_grounded:
         raise NotImplementedError(
             "endpoint_grounded=False (âncora elevada do seabed) não é suportado "
             "ainda. Forneça endpoint_grounded=True."
         )
-    # Fairlead afundado (startpoint_depth > 0) é permitido: o drop vertical
-    # efetivo usado pelo solver é h − startpoint_depth. O despacho em solve()
-    # trata o caso degenerado drop = 0 (linha horizontal no seabed).
+    # (a) Fisicamente justificada: fairlead no ou abaixo do seabed é inviável.
+    # Comparação plana (slope=0) — em seabed inclinado descendente, a
+    # profundidade do seabed sob o fairlead é menor que h, e esta validação
+    # rejeita casos válidos. Q7 da Fase 2 (Commit 3) relaxa para incluir slope.
     if boundary.startpoint_depth >= boundary.h + 1e-9:
         raise ValueError(
             f"startpoint_depth={boundary.startpoint_depth:.2f} m >= "
@@ -305,6 +325,9 @@ def solve(
                         config=config,
                     )
             else:
+                # (b) Defensiva: este else é unreachable em prática
+                # (boundary.mode é Enum SolutionMode, validado pelo
+                # Pydantic). Mantemos por consistência sintática do match.
                 raise ValueError(f"modo inválido: {boundary.mode}")
         elif h_drop <= 1e-6:
             # Caso degenerado: fairlead e âncora no mesmo nível (ambos no fundo).

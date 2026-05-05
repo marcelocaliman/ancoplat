@@ -406,9 +406,25 @@ class BoundaryConditions(BaseModel):
     """
     Condições de contorno físicas do problema.
 
-    h é a distância vertical da âncora até o fairlead (positiva = fairlead
-    acima da âncora). No modelo de fundo plano, h coincide com a lâmina
-    d'água se a âncora está no seabed.
+    `h` é a **profundidade do seabed sob a âncora** medida a partir da
+    superfície da água — equivalente a `water_depth_at_anchor` no
+    domínio de mooring offshore. Como a âncora sempre está no seabed
+    no MVP v1 (`endpoint_grounded=True`), `h` coincide com a lâmina
+    d'água naquela coluna.
+
+    O **drop vertical** efetivo usado pela catenária (distância anchor
+    → fairlead) é `h - startpoint_depth`, calculado dentro do facade
+    `solve()` e não exposto como input direto. Em seabed inclinado, a
+    profundidade do seabed sob o FAIRLEAD difere de `h` — pelo
+    `seabed.slope_rad` × distância horizontal — e é exposta no resultado
+    em `SolverResult.depth_at_fairlead`.
+
+    Decisão registrada na Fase 2 do plano de profissionalização (E4):
+    a docstring antiga descrevia `h` como "distância vertical anchor →
+    fairlead" — semantica errada que confundia engenheiros. Corrigida
+    aqui para "profundidade do seabed sob a âncora" (water_depth_at_anchor).
+    O frontend agora oferece input por batimetria nos dois pontos com
+    slope derivado (`BathymetryInputGroup`).
 
     Campos `startpoint_depth` e `endpoint_grounded` refletem Seção 5.1 do
     MVP v2 PDF. O MVP v1 assume:
@@ -416,6 +432,11 @@ class BoundaryConditions(BaseModel):
       - âncora (endpoint) no seabed         → endpoint_grounded = True
     Valores diferentes são validados pelo facade solve() e geram INVALID_CASE
     com mensagem clara. Suporte para âncora elevada fica para v2+.
+
+    Campos `startpoint_offset_horz` e `startpoint_offset_vert` (Fase 2 /
+    A2.6) são **cosméticos em v1.0** — afetam apenas a visualização
+    do plot, NÃO entram no cálculo do solver. Reservados para forward-
+    compat com fase futura que tornará o offset físico.
     """
 
     model_config = ConfigDict(frozen=True)
