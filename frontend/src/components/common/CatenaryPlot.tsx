@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Image as ImageIcon, Maximize2, Tag, Type } from 'lucide-react'
 import type { LineAttachment, SolverResult } from '@/api/types'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { useThemeStore, resolveTheme } from '@/store/theme'
 
 /**
@@ -334,6 +336,20 @@ export function CatenaryPlot({
     ? { width: '100%', height: '100%' }
     : { width: '100%', height }
   const theme = resolveTheme(useThemeStore((s) => s.theme))
+
+  // Fase 3 / D9: toggles internos do plot. equalAspect já é prop
+  // (controlada de fora) — espelhamos em estado para permitir override
+  // pelo usuário via botão. showLabels/showLegend/showImages são
+  // exclusivamente UI state (default true — comportamento pré-F3).
+  const [equalAspectLocal, setEqualAspectLocal] = useState(equalAspect)
+  const [showLabels, setShowLabels] = useState(true)
+  const [showLegend, setShowLegend] = useState(true)
+  const [showImages, setShowImages] = useState(true)
+  // Quando a prop equalAspect muda externamente (ex.: pai reseta),
+  // sincroniza o estado local.
+  useEffect(() => {
+    setEqualAspectLocal(equalAspect)
+  }, [equalAspect])
 
   // Hover highlight bidirecional (legenda ↔ traço): quando o usuário
   // passa o mouse sobre um chip da legenda OU sobre um segmento no plot,
@@ -1167,7 +1183,7 @@ export function CatenaryPlot({
       dtick: ranges.yDtick,
       tickformat: ',.0f',
     }
-    if (equalAspect) {
+    if (equalAspectLocal) {
       yAxis.scaleanchor = 'x'
       yAxis.scaleratio = 1
     }
@@ -1207,10 +1223,15 @@ export function CatenaryPlot({
       // cima (ver <CatenaryLegend /> abaixo). Permite usar SVGs inline para
       // fairlead/âncora, o que não é possível na legenda nativa do Plotly.
       showlegend: false,
-      images,
-      annotations,
+      // Fase 3 / D9: toggles condicionais. images/annotations vazias
+      // quando o usuário desabilita os respectivos overlays.
+      images: showImages ? images : [],
+      annotations: showLabels ? annotations : [],
     }
-  }, [palette, ranges, equalAspect, height, images, annotations, theme])
+  }, [
+    palette, ranges, equalAspectLocal, height, images, annotations, theme,
+    showImages, showLabels,
+  ])
 
   const config = useMemo<Partial<Plotly.Config>>(
     () => ({
@@ -1364,20 +1385,49 @@ export function CatenaryPlot({
 
   return (
     <div ref={plotContainerRef} className="relative h-full w-full">
+      {/* Fase 3 / D9: toggles do plot no canto superior direito. */}
+      <div className="pointer-events-none absolute right-1 top-1 z-20 flex gap-1">
+        <PlotToggleButton
+          icon={<Maximize2 className="h-3 w-3" />}
+          active={equalAspectLocal}
+          onToggle={() => setEqualAspectLocal((v) => !v)}
+          tooltip="Aspect ratio 1:1 (escala geométrica fiel)"
+        />
+        <PlotToggleButton
+          icon={<Type className="h-3 w-3" />}
+          active={showLabels}
+          onToggle={() => setShowLabels((v) => !v)}
+          tooltip="Mostrar rótulos (Fairlead / Âncora)"
+        />
+        <PlotToggleButton
+          icon={<Tag className="h-3 w-3" />}
+          active={showLegend}
+          onToggle={() => setShowLegend((v) => !v)}
+          tooltip="Mostrar legenda"
+        />
+        <PlotToggleButton
+          icon={<ImageIcon className="h-3 w-3" />}
+          active={showImages}
+          onToggle={() => setShowImages((v) => !v)}
+          tooltip="Mostrar ícones (plataforma, âncora, boias)"
+        />
+      </div>
       {/* Legenda HTML flutuante no topo do plot, com SVGs inline para
           fairlead e âncora — algo que a legenda nativa do Plotly não suporta. */}
-      <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center px-2">
-        <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-md border border-border/40 bg-background/70 px-3 py-1 text-[11px] backdrop-blur-sm">
-          {legendItems.map((item, i) => (
-            <LegendChip
-              key={i}
-              item={item}
-              hoveredUserIdx={hoveredUserIdx}
-              onHoverChange={setHoveredUserIdx}
-            />
-          ))}
+      {showLegend && (
+        <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center px-2">
+          <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-md border border-border/40 bg-background/70 px-3 py-1 text-[11px] backdrop-blur-sm">
+            {legendItems.map((item, i) => (
+              <LegendChip
+                key={i}
+                item={item}
+                hoveredUserIdx={hoveredUserIdx}
+                onHoverChange={setHoveredUserIdx}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       {/* Banner de aviso de boia voadora — sobreposto ao topo do plot,
           abaixo da legenda. Cor amarelo/âmbar (warning, não error). */}
       {surfaceViolations.length > 0 && (
@@ -1470,6 +1520,40 @@ function LegendChip({
       )}
       <span className="text-foreground">{item.label}</span>
     </span>
+  )
+}
+
+/**
+ * Botão de toggle no canto superior direito do plot (Fase 3 / D9).
+ * Active = toggle ON (overlay/feature visível); Inactive = OFF.
+ * Tamanho compacto (24×24px) — não rouba espaço útil do plot.
+ */
+function PlotToggleButton({
+  icon,
+  active,
+  onToggle,
+  tooltip,
+}: {
+  icon: React.ReactNode
+  active: boolean
+  onToggle: () => void
+  tooltip: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={tooltip}
+      className={cn(
+        'pointer-events-auto flex h-6 w-6 items-center justify-center rounded',
+        'border border-border/40 backdrop-blur-sm transition-colors',
+        active
+          ? 'bg-foreground/15 text-foreground'
+          : 'bg-background/60 text-muted-foreground hover:bg-foreground/10',
+      )}
+    >
+      {icon}
+    </button>
   )
 }
 
