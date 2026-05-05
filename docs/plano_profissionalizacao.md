@@ -834,6 +834,13 @@ Cada subitem 12.x ativado independentemente, com base em:
 
 ## 4. Checklist final — "App pronto para engenheiro profissional usar"
 
+### Estado de progresso por fase (atualizado a cada fase fechada)
+
+- ✅ **Fase 0** — fechada em 2026-05-04. Tag `v0.5-baseline`, snapshots `docs/audit/cases_baseline_2026-05-04.json` e `docs/audit/moorpy_baseline_2026-05-04.json`, ambiente MoorPy isolado em `tools/moorpy_env/`, decisão fechada QMoor/GMoor (modelo NREL `α + β·T_mean`) registrada em CLAUDE.md. 290 testes verdes (282 backend + 8 frontend). Ver [`relatorio_F0_baseline.md`](relatorio_F0_baseline.md).
+- ⬜ Fase 1 — pendente
+- ⬜ Fase 2 — pendente
+- ⬜ Fases 3–11 — pendentes
+
 ### 4.1 — Correção física
 - [ ] Atrito de seabed per-segmento (Fase 1)
 - [ ] Toggle EA QMoor/GMoor por segmento com modelo MoorPy `α + β·T_m` documentado (Fase 1)
