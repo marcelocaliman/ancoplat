@@ -144,13 +144,41 @@ class LineSegment(BaseModel):
     Segmento homogêneo de linha de ancoragem.
 
     Grandezas em SI: comprimento em m, peso em N/m, EA e MBL em N.
-    MVP v2 suporta uma única linha, portanto um único segmento.
-    Multi-segmento fica para v2.1 (conforme Seção 9 do Documento A).
 
     Campos opcionais `category` e `line_type` refletem Seção 5.1 do MVP v2
     PDF e Seção 4.2 do Documento A; servem para rastreabilidade e para
     escolher defaults de atrito na Seção 4.4 quando o solo é conhecido.
-    Não afetam o cálculo do solver.
+
+    ─── Campos físicos por segmento (Fase 1) ────────────────────────────
+    Estes três campos foram adicionados na Fase 1 do plano de
+    profissionalização para resolver as divergências B3 (atrito global) e
+    A1.4+B4 (EA toggle):
+
+    `mu_override`: coeficiente de atrito axial específico para este
+        segmento, sobrescrevendo qualquer outra fonte. Use para casos onde
+        o usuário sabe explicitamente o atrito do trecho.
+
+    `seabed_friction_cf`: coeficiente de atrito derivado do catálogo
+        (line_type → seabed_friction_cf). Populado automaticamente pelo
+        API service ao traduzir do catálogo. Solver puro (sem DB) recebe
+        já resolvido.
+
+    `ea_source`: qual coluna do catálogo foi usada para popular `EA` —
+        "qmoor" (default, EA estático) ou "gmoor" (EA dinâmico, modelo
+        NREL/MoorPy). Documentado em CLAUDE.md seção "Modelo físico de
+        QMoor vs GMoor".
+
+    `ea_dynamic_beta`: coeficiente β do modelo dinâmico MoorPy
+        (`EA = α + β × T_mean`). RESERVADO — não-implementado em v1.0.
+        Quando presente e `ea_source="gmoor"`, ativaria iteração externa
+        de tensão. Mantido como campo opcional para futura compatibilidade.
+
+    ─── Precedência do atrito (resolvida pela facade `solve()`) ─────────
+        segment.mu_override → segment.seabed_friction_cf → seabed.mu → 0.0
+    Defaults `None` preservam o comportamento legado (cai no `seabed.mu`
+    global, equivalente a antes da Fase 1). Esta é uma decisão consciente
+    em substituição à feature-flag `use_per_segment_friction` originalmente
+    prevista no plano (R1.1) — ver CLAUDE.md.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -176,6 +204,46 @@ class LineSegment(BaseModel):
     )
     modulus: Optional[float] = Field(
         default=None, description="Módulo axial aparente (Pa) — metadado"
+    )
+
+    # ─── Atrito per-segmento (Fase 1 / B3) ────────────────────────────
+    mu_override: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Coeficiente de atrito axial específico do segmento, "
+            "sobrescrevendo seabed.mu global e o do catálogo. "
+            "None = não sobrescreve."
+        ),
+    )
+    seabed_friction_cf: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Coeficiente de atrito do catálogo (line_type.seabed_friction_cf). "
+            "Populado pelo API service ao traduzir do catálogo. "
+            "Solver consome após mu_override e antes de seabed.mu."
+        ),
+    )
+
+    # ─── EA source (Fase 1 / A1.4+B4) ─────────────────────────────────
+    ea_source: Literal["qmoor", "gmoor"] = Field(
+        default="qmoor",
+        description=(
+            "Origem do EA: 'qmoor' (estático, EA_MBL × MBL) ou 'gmoor' "
+            "(dinâmico, EAd × MBL — termo α do modelo NREL/MoorPy). "
+            "Default 'qmoor' preserva comportamento histórico do AncoPlat."
+        ),
+    )
+    ea_dynamic_beta: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "RESERVADO — coeficiente β (EAd_Lm) do modelo dinâmico "
+            "completo `EA = α + β × T_mean`. NÃO implementado em v1.0; "
+            "campo existe para compatibilidade com Fase 4+. "
+            "Quando None ou 0, modelo dinâmico é simplificado a α constante."
+        ),
     )
 
     @field_validator("length", "EA", "MBL")
