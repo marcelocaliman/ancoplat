@@ -55,6 +55,7 @@ const EMPTY_LINE = {
       MBL: 5.57e6,
       category: 'StuddedChain' as const,
       line_type: null as string | null,
+      ea_source: 'qmoor' as const,
     },
   ],
   boundary: {
@@ -63,6 +64,9 @@ const EMPTY_LINE = {
     input_value: 1_200_000,
     startpoint_depth: 0,
     endpoint_grounded: true,
+    startpoint_offset_horz: 0,
+    startpoint_offset_vert: 0,
+    startpoint_type: 'semisub' as const,
   },
   seabed: { mu: 0.6, slope_rad: 0 },
   criteria_profile: 'MVP_Preliminary' as const,
