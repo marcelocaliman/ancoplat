@@ -842,7 +842,8 @@ Cada subitem 12.x ativado independentemente, com base em:
 - ✅ **Fase 3** — fechada em 2026-05-05. Quick wins UX: `LineSummaryPanel` com 4 agregados na aba Linha (A1.5); grounded pontilhado vermelho (D6 — decisão consciente, divergência do QMoor cinza, registrada em CLAUDE.md); `boundary.startpoint_type` enum cosmético + Select no grupo Fairlead + ícones SVG novos AHV/Barge/None via dispatcher `getStartpointSvg()` (A2.5+D7); 4 toggles compactos no plot (D9): equal-aspect / labels / legend / images. 372 backend + 41 frontend verdes. Solver intacto. Regressão baseline 3/3. Ver [`relatorio_F3_quick_wins.md`](relatorio_F3_quick_wins.md).
 - ✅ **Fase 4** — fechada em 2026-05-05. Diagnostics maturidade + ProfileType taxonomy: `ProfileType` enum (10 valores forward-compat) + `classify_profile_type()` puro em módulo dedicado; validação vs MoorPy 6/7 match + 1 divergência Cat-3 documentada; 4 diagnostics novos (D012 slope alto + D013 μ=0 com catálogo limiar 0.3 empírico + D014 gmoor sem β + D015 PT raro); cobertura `diagnostics.py` em **100%**; `confidence` field (high/medium/low) com critério documentado; `SurfaceViolationsCard` UI dedicada. 438 backend + 57 frontend verdes. Apply tests: 3 garantidos + 3 best-effort + 9 deferred para Fase 10. Ver [`relatorio_F4_diagnostics.md`](relatorio_F4_diagnostics.md).
 - ✅ **Fase 5** — fechada em 2026-05-05. Reports, memorial e exportação: `case_input_hash()` SHA-256 canonicalizado (sort_keys + separators, exclui name/description) com 16 testes de canonicalização + estabilidade (Ajuste 1); `.moor` v2 schema versionado + migrador v1→v2 com **log estruturado** `{field, old, new, reason}` exposto via `/import/moor` retornando `{case, migration_log}` (Ajuste 2); `build_memorial_pdf()` com rastreabilidade total (hash[:16] + solver_version + timestamp em footer de cada página) + ProfileType + diagnostics estruturados (severity colorida + confidence) — content checks via PyPDF; CSV de geometria ≥ 5000 pontos international format (`,` separator, `.` decimal) com comentários de metadata; Excel `.xlsx` com 3 abas mínimas (Caso/Resultados/Geometria) + Diagnostics opcional consistente com Memorial PDF; UI com 3 botões em CaseDetail e ImportExportPage; 4 endpoints REST novos (`memorial-pdf`, `csv`, `xlsx`, `import/moor` v2). 499 backend + 4 skipped + 57 frontend verdes. Pendência herdada de F2: `.moor` schema sem `slope_rad`/`attachments` — round-trip dos baseline cases skipa quando aplicável. Ver [`relatorio_F5_reports.md`](relatorio_F5_reports.md).
-- ⬜ Fases 6–11 — pendentes
+- ✅ **Fase 6** — fechada em 2026-05-05. Catálogo de boias: tabela `buoys` + `BuoyRecord` + schemas Pydantic com 4 end_types fechados (flat/hemispherical/elliptical/semi_conical); `compute_submerged_force()` ancorado em Excel "Formula Guide" R4-R7 com 23 testes (8 ±1% volume + 8 ±1% empuxo cobrindo 4 end_types × 2 dimensões + 7 sanity); seed canônico de 11 entradas (1 Excel + 10 generic_offshore) com `data_source` documentado por entrada; 5 endpoints REST `/buoys`; `LineAttachment.buoy_catalog_id` opcional rastreável **não-autoritativo em runtime** (solver ignora — verificado); BuoyPicker integrado ao AttachmentsEditor com override automático (`clearCatalogLink` em 6 campos físicos) + indicador visual "do catálogo / modo manual"; tab Boias em /catalog com URL deep-linking `?tab=buoys`. **Library paramétrica MoorPy reservada para F12.x** (decisão Q1 consciente). 554 backend + 4 skipped + 66 frontend verdes. Identidade `V_hemi = V_conic` registrada (propriedade do Excel, não bug). Ver [`relatorio_F6_buoys.md`](relatorio_F6_buoys.md).
+- ⬜ Fases 7–11 — pendentes
 
 ### 4.1 — Correção física
 - [ ] Atrito de seabed per-segmento (Fase 1)
@@ -887,10 +888,10 @@ Cada subitem 12.x ativado independentemente, com base em:
 - [x] `.moor` v2 com round-trip estável (Fase 5) — limitação herdada: schema sem slope_rad/attachments, pendente em Fase 5.x ou 12
 
 ### 4.6 — Catálogos
-- [ ] Cabos: 522 entradas legacy_qmoor (✅)
-- [ ] Cabos: library paramétrica MoorPy disponível em modo "calculadora" (Fase 6, opcional)
-- [ ] Boias: ≥ 5 entradas seed (Fase 6)
-- [ ] Usuário pode adicionar entradas custom (✅ cabos; Fase 6 boias)
+- [x] Cabos: 522 entradas legacy_qmoor (✅)
+- [ ] Cabos: library paramétrica MoorPy disponível em modo "calculadora" (Fase 6 → reservado para F12.x; decisão consciente Q1)
+- [x] Boias: ≥ 10 entradas seed (Fase 6 — 11 entradas, ajuste do usuário em Q9 elevou de 5 para 10)
+- [x] Usuário pode adicionar entradas custom (✅ cabos; ✅ boias na Fase 6)
 
 ### 4.7 — Documentação
 - [ ] CLAUDE.md atualizado (Fase 11)
