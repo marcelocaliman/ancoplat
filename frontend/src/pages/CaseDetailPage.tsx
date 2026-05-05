@@ -431,6 +431,11 @@ export function CaseDetailPage() {
                       attachments={caseInput.attachments ?? []}
                       seabedSlopeRad={caseInput.seabed?.slope_rad ?? 0}
                       segments={caseInput.segments ?? []}
+                      startpointType={
+                        (caseInput.boundary?.startpoint_type as
+                          | 'semisub' | 'ahv' | 'barge' | 'none' | undefined)
+                          ?? 'semisub'
+                      }
                     />
                   </CardContent>
                 </Card>

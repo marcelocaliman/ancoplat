@@ -68,14 +68,62 @@ function svgDataUri(svg: string): string {
 }
 
 function fairleadSvg(color: string): string {
-  // Bloco do casco (semi-sub) com guia do cabo (fairlead chock).
-  // Viewbox simétrico 64×64. Cabo sai pelo fairlead chock no canto inferior direito.
+  // Semi-sub / FPSO: bloco do casco com guia do cabo (fairlead chock).
+  // Viewbox 64×64. Cabo sai pelo fairlead chock no canto inferior direito.
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
     <rect x="6" y="14" width="52" height="22" rx="3" fill="${color}" opacity="0.85"/>
     <rect x="14" y="6" width="36" height="10" rx="2" fill="${color}"/>
     <circle cx="48" cy="40" r="6" fill="none" stroke="${color}" stroke-width="3"/>
     <line x1="48" y1="46" x2="48" y2="58" stroke="${color}" stroke-width="2"/>
   </svg>`
+}
+
+function ahvSvg(color: string): string {
+  // AHV (Anchor Handler Vessel): casco baixo e alongado com superestrutura
+  // a meia-nau e uma popa baixa onde o cabo sai. Stinger de aço sugerido
+  // por linhas verticais na popa.
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+    <path d="M 4 28 L 60 28 L 56 38 L 8 38 Z" fill="${color}" opacity="0.85"/>
+    <rect x="20" y="14" width="22" height="14" rx="1.5" fill="${color}"/>
+    <line x1="42" y1="38" x2="44" y2="46" stroke="${color}" stroke-width="2"/>
+    <line x1="48" y1="38" x2="50" y2="46" stroke="${color}" stroke-width="2"/>
+    <circle cx="48" cy="49" r="4" fill="none" stroke="${color}" stroke-width="2.5"/>
+  </svg>`
+}
+
+function bargeSvg(color: string): string {
+  // Barge: bloco retangular plano sem superestrutura, com guia do cabo
+  // na lateral. Sem decks ou casaria — silhueta simples de embarcação plana.
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+    <rect x="4" y="22" width="56" height="18" rx="2" fill="${color}" opacity="0.85"/>
+    <line x1="14" y1="22" x2="14" y2="40" stroke="#FFFFFF" stroke-width="1" opacity="0.55"/>
+    <line x1="32" y1="22" x2="32" y2="40" stroke="#FFFFFF" stroke-width="1" opacity="0.55"/>
+    <line x1="50" y1="22" x2="50" y2="40" stroke="#FFFFFF" stroke-width="1" opacity="0.55"/>
+    <circle cx="56" cy="44" r="4" fill="none" stroke="${color}" stroke-width="2.5"/>
+  </svg>`
+}
+
+/**
+ * Dispatcher de SVG do startpoint conforme tipo selecionado pelo usuário
+ * (campo cosmético `boundary.startpoint_type`, Fase 3 / A2.5+D7).
+ *
+ * Retorna a string SVG ou `null` para o caso `none` (sem ícone — caller
+ * deve omitir a layout image).
+ */
+function getStartpointSvg(
+  type: 'semisub' | 'ahv' | 'barge' | 'none',
+  color: string,
+): string | null {
+  switch (type) {
+    case 'semisub':
+      return fairleadSvg(color)
+    case 'ahv':
+      return ahvSvg(color)
+    case 'barge':
+      return bargeSvg(color)
+    case 'none':
+      return null
+  }
 }
 
 function anchorSvg(color: string): string {
@@ -247,6 +295,12 @@ export interface CatenaryPlotProps {
    * na legenda.
    */
   segments?: SegmentMeta[]
+  /**
+   * Tipo do startpoint (Fase 3 / A2.5+D7). Define qual ícone SVG aparece
+   * sobre o fairlead. Apenas cosmético — não afeta o resultado físico.
+   * Default 'semisub' preserva o ícone que aparecia antes da Fase 3.
+   */
+  startpointType?: 'semisub' | 'ahv' | 'barge' | 'none'
 }
 
 /**
@@ -273,6 +327,7 @@ export function CatenaryPlot({
   attachments = [],
   seabedSlopeRad = 0,
   segments = [],
+  startpointType = 'semisub',
 }: CatenaryPlotProps) {
   const fillContainer = height == null
   const plotStyle: React.CSSProperties = fillContainer
@@ -647,7 +702,11 @@ export function CatenaryPlot({
           mode: 'lines',
           x: gXm,
           y: gYm,
-          line: { color: palette.grounded, width: 4 },
+          // Fase 3 / D6: grounded como linha pontilhada para destacar do
+          // suspenso (sólido). Cor vermelha preservada — decisão consciente,
+          // diverge da convenção cinza do QMoor pois é mais visível.
+          // Ver §274 do plano de profissionalização e CLAUDE.md.
+          line: { color: palette.grounded, width: 4, dash: 'dot' },
           opacity: hoveredUserIdx != null ? 0.5 : 1,
           connectgaps: false,
           name: 'Trecho apoiado',
@@ -700,7 +759,8 @@ export function CatenaryPlot({
           mode: 'lines',
           x: groundedX,
           y: groundedY,
-          line: { color: palette.grounded, width: 3.5 },
+          // Fase 3 / D6: grounded pontilhado vermelho (ver §274 do plano).
+          line: { color: palette.grounded, width: 3.5, dash: 'dot' },
           name: 'Trecho apoiado',
           text: groundedT.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
           hovertemplate:
@@ -964,9 +1024,13 @@ export function CatenaryPlot({
     const axData = (attTargetPx / plotW) * xSpan
     const ayData = (attTargetPx / plotH) * ySpan
 
-    const imgs: Record<string, unknown>[] = [
-      {
-        source: svgDataUri(fairleadSvg(palette.iconColor)),
+    const startpointSvg = getStartpointSvg(startpointType, palette.iconColor)
+    const imgs: Record<string, unknown>[] = []
+    // Fase 3 / D7: ícone do startpoint só é desenhado quando o tipo
+    // selecionado tem SVG associado. 'none' omite a layout image.
+    if (startpointSvg != null) {
+      imgs.push({
+        source: svgDataUri(startpointSvg),
         xref: 'x',
         yref: 'y',
         x: 0,
@@ -976,20 +1040,20 @@ export function CatenaryPlot({
         xanchor: 'center',
         yanchor: 'middle',
         layer: 'above',
-      },
-      {
-        source: svgDataUri(anchorSvg(palette.anchorIconColor)),
-        xref: 'x',
-        yref: 'y',
-        x: Xtotal,
-        y: anchorY,
-        sizex: fxData,
-        sizey: fyData,
-        xanchor: 'center',
-        yanchor: 'middle',
-        layer: 'above',
-      },
-    ]
+      })
+    }
+    imgs.push({
+      source: svgDataUri(anchorSvg(palette.anchorIconColor)),
+      xref: 'x',
+      yref: 'y',
+      x: Xtotal,
+      y: anchorY,
+      sizex: fxData,
+      sizey: fyData,
+      xanchor: 'center',
+      yanchor: 'middle',
+      layer: 'above',
+    })
 
     const segBounds = result.segment_boundaries ?? []
     if (attachments.length > 0 && segBounds.length >= 2) {
@@ -1238,11 +1302,26 @@ export function CatenaryPlot({
         items.push({ kind: 'line', color: palette.grounded, label: 'Trecho apoiado' })
       }
     }
-    items.push({
-      kind: 'svg',
-      svg: fairleadSvg(palette.iconColor),
-      label: 'Fairlead',
-    })
+    // Fase 3 / D7: legend item do startpoint reflete o tipo selecionado.
+    // 'none' omite o item da legenda (consistente com a omissão do ícone
+    // sobre o plot).
+    {
+      const legendStartpointSvg = getStartpointSvg(
+        startpointType, palette.iconColor,
+      )
+      if (legendStartpointSvg != null) {
+        items.push({
+          kind: 'svg',
+          svg: legendStartpointSvg,
+          label:
+            startpointType === 'ahv'
+              ? 'AHV'
+              : startpointType === 'barge'
+                ? 'Barge'
+                : 'Fairlead',
+        })
+      }
+    }
     items.push({
       kind: 'svg',
       svg: anchorSvg(palette.anchorIconColor),

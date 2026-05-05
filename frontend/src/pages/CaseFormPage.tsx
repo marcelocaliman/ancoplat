@@ -900,6 +900,9 @@ export function CaseFormPage() {
                 attachments={debouncedValues.attachments ?? []}
                 seabedSlopeRad={debouncedValues.seabed?.slope_rad ?? 0}
                 segments={debouncedValues.segments ?? []}
+                startpointType={
+                  debouncedValues.boundary?.startpoint_type ?? 'semisub'
+                }
                 preSolveDiagnostics={preSolveDiagnostics}
                 worstSeverity={diagWorst}
                 lastValidValues={lastValidValues}
@@ -1032,6 +1035,7 @@ function PlotArea({
   attachments,
   seabedSlopeRad,
   segments,
+  startpointType = 'semisub',
   preSolveDiagnostics,
   worstSeverity: worstSev,
   lastValidValues,
@@ -1048,6 +1052,7 @@ function PlotArea({
     category?: 'Wire' | 'StuddedChain' | 'StudlessChain' | 'Polyester' | null
     line_type?: string | null
   }>
+  startpointType?: 'semisub' | 'ahv' | 'barge' | 'none'
   preSolveDiagnostics?: SolverDiagnostic[]
   worstSeverity?: DiagnosticSeverity | null
   lastValidValues?: CaseFormValues | null
@@ -1167,6 +1172,7 @@ function PlotArea({
           attachments={attachments}
           seabedSlopeRad={seabedSlopeRad}
           segments={segments}
+          startpointType={startpointType}
         />
       </div>
     </div>
