@@ -17,7 +17,15 @@ import {
   Wrench,
   Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from 'react'
 import { Controller, useFieldArray, useForm } from 'react-hook-form'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -1012,12 +1020,29 @@ function InlineField({
   tooltip?: string
   children: React.ReactNode
 }) {
+  // F9 / Q8 — a11y: id determinístico Label↔Input + aria-required + aria-invalid
+  // + aria-describedby quando há mensagem de erro.
+  const id = useId()
+  const errorId = error ? `${id}-error` : undefined
+  const enhancedChild = injectFieldA11y(children, {
+    id,
+    required,
+    invalid: !!error,
+    describedBy: errorId,
+  })
   return (
     <div className={cn('flex flex-col gap-0.5', className)}>
-      <Label className="flex items-center justify-between gap-1 text-[10px] font-medium text-muted-foreground">
+      <Label
+        htmlFor={id}
+        className="flex items-center justify-between gap-1 text-[10px] font-medium text-muted-foreground"
+      >
         <span className="flex items-center gap-1 truncate">
           {label}
-          {required && <span className="text-danger">*</span>}
+          {required && (
+            <span aria-hidden className="text-danger">
+              *
+            </span>
+          )}
           {tooltip && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1033,9 +1058,32 @@ function InlineField({
           <span className="shrink-0 font-mono text-[9px] font-normal">{unit}</span>
         )}
       </Label>
-      {children}
-      {error && <p className="text-[10px] text-danger">{error}</p>}
+      {enhancedChild}
+      {error && (
+        <p id={errorId} role="alert" className="text-[10px] text-danger">
+          {error}
+        </p>
+      )}
     </div>
+  )
+}
+
+// Helper local — espelha SegmentEditor.injectA11y mas adiciona
+// aria-invalid e aria-describedby para mensagens de erro inline.
+function injectFieldA11y(
+  children: React.ReactNode,
+  props: { id: string; required?: boolean; invalid?: boolean; describedBy?: string },
+): React.ReactNode {
+  const arr = Children.toArray(children)
+  const onlyChild = arr[0]
+  if (!isValidElement(onlyChild)) return children
+  const extra: Record<string, unknown> = { id: props.id }
+  if (props.required) extra['aria-required'] = true
+  if (props.invalid) extra['aria-invalid'] = true
+  if (props.describedBy) extra['aria-describedby'] = props.describedBy
+  return cloneElement(
+    onlyChild as React.ReactElement<Record<string, unknown>>,
+    extra,
   )
 }
 

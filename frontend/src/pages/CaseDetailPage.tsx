@@ -894,8 +894,12 @@ function StaleSolverBanner({
   pending: boolean
 }) {
   return (
-    <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
-      <AlertCircle className="mt-0.5 h-4 w-4 text-warning" />
+    <div
+      role="status"
+      aria-live="polite"
+      className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 text-warning" aria-hidden />
       <div className="min-w-0 flex-1 space-y-1">
         <p className="font-medium">Execução em versão antiga do solver</p>
         <p className="text-muted-foreground">
