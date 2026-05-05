@@ -62,6 +62,20 @@ export const lineSegmentSchema = z.object({
   diameter: z.number().positive().nullable().optional(),
   dry_weight: z.number().positive().nullable().optional(),
   modulus: z.number().positive().nullable().optional(),
+  // ─── Atrito per-segmento (Fase 1 / B3) ─────────────────────────
+  mu_override: z
+    .number()
+    .min(0, 'Atrito não pode ser negativo')
+    .nullable()
+    .optional(),
+  seabed_friction_cf: z
+    .number()
+    .min(0, 'Atrito do catálogo não pode ser negativo')
+    .nullable()
+    .optional(),
+  // ─── EA source (Fase 1 / A1.4+B4) ──────────────────────────────
+  ea_source: z.enum(['qmoor', 'gmoor']).default('qmoor'),
+  ea_dynamic_beta: z.number().min(0).nullable().optional(), // reservado v1
 })
 
 export const boundarySchema = z.object({
@@ -150,6 +164,10 @@ export const EMPTY_CASE: CaseFormValues = {
       diameter: 0.0762,      // 3" ~ wire rope IWRCEIPS default
       dry_weight: 242.3,     // 16.6 lbf/ft
       modulus: 6.76e10,      // 9804 kip/in² — módulo aparente wire
+      mu_override: null,
+      seabed_friction_cf: null,
+      ea_source: 'qmoor',
+      ea_dynamic_beta: null,
     },
   ],
   boundary: {

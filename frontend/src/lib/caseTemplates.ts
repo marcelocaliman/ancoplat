@@ -43,6 +43,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
           diameter: 0.0762,
           dry_weight: 242.3,
           modulus: 6.76e10,
+          ea_source: 'qmoor',
         },
       ],
       boundary: {
@@ -79,6 +80,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
           diameter: 0.16,
           dry_weight: 22.0,
           modulus: 2.24e9,
+          ea_source: 'qmoor',
         },
       ],
       boundary: {
@@ -115,6 +117,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
           diameter: 0.0508,
           dry_weight: 107.9,
           modulus: 9.65e10,
+          ea_source: 'qmoor',
         },
       ],
       boundary: {
@@ -180,6 +183,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
           diameter: 0.105,
           dry_weight: 1800,
           modulus: 1.7e11,
+          ea_source: 'qmoor',
         },
         {
           length: 700,
@@ -191,6 +195,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
           diameter: 0.076,
           dry_weight: 240,
           modulus: 9.6e10,
+          ea_source: 'qmoor',
         },
         {
           length: 200,
@@ -202,6 +207,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
           diameter: 0.105,
           dry_weight: 1800,
           modulus: 1.7e11,
+          ea_source: 'qmoor',
         },
       ],
       boundary: {
@@ -238,6 +244,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
           diameter: 0.076,
           dry_weight: 950,
           modulus: 1.5e11,
+          ea_source: 'qmoor',
         },
       ],
       boundary: {
@@ -274,6 +281,7 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
           diameter: 0.18,
           dry_weight: 22,
           modulus: 1.8e9,
+          ea_source: 'qmoor',
         },
       ],
       boundary: {

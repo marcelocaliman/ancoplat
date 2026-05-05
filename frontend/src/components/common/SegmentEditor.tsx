@@ -71,26 +71,67 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
   const p = (suffix: string): Path<T> =>
     `${basePath}.${index}.${suffix}` as Path<T>
 
-  function applyLineTypeToSegment(lt: LineTypeOutput | null) {
+  /**
+   * Aplica os campos do catálogo (`LineTypeOutput`) ao segmento.
+   *
+   * Fase 1: aceita `eaSource` para escolher entre coluna `qmoor_ea`
+   * (estática, default) ou `gmoor_ea` (dinâmica, modelo NREL/MoorPy
+   * — ver CLAUDE.md). Quando `gmoor` é solicitado mas o catálogo tem
+   * `gmoor_ea = null`, faz fallback para `qmoor_ea` com toast de aviso
+   * (defesa em UI alinhada com a validação 422 do backend Q4).
+   *
+   * Também popula `seabed_friction_cf` automaticamente — passa a ser
+   * a fonte de verdade do atrito quando o usuário não fizer override.
+   */
+  function applyLineTypeToSegment(
+    lt: LineTypeOutput | null,
+    eaSource: 'qmoor' | 'gmoor' = 'qmoor',
+  ) {
     if (!lt) return
+
+    // Resolve EA conforme ea_source pedido
+    let chosenEA: number
+    let appliedSource: 'qmoor' | 'gmoor' = eaSource
+    if (eaSource === 'gmoor') {
+      if (lt.gmoor_ea != null) {
+        chosenEA = lt.gmoor_ea
+      } else {
+        // Fallback silencioso para qmoor + toast de aviso
+        chosenEA = lt.qmoor_ea ?? 0
+        appliedSource = 'qmoor'
+        toast.warning(
+          `${lt.line_type}: catálogo não tem GMoor EA. Aplicando QMoor.`,
+        )
+      }
+    } else {
+      chosenEA = lt.qmoor_ea ?? lt.gmoor_ea ?? 0
+    }
+
     setValue(p('line_type'), lt.line_type as never, { shouldValidate: true })
     setValue(p('category'), lt.category as never, { shouldValidate: true })
     setValue(p('w'), roundTo(lt.wet_weight, 2) as never, { shouldValidate: true })
-    setValue(
-      p('EA'),
-      roundTo(lt.qmoor_ea ?? lt.gmoor_ea ?? 0, 0) as never,
-      { shouldValidate: true },
-    )
+    setValue(p('EA'), roundTo(chosenEA, 0) as never, { shouldValidate: true })
+    setValue(p('ea_source'), appliedSource as never, { shouldValidate: true })
     setValue(p('MBL'), roundTo(lt.break_strength, 0) as never, { shouldValidate: true })
     setValue(p('diameter'), roundTo(lt.diameter, 5) as never, { shouldValidate: true })
     setValue(p('dry_weight'), roundTo(lt.dry_weight, 2) as never, { shouldValidate: true })
     if (lt.modulus) {
       setValue(p('modulus'), roundTo(lt.modulus, 0) as never, { shouldValidate: true })
     }
+    // Atrito do catálogo (Fase 1 / B3) — populado quando line_type é
+    // aplicado. mu_override do usuário (se houver) tem precedência.
+    if (lt.seabed_friction_cf != null) {
+      setValue(
+        p('seabed_friction_cf'),
+        lt.seabed_friction_cf as never,
+        { shouldValidate: true },
+      )
+    }
+
     toast.success(`${lt.line_type} aplicado ao segmento ${index + 1}`, {
       description: `Ø ${fmtDiameterMM(lt.diameter, 0)} · MBL ${fmtNumber(
         lt.break_strength / 1000, 0,
-      )} kN`,
+      )} kN · EA ${appliedSource.toUpperCase()}`,
     })
   }
 
@@ -175,7 +216,13 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
                   } as LineTypeOutput)
                 : null
             }
-            onChange={applyLineTypeToSegment}
+            onChange={(lt) =>
+              applyLineTypeToSegment(
+                lt,
+                (watch(p('ea_source')) as 'qmoor' | 'gmoor' | undefined) ??
+                  'qmoor',
+              )
+            }
           />
         )}
       />
@@ -285,6 +332,52 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
             type="number"
             step="1e9"
             {...register(p('modulus'), { valueAsNumber: true })}
+            className="h-8 font-mono"
+          />
+        </InlineLabeled>
+        {/* ─── Fase 1: EA source + atrito per-segmento ─────────────── */}
+        <InlineLabeled
+          label="EA source"
+          className="col-span-2"
+        >
+          <Controller
+            control={control}
+            name={p('ea_source')}
+            render={({ field }) => (
+              <Select
+                value={(field.value as string | undefined) ?? 'qmoor'}
+                onValueChange={field.onChange}
+              >
+                <SelectTrigger className="h-8" title="EA estático (QMoor) ou dinâmico (GMoor — modelo NREL/MoorPy). Default QMoor.">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="qmoor">QMoor (estático)</SelectItem>
+                  <SelectItem value="gmoor">GMoor (dinâmico)</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </InlineLabeled>
+        <InlineLabeled
+          label="μ override"
+          unit=""
+          className="col-span-2"
+        >
+          <Input
+            type="number"
+            step="0.05"
+            min="0"
+            placeholder={(() => {
+              const cf = watch(p('seabed_friction_cf')) as number | null
+              return cf != null
+                ? `Catálogo: ${fmtNumber(cf, 2)} (deixe vazio p/ usar)`
+                : 'Vazio = usa global do seabed'
+            })()}
+            {...register(p('mu_override'), {
+              setValueAs: (v) =>
+                v === '' || v == null ? null : Number(v),
+            })}
             className="h-8 font-mono"
           />
         </InlineLabeled>
