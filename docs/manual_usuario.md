@@ -337,7 +337,155 @@ para v1.1+.
 
 > **Esta seção é leitura obrigatória antes de usar a feature AHV.**
 
-*(Conteúdo desta seção em commit dedicado — vide §7 abaixo.)*
+### 7.1. Domínio de aplicação
+
+A feature **AHV (Anchor Handler Vessel)** modela uma carga estática
+horizontal aplicada num ponto da linha de ancoragem durante operação
+de **instalação de âncora**. O caso de uso típico é o cálculo
+preliminar da tensão na linha quando um rebocador (anchor handler)
+está engatado ao cabo aplicando bollard pull para posicionar a
+âncora.
+
+A feature é **especializada para análise de instalação** — não
+substitui as análises rotineiras de operação (catenária pura sem
+AHV) nem deve ser usada para certificação de operação dinâmica
+(snap loads, ondas, vento variável).
+
+### 7.2. Idealização modelada vs operação real
+
+> **Esta é a parte mais importante desta seção. Leia com atenção.**
+
+A modelagem do AncoPlat é uma **idealização estática** da operação
+real:
+
+| Aspecto físico | Realidade na operação | Modelo AncoPlat v1.0 |
+|----------------|-----------------------|----------------------|
+| Posição do rebocador | Dinâmica (oscila com ondas) | Fixa, ponto único na linha |
+| Direção do bollard pull | Varia com posicionamento dinâmico | Constante, ângulo `heading` informado |
+| Magnitude da força | Oscila com ondas + vento | Constante, valor `bollard_pull` informado |
+| Acoplamento hidrodinâmico | Cabo/rebocador interagem com fluxo | Não modelado |
+| Snap loads | Ocorrem em rebocador desalinhado | Não capturados |
+| Pitch da força (Fz≠0) | Existe quando rebocador puxa pra cima | Não modelado em v1.0 |
+| 3D (componente fora do plano) | Existe na operação real | Reduzido a 2D no plano da linha |
+
+A consequência prática é: o resultado do AncoPlat é uma estimativa
+**média conservadora** da carga em junção sob aquela combinação de
+bollard pull + heading, válida para dimensionamento preliminar mas
+**não substitui análise dinâmica de instalação** com modelo de
+ondas, posicionamento do rebocador e dinâmica do cabo.
+
+### 7.3. Quando usar
+
+Use a feature AHV quando:
+- Estimar carga em junção durante operação de instalação para
+  dimensionamento preliminar de pendant.
+- Avaliar sensibilidade da tensão na linha à magnitude e direção do
+  bollard pull (varredura paramétrica).
+- Documentar premissas estáticas em memorial técnico para revisão
+  por engenheiro responsável.
+- Comparar layouts de instalação alternativos (rota de aproximação
+  do rebocador, ângulo de engate) em primeira ordem.
+
+### 7.4. Quando NÃO usar
+
+> **Quando NÃO usar tem peso igual ao "quando usar". Não é footnote.**
+
+NÃO use a feature AHV para:
+
+- **Certificação operacional** de instalação. AncoPlat não substitui
+  software dedicado de análise dinâmica (OrcaFlex, Aqwa, Sesam,
+  etc.). Use AncoPlat para preliminary scoping; certificação requer
+  análise dinâmica auditada.
+- **Análise de snap loads**. Cargas de impacto durante desalinhamento
+  do rebocador NÃO são capturadas pela idealização estática.
+  Subestima carga máxima em cenários adversos.
+- **Operação em ondas significativas** (Hs > ~1.5 m) sem cross-check
+  dinâmico. A idealização estática perde aderência à realidade
+  conforme aumenta a oscilação do rebocador.
+- **Decisão de bollard pull máximo aplicável**. O número de bollard
+  pull que você informa é input, não output. AncoPlat reporta o que
+  acontece NA LINHA dado o bollard, não diz qual bollard é seguro
+  aplicar — isso depende do AHV físico, do cabo de engate, do
+  conector e da equipe de operação.
+- **Substituto de análise de fadiga**. Carga estática única não dá
+  ciclos.
+
+### 7.5. Diagnostics dedicados (D018 e D019)
+
+A v1.0 carrega 2 diagnostics que disparam automaticamente em cases
+com AHV:
+
+#### D018 — AHV idealização estática
+
+- **Severity:** warning
+- **Confidence:** medium
+- **Quando dispara:** **sempre que `kind="ahv"` está presente em
+  qualquer junção do caso**. Não há opção de esconder.
+- **Mensagem:** "Análise estática de AHV é idealização — não
+  substitui análise dinâmica de instalação."
+- **O que fazer:** ler esta seção do manual e o bloco "AHV — Domínio
+  de aplicação" no Memorial PDF gerado para o caso. Confirmar que o
+  uso pretendido se enquadra em §7.3.
+
+D018 é registrado no Memorial PDF em seção dedicada,
+explicitamente, **com o texto canônico desta idealização**. Esta
+mitigação em 3 níveis (D018 + Memorial + manual) é decisão fechada
+da Fase 8 e **não é opcional**: vide
+[decisões fechadas §9](decisoes_fechadas.md#9).
+
+#### D019 — Heading com projeção <30%
+
+- **Severity:** warning
+- **Confidence:** high
+- **Quando dispara:** quando o `ahv_heading_deg` resulta em projeção
+  inferior a 30% no plano vertical da linha. Exemplo: linha alinhada
+  com eixo X (azimute 0°) + AHV com heading=85° → projeção horizontal
+  da força AHV no plano da linha é cos(85°)=0.087, ou seja, ~9%.
+- **Por que importa:** se o engenheiro digita um bollard pull alto
+  (1+ MN) e um heading quase perpendicular ao plano da linha,
+  o resultado da análise pode ficar quase idêntico ao caso SEM AHV
+  (porque a força projetada é desprezível). D019 alerta para o
+  usuário verificar se o heading está correto OU se o caso deveria
+  ser modelado em 3D (limitação v1.0 — vide §7.2).
+- **O que fazer:** revisar `ahv_heading_deg`. Em referencial: 0° = eixo
+  X global, anti-horário. Se a linha é radial num spread mooring,
+  use o azimute do fairlead como heading do AHV alinhado.
+
+### 7.6. Exemplo numérico — BC-AHV-01 (lateral pura)
+
+Caso canônico do gate v1.0:
+
+- **Geometria:** 2 segmentos chain studless de 200 m cada, h=200 m,
+  `T_fl=2 MN`.
+- **AHV:** junção 0 (entre seg 0 e seg 1), `bollard_pull=1 MN`,
+  `heading=0°` (alinhado com eixo X global, mesma direção da
+  catenária).
+
+Resultado:
+- **H_jump na junção 0:** -1 MN (AHV puxa contra a tensão da linha
+  na direção da âncora).
+- **H_anchor:** ≈ H_fairlead − 1 MN (queda de 1 MN passando pela
+  junção AHV).
+- **V_jump:** 0 (AHV horizontal puro).
+- **Erro vs cálculo manual:** 0.0000% (catenária paramétrica é
+  exata; sem incerteza de modelo elástico como em F7).
+
+Reproduza este caso clicando em **Sidebar → "Samples" → "AHV pull
+durante instalação"**.
+
+### 7.7. Onde encontrar mais detalhes
+
+- **Memorial PDF do caso** — seção "AHV — Domínio de aplicação"
+  obrigatória quando AHV está presente. Texto canônico verificado
+  via 5 strings-chave em PyPDF (vide
+  [`backend/api/tests/test_memorial_pdf_ahv.py`](../backend/api/tests/test_memorial_pdf_ahv.py)).
+- **Relatório técnico:**
+  [`relatorio_F8_ahv.md`](relatorio_F8_ahv.md) — desenvolvimento
+  completo da feature, BC-AHV-01..04, descobertas técnicas (H
+  per-segmento).
+- **Especificação técnica:**
+  [`Documento_A_Especificacao_Tecnica_v2_2.docx`](Documento_A_Especificacao_Tecnica_v2_2.docx)
+  — domínio offshore canônico.
 
 ---
 
