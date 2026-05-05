@@ -103,6 +103,93 @@ def test_fairlead_abaixo_do_seabed_invalid_case() -> None:
     assert "startpoint_depth" in r.message or "inviável" in r.message.lower()
 
 
+# ==============================================================================
+# BC-FAIRLEAD-SLOPE-01: validação de fairlead em seabed inclinado (Fase 2 / Q7)
+# ==============================================================================
+
+
+def test_BC_FAIRLEAD_SLOPE_01_descendente_nao_rejeita_caso_valido() -> None:
+    """
+    Em seabed descendente (slope < 0 — anchor mais raso que ponto sob
+    fairlead), a profundidade do seabed sob o fairlead é MAIOR que h.
+    A validação Fase 2 (h_at_fairlead = h - tan(slope)·X) deve aceitar
+    casos onde startpoint_depth > h mas startpoint_depth < h_at_fairlead.
+
+    Cenário: h (anchor)=200m, slope=-5° (desce 5° p/ fairlead),
+    X≈400m → h_at_fairlead = 200 - tan(-5°)·400 ≈ 235m.
+    Fairlead a 30m de prof — OK (< 235m).
+    """
+    import math
+    seg = LineSegment(
+        length=600.0, w=13.78 * LBF_FT_TO_N_M, EA=34.25e6, MBL=3.78e6,
+    )
+    bc = BoundaryConditions(
+        h=200, mode=SolutionMode.TENSION, input_value=785_000,
+        startpoint_depth=30.0,
+    )
+    sb = SeabedConfig(slope_rad=math.radians(-5))  # descendente
+    r = solve([seg], bc, sb)
+    # Pré-Fase-2 isso teria rejeitado se startpoint_depth fosse > h plano —
+    # mas startpoint_depth=30 < h=200 mesmo plano, logo o caso passaria.
+    # Construímos um teste mais cirúrgico abaixo (startpoint_depth ENTRE h e h_at_fairlead).
+    assert r.status == ConvergenceStatus.CONVERGED, r.message
+
+
+def test_BC_FAIRLEAD_SLOPE_01_descendente_caso_que_falharia_pre_F2() -> None:
+    """
+    Caso que a validação plana pré-Fase-2 rejeitaria mas o relaxamento
+    Q7 aceita: startpoint_depth > h mas ainda < h_at_fairlead.
+
+    Setup escolhido: h=100m, slope=-30° (seabed cai forte), X (modo Range)
+    de 500m → h_at_fairlead ≈ 100 - tan(-30°)·500 ≈ 100 + 289 = 389m.
+    Fairlead a 150m de prof: 150 > h=100 (rejeitaria pré-F2) mas
+    150 < h_at_fairlead=389 (aceita pós-F2).
+    """
+    import math
+    seg = LineSegment(
+        length=900.0, w=13.78 * LBF_FT_TO_N_M, EA=34.25e6, MBL=3.78e6,
+    )
+    bc = BoundaryConditions(
+        h=100,
+        mode=SolutionMode.RANGE,
+        input_value=500.0,
+        startpoint_depth=150.0,  # > h plano, mas < h_at_fairlead
+    )
+    sb = SeabedConfig(slope_rad=math.radians(-30))
+    # Pré-F2 isto virava INVALID_CASE no _validate_inputs.
+    # Pós-F2 deve passar a validação (e retornar CONVERGED ou INVALID_CASE
+    # por outras razões físicas, mas NÃO pelo guard de startpoint_depth >= h).
+    r = solve([seg], bc, sb)
+    if r.status == ConvergenceStatus.INVALID_CASE:
+        # Se ainda é INVALID, garante que é por outra razão (não startpoint_depth).
+        assert "startpoint_depth" not in r.message, (
+            f"Caso ainda rejeitado pelo guard de startpoint_depth: {r.message}"
+        )
+
+
+def test_BC_FAIRLEAD_SLOPE_01_descendente_excessivo_rejeita() -> None:
+    """
+    Caso que mesmo o relaxamento Q7 deve rejeitar: startpoint_depth >
+    h_at_fairlead (geometria impossível).
+    """
+    import math
+    seg = LineSegment(
+        length=400.0, w=13.78 * LBF_FT_TO_N_M, EA=34.25e6, MBL=3.78e6,
+    )
+    # h=200, slope=+10° (sobe ao fairlead), X≈300 → h_at_fairlead ≈ 200 - 53 = 147
+    # startpoint_depth=180 > h_at_fairlead=147 → rejeita.
+    bc = BoundaryConditions(
+        h=200,
+        mode=SolutionMode.RANGE,
+        input_value=300.0,
+        startpoint_depth=180.0,
+    )
+    sb = SeabedConfig(slope_rad=math.radians(10))  # sobe ao fairlead
+    r = solve([seg], bc, sb)
+    assert r.status == ConvergenceStatus.INVALID_CASE
+    assert "fairlead" in r.message.lower()
+
+
 def test_default_endpoint_grounded_e_startpoint_depth() -> None:
     """Defaults preservados: endpoint_grounded=True, startpoint_depth=0."""
     bc = BoundaryConditions(h=300, mode=SolutionMode.TENSION, input_value=785_000)

@@ -145,16 +145,48 @@ def _validate_inputs(
             "ainda. Forneça endpoint_grounded=True."
         )
     # (a) Fisicamente justificada: fairlead no ou abaixo do seabed é inviável.
-    # Comparação plana (slope=0) — em seabed inclinado descendente, a
-    # profundidade do seabed sob o fairlead é menor que h, e esta validação
-    # rejeita casos válidos. Q7 da Fase 2 (Commit 3) relaxa para incluir slope.
-    if boundary.startpoint_depth >= boundary.h + 1e-9:
+    # Em seabed inclinado, a profundidade do seabed SOB O FAIRLEAD difere
+    # de h (= prof. sob a âncora) — depende de slope_rad e da distância
+    # horizontal. Q7 da Fase 2: validar contra `h_at_fairlead` (calculado
+    # com slope), não contra `h` plano.
+    h_at_fairlead = boundary.h - math.tan(seabed.slope_rad) * _x_estimate(
+        line_segments, boundary,
+    )
+    if boundary.startpoint_depth >= h_at_fairlead + 1e-9:
         raise ValueError(
             f"startpoint_depth={boundary.startpoint_depth:.2f} m >= "
-            f"h={boundary.h:.2f} m: fairlead no ou abaixo do seabed é inviável "
-            "(a âncora precisa ficar abaixo do fairlead, ou no mesmo nível)."
+            f"h_at_fairlead={h_at_fairlead:.2f} m "
+            f"(h={boundary.h:.2f} m, slope={math.degrees(seabed.slope_rad):.2f}°, "
+            f"X_est={_x_estimate(line_segments, boundary):.1f} m): "
+            "fairlead no ou abaixo do seabed sob ele é inviável. "
+            "Verifique geometria — possível X grande demais ou inversão "
+            "de sinal no slope (slope > 0 = seabed sobe ao fairlead)."
         )
     return segment
+
+
+def _x_estimate(
+    line_segments: Sequence[LineSegment],
+    boundary: BoundaryConditions,
+) -> float:
+    """
+    Estimativa conservadora de X (distância horizontal âncora → fairlead)
+    para validar `startpoint_depth` em seabed inclinado (Q7 da Fase 2).
+
+    Estratégia (mais específico → mais geral):
+      1. Modo Range: `boundary.input_value` JÁ é o X target — usa direto.
+      2. Modo Tension: upper-bound conservador é Σ L_segments (linha
+         taut, X ≤ comprimento total). Garante que a validação falhe
+         FECHADA — só rejeita quando geometria é impossível para
+         qualquer X ≤ L_total razoável.
+
+    A elasticidade pode esticar a linha em até ~5% (validador de strain
+    no multi_segment.py); o upper-bound usa `length` (unstretched), aceitando
+    pequena conservadorismo em vez de chamar o solver elástico aqui.
+    """
+    if boundary.mode == SolutionMode.RANGE:
+        return float(boundary.input_value)
+    return sum(s.length for s in line_segments)
 
 
 def _broken_ratio(
