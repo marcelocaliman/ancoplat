@@ -225,3 +225,13 @@ export const exportJsonUrl = (caseId: number) =>
 
 export const exportPdfUrl = (caseId: number) =>
   `/api/v1/cases/${caseId}/export/pdf`
+
+// Fase 5 — Memorial técnico, CSV de geometria, Excel completo
+export const exportMemorialPdfUrl = (caseId: number) =>
+  `/api/v1/cases/${caseId}/export/memorial-pdf`
+
+export const exportCsvUrl = (caseId: number) =>
+  `/api/v1/cases/${caseId}/export/csv`
+
+export const exportXlsxUrl = (caseId: number) =>
+  `/api/v1/cases/${caseId}/export/xlsx`
