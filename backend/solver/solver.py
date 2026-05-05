@@ -696,9 +696,18 @@ def solve(
                 }
             )
 
-        # Caso normal convergido: injeta alert_level.
+        # Caso normal convergido: injeta alert_level + profile_type.
+        # Fase 4 / Q2: classify_profile_type é chamado aqui no facade,
+        # após o solve completo. Função pura, não toca em DB nem
+        # re-solve. None quando status != CONVERGED/ILL_CONDITIONED.
+        from .profile_type import classify_profile_type as _classify_pt
+        pt = _classify_pt(result, line_segments, seabed)
         return SolverResult(
-            **{**result.model_dump(), "alert_level": alert}
+            **{
+                **result.model_dump(),
+                "alert_level": alert,
+                "profile_type": pt,
+            }
         )
 
     return result
