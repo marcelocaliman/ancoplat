@@ -29,8 +29,26 @@ from fastapi.testclient import TestClient
 from backend.api.tests._fixtures import BC01_LIKE_INPUT
 
 
-N_REPS = 50  # número de requisições por endpoint
+N_REPS = 30  # número de requisições por endpoint (sob rate limit 100/min)
 P95_GATE_MS = 100.0  # gate <100ms (per plano §926)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """
+    Reset do storage do slowapi antes de cada teste de perf — evita
+    falsos 429 quando a suíte completa acumula chamadas no bucket
+    compartilhado por TestClient (mesmo client IP). Sem isso, o teste
+    passa em isolamento mas falha após `test_rate_limit_dispara`
+    encher o bucket (test_robustez_f4.py).
+    """
+    from backend.api.main import limiter
+    try:
+        limiter.reset()
+    except Exception:
+        # storage pode não suportar reset em todas versões do slowapi
+        pass
+    yield
 
 
 def _percentile(values: list[float], p: float) -> float:
