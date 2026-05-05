@@ -79,11 +79,14 @@ export const lineSegmentSchema = z.object({
 })
 
 export const boundarySchema = z.object({
-  h: z.number().positive("Lâmina d'água deve ser > 0"),
+  h: z.number().positive("Profundidade do seabed sob a âncora deve ser > 0"),
   mode: z.enum(['Tension', 'Range']),
   input_value: z.number().positive('Valor deve ser > 0'),
   startpoint_depth: z.number().min(0).default(0),
   endpoint_grounded: z.boolean().default(true),
+  // Offset cosmético do startpoint (Fase 2 / A2.6) — não entra no solver.
+  startpoint_offset_horz: z.number().default(0),
+  startpoint_offset_vert: z.number().default(0),
 })
 
 export const seabedSchema = z.object({
@@ -176,6 +179,8 @@ export const EMPTY_CASE: CaseFormValues = {
     input_value: 785_000,
     startpoint_depth: 0,
     endpoint_grounded: true,
+    startpoint_offset_horz: 0,
+    startpoint_offset_vert: 0,
   },
   seabed: { mu: 0.6, slope_rad: 0 },  // default de wire em argila firme
   criteria_profile: 'MVP_Preliminary',

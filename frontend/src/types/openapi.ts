@@ -584,6 +584,18 @@ export interface components {
              * @default true
              */
             endpoint_grounded: boolean;
+            /**
+             * Startpoint Offset Horz
+             * @description (Fase 2) Offset horizontal cosmético do startpoint (m). Não entra no solver em v1.0.
+             * @default 0
+             */
+            startpoint_offset_horz?: number;
+            /**
+             * Startpoint Offset Vert
+             * @description (Fase 2) Offset vertical cosmético do startpoint (m, positivo acima). Não entra no solver em v1.0.
+             * @default 0
+             */
+            startpoint_offset_vert?: number;
         };
         /**
          * CaseInput

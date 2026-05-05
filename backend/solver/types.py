@@ -441,7 +441,14 @@ class BoundaryConditions(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    h: float = Field(..., description="Distância vertical anchor→fairlead (m)")
+    h: float = Field(
+        ...,
+        description=(
+            "Profundidade do seabed sob a âncora (water_depth_at_anchor, m). "
+            "Como a âncora sempre está no seabed no MVP v1, h coincide com a "
+            "lâmina d'água naquela coluna."
+        ),
+    )
     mode: SolutionMode
     input_value: float = Field(
         ..., description="T_fl (N) se mode=Tension; X_total (m) se mode=Range"
@@ -453,6 +460,29 @@ class BoundaryConditions(BaseModel):
     endpoint_grounded: bool = Field(
         default=True,
         description="Se True, âncora está no seabed. MVP v1 exige True.",
+    )
+
+    # ─── Offset cosmético do startpoint (Fase 2 / A2.6) ───────────────
+    # Reservado em v1.0 — afeta APENAS a posição do ícone do fairlead no
+    # plot, NÃO entra no cálculo do solver. Mantido como campo opcional
+    # para forward-compat com fase futura que tornará o offset físico
+    # (similar ao tratamento de `ea_dynamic_beta` na Fase 1).
+    startpoint_offset_horz: float = Field(
+        default=0.0,
+        description=(
+            "Offset horizontal do startpoint a partir da âncora (m). "
+            "COSMÉTICO em v1.0 — afeta apenas a visualização do plot, "
+            "NÃO entra no cálculo. Reservado para fase futura."
+        ),
+    )
+    startpoint_offset_vert: float = Field(
+        default=0.0,
+        description=(
+            "Offset vertical do startpoint relativo à superfície (m, "
+            "positivo acima). Equivalente ao 'Deck Level above SWL' do "
+            "QMoor 0.8.5. COSMÉTICO em v1.0 — afeta apenas a visualização "
+            "do plot. Reservado para fase futura."
+        ),
     )
 
     @field_validator("h", "input_value")

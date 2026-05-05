@@ -128,3 +128,38 @@ def test_segment_continua_frozen():
     seg = LineSegment(length=500.0, w=200.0, EA=7.5e9, MBL=3.0e6)
     with pytest.raises((ValidationError, TypeError)):
         seg.ea_source = "gmoor"  # type: ignore[misc]
+
+
+# ─── BoundaryConditions — campos cosméticos da Fase 2 ───────────────
+
+
+def test_boundary_minimal_aplica_defaults_offset_zero():
+    """BoundaryConditions mínimo recebe defaults Fase-2 zerados."""
+    from backend.solver.types import BoundaryConditions, SolutionMode
+    bc = BoundaryConditions(h=300.0, mode=SolutionMode.TENSION, input_value=500_000)
+    assert bc.startpoint_offset_horz == 0.0
+    assert bc.startpoint_offset_vert == 0.0
+
+
+def test_boundary_aceita_offset_cosmetico_positivo_e_negativo():
+    """Offset é apenas visual — sem range físico restrito."""
+    from backend.solver.types import BoundaryConditions, SolutionMode
+    bc = BoundaryConditions(
+        h=300.0, mode=SolutionMode.TENSION, input_value=500_000,
+        startpoint_offset_horz=15.5,
+        startpoint_offset_vert=-3.2,  # negativo aceito (deck abaixo da água?)
+    )
+    assert bc.startpoint_offset_horz == 15.5
+    assert bc.startpoint_offset_vert == -3.2
+
+
+def test_boundary_payload_legacy_sem_offset_aceito():
+    """Payload pré-Fase-2 (sem startpoint_offset_*) deserializa com defaults."""
+    from backend.solver.types import BoundaryConditions
+    payload = {
+        "h": 300.0, "mode": "Tension", "input_value": 500_000,
+        "startpoint_depth": 0.0, "endpoint_grounded": True,
+    }
+    bc = BoundaryConditions.model_validate(payload)
+    assert bc.startpoint_offset_horz == 0.0
+    assert bc.startpoint_offset_vert == 0.0
