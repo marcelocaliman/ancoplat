@@ -52,10 +52,10 @@ def test_import_moor_imperial_cria_caso(client: TestClient) -> None:
     resp = client.post("/api/v1/import/moor", json=_MOOR_JSON_IMPERIAL)
     assert resp.status_code == 201, resp.text
     body = resp.json()
-    assert body["id"] > 0
-    assert body["name"] == "Test .moor imperial"
+    assert body["case"]["id"] > 0
+    assert body["case"]["name"] == "Test .moor imperial"
     # Valores devem ter sido convertidos para SI
-    seg = body["input"]["segments"][0]
+    seg = body["case"]["input"]["segments"][0]
     # 1476.4 ft → ~450.04 m
     assert 449 < seg["length"] < 451
     # 13.78 lbf/ft → ~201.1 N/m
@@ -65,7 +65,7 @@ def test_import_moor_imperial_cria_caso(client: TestClient) -> None:
     assert seg["category"] == "Wire"
     assert seg["line_type"] == "IWRCEIPS"
     # Boundary: 984 ft → ~299.9 m
-    assert 299 < body["input"]["boundary"]["h"] < 301
+    assert 299 < body["case"]["input"]["boundary"]["h"] < 301
 
 
 def test_import_moor_metric_com_numeros_puros(client: TestClient) -> None:
@@ -101,10 +101,10 @@ def test_import_moor_metric_com_numeros_puros(client: TestClient) -> None:
     resp = client.post("/api/v1/import/moor", json=payload)
     assert resp.status_code == 201, resp.text
     body = resp.json()
-    seg = body["input"]["segments"][0]
+    seg = body["case"]["input"]["segments"][0]
     assert seg["length"] == 450.0
     assert seg["w"] == 201.1
-    assert body["input"]["boundary"]["h"] == 300.0
+    assert body["case"]["input"]["boundary"]["h"] == 300.0
 
 
 def test_import_moor_sem_name_400(client: TestClient) -> None:
@@ -130,7 +130,7 @@ def test_import_moor_multi_segmento_aceito(client: TestClient) -> None:
     resp = client.post("/api/v1/import/moor", json=payload)
     assert resp.status_code == 201, resp.text
     body = resp.json()
-    assert len(body["input"]["segments"]) == 2
+    assert len(body["case"]["input"]["segments"]) == 2
 
 
 def test_import_moor_acima_de_10_segmentos_400(client: TestClient) -> None:
@@ -214,7 +214,7 @@ def test_roundtrip_import_export_metric(client: TestClient) -> None:
     principais dentro de precisão razoável.
     """
     imported = client.post("/api/v1/import/moor", json=_MOOR_JSON_IMPERIAL).json()
-    case_id = imported["id"]
+    case_id = imported["case"]["id"]  # Fase 5: response wrap {case, migration_log}
     exported = client.get(
         f"/api/v1/cases/{case_id}/export/moor?unit_system=imperial"
     ).json()
@@ -236,6 +236,7 @@ def test_export_json_200(client: TestClient) -> None:
     resp = client.get(f"/api/v1/cases/{created['id']}/export/json")
     assert resp.status_code == 200
     body = resp.json()
+    # GET /export/json retorna CaseOutput direto (sem wrapper {case, ...})
     assert body["id"] == created["id"]
     assert "input" in body
     assert "latest_executions" in body
