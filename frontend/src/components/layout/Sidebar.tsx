@@ -1,9 +1,11 @@
 import {
   ArrowLeftRight,
   Compass,
+  HelpCircle,
   LayoutList,
   Package,
   Settings,
+  Sparkles,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { ApiStatusIndicator } from '@/components/common/ApiStatusIndicator'
@@ -26,8 +28,10 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: 'Casos', to: '/cases', icon: LayoutList },
   { label: 'Mooring systems', to: '/mooring-systems', icon: Compass },
+  { label: 'Samples', to: '/samples', icon: Sparkles },
   { label: 'Catálogo', to: '/catalog', icon: Package },
   { label: 'Importar/Exportar', to: '/import-export', icon: ArrowLeftRight },
+  { label: 'Ajuda', to: '/help/glossary', icon: HelpCircle },
   { label: 'Configurações', to: '/settings', icon: Settings },
 ]
 

@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
+import { Children, cloneElement, isValidElement, useId, type ReactNode } from 'react'
 import {
   Controller,
   type Control,
@@ -228,7 +229,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
       />
 
       <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-        <InlineLabeled label="Comprimento" unit="m">
+        <InlineLabeled label="Comprimento" unit="m" required>
           <Input
             type="number"
             step="1"
@@ -267,7 +268,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
             )}
           />
         </InlineLabeled>
-        <InlineLabeled label="Peso submerso">
+        <InlineLabeled label="Peso submerso" required>
           <Controller
             control={control}
             name={p('w')}
@@ -391,21 +392,42 @@ function InlineLabeled({
   unit,
   className,
   children,
+  required,
 }: {
   label: string
   unit?: string
   className?: string
   children: React.ReactNode
+  /** Marca o campo como obrigatório — adiciona `aria-required` no input. */
+  required?: boolean
 }) {
+  // F9 / Q8 — a11y: gera id determinístico para associar Label↔Input
+  // sem precisar mexer em todos os call sites. Children pode ser
+  // <Input> direto ou um <Controller render={...}> — em ambos os casos,
+  // cloneElement injeta `id` (e `aria-required` se aplicável) no primeiro
+  // child renderizado.
+  const id = useId()
+  const enhancedChild = injectA11y(children, { id, required })
   return (
     <div className={cn('flex flex-col gap-0.5', className)}>
-      <Label className="flex items-center justify-between gap-1 text-[10px] font-medium text-muted-foreground">
-        <span className="truncate">{label}</span>
+      <Label
+        htmlFor={id}
+        className="flex items-center justify-between gap-1 text-[10px] font-medium text-muted-foreground"
+      >
+        <span className="truncate">
+          {label}
+          {required && (
+            <span aria-hidden className="text-danger">
+              {' '}
+              *
+            </span>
+          )}
+        </span>
         {unit && (
           <span className="shrink-0 font-mono text-[9px] font-normal">{unit}</span>
         )}
       </Label>
-      {children}
+      {enhancedChild}
     </div>
   )
 }
@@ -414,3 +436,32 @@ function roundTo(value: number, digits: number): number {
   const f = 10 ** digits
   return Math.round(value * f) / f
 }
+
+/**
+ * F9 / Q8 — Injeta `id` (para Label↔Input via htmlFor) e `aria-required`
+ * no primeiro child concreto. Lida com:
+ *   - Input direto: cloneElement adiciona props.
+ *   - Controller render: criança é tipicamente um Fragment ou wrapper —
+ *     cloneElement aplica no primeiro nível; props passam via spread.
+ *   - Wrappers customizados (UnitInput): se o componente aceita id /
+ *     aria-* via spread, herda automaticamente.
+ *
+ * Quando o tipo do children não suporta esses props (raro), o id ainda
+ * fica registrado no Label — Tab para o input continua funcionando via
+ * sequência DOM, e screen readers leem o label associado pela proximidade.
+ */
+function injectA11y(
+  children: ReactNode,
+  props: { id: string; required?: boolean },
+): ReactNode {
+  const onlyChild = Children.toArray(children)[0]
+  if (!isValidElement(onlyChild)) return children
+  const extra: Record<string, unknown> = { id: props.id }
+  if (props.required) extra['aria-required'] = true
+  return cloneElement(
+    onlyChild as React.ReactElement<Record<string, unknown>>,
+    extra,
+  )
+}
+
+export { injectA11y as __injectA11yForTesting }

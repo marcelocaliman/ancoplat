@@ -4,6 +4,7 @@ import { Disclaimer } from './Disclaimer'
 import { Sidebar } from './Sidebar'
 import { CommandPalette } from '@/components/common/CommandPalette'
 import { HelpDialog } from '@/components/common/HelpDialog'
+import { OnboardingTour } from '@/components/common/OnboardingTour'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { useUIStore } from '@/store/ui'
 
@@ -47,6 +48,7 @@ export function AppLayout() {
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <GSequenceShortcut onNavigate={(to) => navigate(to)} />
+      <OnboardingTour />
     </div>
   )
 }

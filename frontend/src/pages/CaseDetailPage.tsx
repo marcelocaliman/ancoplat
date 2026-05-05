@@ -340,7 +340,11 @@ export function CaseDetailPage() {
   return (
     <>
       <Topbar breadcrumbs={breadcrumbs} actions={actions} />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* F9 / Q7 — `print-area` ativa o stylesheet em @media print
+          (apenas conteúdo do caso visível em A4 portrait; sidebar +
+          topbar + footer escondidos). Botões interativos individuais
+          marcados com `print-hide`. */}
+      <div className="print-area flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* ─────────── Cabeçalho do caso ─────────── */}
         <header className="shrink-0 border-b border-border bg-background/60 px-6 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -894,8 +898,12 @@ function StaleSolverBanner({
   pending: boolean
 }) {
   return (
-    <div className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm">
-      <AlertCircle className="mt-0.5 h-4 w-4 text-warning" />
+    <div
+      role="status"
+      aria-live="polite"
+      className="mb-4 flex items-start gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4 text-sm"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 text-warning" aria-hidden />
       <div className="min-w-0 flex-1 space-y-1">
         <p className="font-medium">Execução em versão antiga do solver</p>
         <p className="text-muted-foreground">

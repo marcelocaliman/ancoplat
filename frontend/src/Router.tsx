@@ -63,6 +63,14 @@ const MooringSystemsComparePage = lazy(() =>
 const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
 )
+const SamplesPage = lazy(() =>
+  import('@/pages/SamplesPage').then((m) => ({ default: m.SamplesPage })),
+)
+const HelpGlossaryPage = lazy(() =>
+  import('@/pages/HelpGlossaryPage').then((m) => ({
+    default: m.HelpGlossaryPage,
+  })),
+)
 
 function PageFallback() {
   return (
@@ -94,8 +102,11 @@ const router = createBrowserRouter([
       { path: 'mooring-systems/compare', element: wrap(<MooringSystemsComparePage />) },
       { path: 'mooring-systems/:id', element: wrap(<MooringSystemDetailPage />) },
       { path: 'mooring-systems/:id/edit', element: wrap(<MooringSystemFormPage />) },
+      { path: 'samples', element: wrap(<SamplesPage />) },
       { path: 'catalog', element: wrap(<CatalogPage />) },
       { path: 'import-export', element: wrap(<ImportExportPage />) },
+      { path: 'help', element: <Navigate to="/help/glossary" replace /> },
+      { path: 'help/glossary', element: wrap(<HelpGlossaryPage />) },
       { path: 'settings', element: wrap(<SettingsPage />) },
       { path: '*', element: wrap(<NotFoundPage />) },
     ],

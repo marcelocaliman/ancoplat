@@ -854,8 +854,8 @@ F9 (UI polish) → F7 (Anchor uplift) → F8 (AHV) → F10 (V&V completo) → F1
 
 Total restante: ~40-55 dias-engenheiro. F12 (features avançadas) fica para pós-v1.0. CLAUDE.md tem a decisão registrada com mitigação obrigatória de F8 (D018 + Memorial PDF + manual).
 
-- ⬜ **Fase 9** — em andamento (próxima na sequência v1.0).
-- ⬜ Fases 7, 8, 10, 11 — pendentes (esta ordem).
+- ✅ **Fase 9** — fechada em 2026-05-05. UI polish & onboarding: 11 case templates em `caseTemplates.ts` (6 existentes + 5 novos: clump-weight + lifted-arch + sloped-seabed + 2 preview F7/F8 marcados com `requirePhase`); rota `/samples` com grid visual; rota `/help/glossary` com 40 verbetes canônicos (incluindo uplift/suspended/AHV/bollard pull marcados como preview); tour DIY linear de 5 etapas com skip persistente em localStorage (decisão Q1=b — sem dependência nova); a11y via auto-associação Label↔Input via useId+cloneElement nos 2 helpers (InlineLabeled + InlineField); print stylesheet A4 portrait para CaseDetailPage; E2E popover BuoyPicker (pendência F6 fechada); profiling watchcircle revelou **2/4 cenários functional violam gate <30s** (Spread 4× = 56s, Shallow chain 4× = 86s) — **pendência crítica registrada para F10**. 554 backend + 4 skipped + 102 frontend verdes. i18n no-go consciente v1.0. Ver [`relatorio_F9_ui_polish.md`](relatorio_F9_ui_polish.md) e [`relatorio_F9_perf_watchcircle.md`](relatorio_F9_perf_watchcircle.md).
+- ⬜ Fases 7, 8, 10, 11 — pendentes (próxima: Fase 7 — Anchor uplift; mini-plano em [`proximas_fases/F7_anchor_uplift_miniplano.md`](proximas_fases/F7_anchor_uplift_miniplano.md)).
 
 ### 4.1 — Correção física
 - [ ] Atrito de seabed per-segmento (Fase 1)

@@ -2,6 +2,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
+  AlertTriangle,
   Anchor,
   CheckCircle2,
   ChevronDown,
@@ -16,9 +17,17 @@ import {
   Wrench,
   Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from 'react'
 import { Controller, useFieldArray, useForm } from 'react-hook-form'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import {
@@ -45,6 +54,7 @@ import {
   type SolverDiagnostic,
 } from '@/components/common/SolverDiagnosticsCard'
 import { TemplatePicker } from '@/components/common/TemplatePicker'
+import { getTemplate, type CaseTemplate } from '@/lib/caseTemplates'
 import { UnitInput } from '@/components/common/UnitInput'
 import { ValidationLogCard } from '@/components/common/ValidationLogCard'
 import {
@@ -109,6 +119,12 @@ export function CaseFormPage() {
   const isEdit = Boolean(id)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  // F9 / Q2 — sample carregado via state da rota (vindo de /samples).
+  const location = useLocation() as { state: { templateId?: string } | null }
+  const initialTemplateId = location.state?.templateId
+  const [activeTemplate, setActiveTemplate] = useState<CaseTemplate | null>(
+    initialTemplateId ? getTemplate(initialTemplateId) ?? null : null,
+  )
 
   const { data: existing, isLoading: loadingExisting } = useQuery({
     queryKey: ['case', id],
@@ -159,6 +175,16 @@ export function CaseFormPage() {
       })
     }
   }, [existing, reset])
+
+  // F9 / Q2 — quando o usuário chega via /samples com um templateId,
+  // popula o form com os valores do sample (apenas em modo new, não edit).
+  useEffect(() => {
+    if (!isEdit && activeTemplate) {
+      reset(activeTemplate.values)
+      toast.success(`Sample "${activeTemplate.name}" carregado.`)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTemplate?.id, isEdit])
 
   const values = watch()
   const mode = values.boundary.mode
@@ -383,6 +409,41 @@ export function CaseFormPage() {
     <DiagnosticsProvider diagnostics={allDiagnostics}>
       <Topbar breadcrumbs={breadcrumbs} actions={actions} />
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
+        {/* F9 / Q2 — banner explicativo quando sample preview foi
+            carregado via /samples (state.templateId aponta para um
+            template com requirePhase). Solver vai retornar erro
+            INVALID_CASE até a fase fechar. */}
+        {activeTemplate?.requirePhase && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-start gap-3 rounded-md border border-warning/50 bg-warning/5 p-3"
+          >
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-warning"
+              aria-hidden
+            />
+            <div className="flex-1">
+              <p className="text-xs font-semibold text-warning">
+                Sample preview · {activeTemplate.requirePhase} em desenvolvimento
+              </p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                {activeTemplate.previewMessage ??
+                  `Esta configuração depende de feature da Fase ${activeTemplate.requirePhase}. Você pode visualizar e editar, mas o solve retornará erro até a feature ser implementada.`}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setActiveTemplate(null)}
+              className="h-7 px-2 text-[10px]"
+              title="Ocultar este aviso"
+            >
+              Fechar
+            </Button>
+          </div>
+        )}
         {/* ───── Linha 1: Metadados (compacta) — Nome + Notas ───── */}
         <Card className="shrink-0 overflow-hidden">
           <CardContent className="grid grid-cols-[minmax(0,560px)_auto] items-end gap-3 p-3">
@@ -959,12 +1020,29 @@ function InlineField({
   tooltip?: string
   children: React.ReactNode
 }) {
+  // F9 / Q8 — a11y: id determinístico Label↔Input + aria-required + aria-invalid
+  // + aria-describedby quando há mensagem de erro.
+  const id = useId()
+  const errorId = error ? `${id}-error` : undefined
+  const enhancedChild = injectFieldA11y(children, {
+    id,
+    required,
+    invalid: !!error,
+    describedBy: errorId,
+  })
   return (
     <div className={cn('flex flex-col gap-0.5', className)}>
-      <Label className="flex items-center justify-between gap-1 text-[10px] font-medium text-muted-foreground">
+      <Label
+        htmlFor={id}
+        className="flex items-center justify-between gap-1 text-[10px] font-medium text-muted-foreground"
+      >
         <span className="flex items-center gap-1 truncate">
           {label}
-          {required && <span className="text-danger">*</span>}
+          {required && (
+            <span aria-hidden className="text-danger">
+              *
+            </span>
+          )}
           {tooltip && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -980,9 +1058,32 @@ function InlineField({
           <span className="shrink-0 font-mono text-[9px] font-normal">{unit}</span>
         )}
       </Label>
-      {children}
-      {error && <p className="text-[10px] text-danger">{error}</p>}
+      {enhancedChild}
+      {error && (
+        <p id={errorId} role="alert" className="text-[10px] text-danger">
+          {error}
+        </p>
+      )}
     </div>
+  )
+}
+
+// Helper local — espelha SegmentEditor.injectA11y mas adiciona
+// aria-invalid e aria-describedby para mensagens de erro inline.
+function injectFieldA11y(
+  children: React.ReactNode,
+  props: { id: string; required?: boolean; invalid?: boolean; describedBy?: string },
+): React.ReactNode {
+  const arr = Children.toArray(children)
+  const onlyChild = arr[0]
+  if (!isValidElement(onlyChild)) return children
+  const extra: Record<string, unknown> = { id: props.id }
+  if (props.required) extra['aria-required'] = true
+  if (props.invalid) extra['aria-invalid'] = true
+  if (props.describedBy) extra['aria-describedby'] = props.describedBy
+  return cloneElement(
+    onlyChild as React.ReactElement<Record<string, unknown>>,
+    extra,
   )
 }
 
