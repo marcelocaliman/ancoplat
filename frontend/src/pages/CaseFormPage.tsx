@@ -32,6 +32,7 @@ import {
 import type { SolverResult } from '@/api/types'
 import { AttachmentsEditor } from '@/components/common/AttachmentsEditor'
 import { BathymetryInputGroup } from '@/components/common/BathymetryInputGroup'
+import { LineSummaryPanel } from '@/components/common/LineSummaryPanel'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
 import {
   DiagnosticsProvider,
@@ -492,12 +493,16 @@ export function CaseFormPage() {
              * mantém a posição do gráfico estável ao trocar de aba.
              */}
             <div className="grid">
-              {/* ───────── Aba Linha: só segmentos ───────── */}
+              {/* ───────── Aba Linha: agregados + segmentos ───────── */}
               <TabsContent
                 forceMount
                 value="linha"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
+              {/* Fase 3 / A1.5: painel agregado no topo da aba Linha. */}
+              <div className="mb-2">
+                <LineSummaryPanel segments={values.segments ?? []} />
+              </div>
               <div className="flex flex-wrap gap-2">
                 {segmentsArray.fields.map((field, idx) => (
                   <div
