@@ -418,19 +418,64 @@ def solve_platform_equilibrium(
     )
 
 
+def _watchcircle_worker(
+    args: "tuple[MooringSystemInput, float, int, list, int]",
+) -> tuple[int, WatchcirclePoint]:
+    """
+    Worker module-level (picklable) para ProcessPoolExecutor.
+
+    Cada processo resolve um único azimuth com `solve_platform_equilibrium`
+    e devolve `(i, WatchcirclePoint)` para reordenação no parent.
+    Os anchors pré-computados são passados como dict serializável pelo
+    parent — vide `_solve_baseline_anchor_positions`.
+    """
+    msys_input, magnitude_n, n_steps, anchors, i = args
+    az_deg = i * (360.0 / n_steps)
+    az_rad = math.radians(az_deg)
+    env = EnvironmentalLoad(
+        Fx=magnitude_n * math.cos(az_rad),
+        Fy=magnitude_n * math.sin(az_rad),
+    )
+    eq = solve_platform_equilibrium(
+        msys_input, env, precomputed_anchors=anchors,
+    )
+    return i, WatchcirclePoint(
+        azimuth_deg=az_deg,
+        magnitude_n=magnitude_n,
+        equilibrium=eq,
+    )
+
+
 def compute_watchcircle(
     msys_input: "MooringSystemInput",
     magnitude_n: float,
     n_steps: int = 36,
+    *,
+    parallel: bool = True,
+    max_workers: int | None = None,
 ) -> WatchcircleResult:
     """
     F5.6 — Varre a direção da carga em 360° (passo `360/n_steps`)
     com magnitude fixa, devolvendo o envelope de offsets.
 
-    Otimização: o baseline (resolver cada linha em Δ=0 para extrair
-    posição das âncoras) é computado UMA vez e reusado em todos os
-    `n_steps` equilíbrios. Sem isso, varredura de 36 passos custaria
-    36× o trabalho do baseline.
+    Otimização inicial (F5.6): o baseline (resolver cada linha em Δ=0
+    para extrair posição das âncoras) é computado UMA vez e reusado
+    em todos os `n_steps` equilíbrios.
+
+    Otimização Fase 10 / Q1=a: as N queries de equilíbrio são
+    INDEPENDENTES entre si — cada azimuth resolve um problema
+    separado. **ProcessPoolExecutor** (não ThreadPool!) produz speedup
+    real porque o solver é Python-puro CPU-bound (brentq + catenária
+    iterativa) e não libera o GIL — threads não ganham nada. Bench
+    F10/Q1: 56s → ~15s em spread 4× (4 cores), atingindo o gate F10.8
+    de <20s. Trade-off: ~1-2s de startup do pool (spawn + reimport)
+    por chamada, amortizado nos N tasks de segundos cada.
+
+    Parâmetros:
+      parallel: True (default) usa ProcessPoolExecutor; False para
+        sequencial (debugging / testes determinísticos / hardware
+        single-core / FastAPI workers já paralelos por requisição).
+      max_workers: número de processos. None usa `os.cpu_count()`.
 
     Carga zero curto-circuita: devolve `n_steps` pontos com offset
     zero — útil pra UI consistente mesmo sem carga.
@@ -443,34 +488,40 @@ def compute_watchcircle(
     # Baseline pré-computado: reusa para todos os passos.
     anchors = _solve_baseline_anchor_positions(msys_input)
 
-    points: list[WatchcirclePoint] = []
+    indexed_points: list[tuple[int, WatchcirclePoint]] = []
+    if parallel and n_steps >= 8:
+        # Threshold: para n_steps < 8 o overhead do pool não compensa.
+        from concurrent.futures import ProcessPoolExecutor
+        worker_args = [
+            (msys_input, magnitude_n, n_steps, anchors, i)
+            for i in range(n_steps)
+        ]
+        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+            indexed_points = list(pool.map(_watchcircle_worker, worker_args))
+    else:
+        indexed_points = [
+            _watchcircle_worker((msys_input, magnitude_n, n_steps, anchors, i))
+            for i in range(n_steps)
+        ]
+
+    # Garante ordem por azimuth (pool.map preserva ordem dos inputs,
+    # mas explicitamos para robustez).
+    indexed_points.sort(key=lambda x: x[0])
+    points = [p for _, p in indexed_points]
+
+    # Agregados — calculados em pass único após coletar todos os pontos.
     max_offset = 0.0
     max_offset_az = 0.0
     max_util = 0.0
     worst = AlertLevel.OK
     n_failed = 0
-
-    for i in range(n_steps):
-        az_deg = i * (360.0 / n_steps)
-        az_rad = math.radians(az_deg)
-        env = EnvironmentalLoad(
-            Fx=magnitude_n * math.cos(az_rad),
-            Fy=magnitude_n * math.sin(az_rad),
-        )
-        eq = solve_platform_equilibrium(
-            msys_input, env, precomputed_anchors=anchors,
-        )
-        points.append(WatchcirclePoint(
-            azimuth_deg=az_deg,
-            magnitude_n=magnitude_n,
-            equilibrium=eq,
-        ))
-
+    for p in points:
+        eq = p.equilibrium
         if not eq.converged:
             n_failed += 1
         if eq.offset_magnitude > max_offset:
             max_offset = eq.offset_magnitude
-            max_offset_az = az_deg
+            max_offset_az = p.azimuth_deg
         if eq.max_utilization > max_util:
             max_util = eq.max_utilization
         if _ALERT_SEVERITY[eq.worst_alert_level] > _ALERT_SEVERITY[worst]:
