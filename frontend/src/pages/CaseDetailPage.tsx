@@ -32,6 +32,7 @@ import {
 } from '@/api/endpoints'
 import type { ExecutionOutput, SolverResult } from '@/api/types'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
+import { SurfaceViolationsCard } from '@/components/common/SurfaceViolationsCard'
 import { SolverDiagnosticsCard } from '@/components/common/SolverDiagnosticsCard'
 import { EmptyState } from '@/components/common/EmptyState'
 import { SensitivityPanel } from '@/components/common/SensitivityPanel'
@@ -701,6 +702,17 @@ function OverviewCards({
           />
         </CardContent>
       </Card>
+
+      {/* Surface violations (Fase 4 / Q6) — card dedicado quando >0 */}
+      {result.surface_violations && result.surface_violations.length > 0 && (
+        <SurfaceViolationsCard
+          violations={result.surface_violations as Array<{
+            index: number
+            name: string
+            height_above_surface_m: number
+          }>}
+        />
+      )}
 
       {/* Atrito & EA por segmento (Fase 1) */}
       <Card>
