@@ -50,6 +50,61 @@ from .catenary import (
     _solve_suspended_range_mode,
     _solve_suspended_tension_mode,
 )
+
+
+def _solve_uplift_tension_mode(
+    L: float, h_drop: float, w: float, T_fl: float
+) -> dict:
+    """
+    Variante do `_solve_suspended_tension_mode` (catenary.py) que ACEITA
+    s_a < 0 para uplift fully-suspended.
+
+    Em uplift sem touchdown disponível, o vértice virtual da catenária
+    pode ficar ENTRE anchor e fairlead (linha forma "U" levemente
+    descendente do anchor antes de subir ao fairlead). A versão upstream
+    em catenary.py rejeita s_a < 0 com mensagem "demanda touchdown" —
+    correto para grounded, mas overly restritivo em uplift onde
+    touchdown é fisicamente impossível.
+
+    Mesma matemática do upstream, sem o guard de s_a >= 0:
+      R_f = T_fl/w; R_a = R_f − h_drop
+      s_a = (R_f² − R_a² − L²) / (2·L)        [pode ser < 0]
+      a² = R_a² − s_a²                        [precisa ser > 0]
+      s_f = s_a + L; X = a·[asinh(s_f/a) − asinh(s_a/a)]
+    """
+    if T_fl <= w * h_drop:
+        raise ValueError(
+            f"T_fl={T_fl:.1f} N insuficiente para sustentar peso suspenso "
+            f"w·h_drop={w * h_drop:.1f} N (caso inválido em uplift)."
+        )
+    R_f = T_fl / w
+    R_a = R_f - h_drop  # > 0 garantido pelo teste acima
+    s_a = (R_f * R_f - R_a * R_a - L * L) / (2.0 * L)
+    # NOTA — sem guard `s_a >= 0`. Em uplift, s_a pode ser negativo:
+    # vértice virtual entre anchor e fairlead (catenária em "U").
+    a_sq = R_a * R_a - s_a * s_a
+    if a_sq <= 0:
+        raise ValueError(
+            f"a²={a_sq:.3e} <= 0: caso degenerado (linha taut ou "
+            "dados inconsistentes)."
+        )
+    a = math.sqrt(a_sq)
+    s_f = s_a + L
+    H = a * w
+    # Distância horizontal: X = x(s_f) − x(s_a)
+    # = a·[asinh(s_f/a) − asinh(s_a/a)]
+    X = a * (math.asinh(s_f / a) - math.asinh(s_a / a))
+    return {
+        "a": a,
+        "H": H,
+        "s_a": s_a,
+        "s_f": s_f,
+        "X": X,
+        "T_fl": T_fl,
+        "T_anchor": w * R_a,
+        "V_anchor": w * s_a,  # pode ser negativo
+        "V_fairlead": w * s_f,
+    }
 from .types import (
     BoundaryConditions,
     ConvergenceStatus,
@@ -236,10 +291,13 @@ def _solve_with_elastic(
     def _rigid_suspended(L_eff: float) -> SolverResult | None:
         try:
             if mode == SolutionMode.TENSION:
-                sol = _solve_suspended_tension_mode(
+                # Usa variante uplift (aceita s_a < 0 → catenária em "U")
+                sol = _solve_uplift_tension_mode(
                     L_eff, h_drop, w, float(input_value),
                 )
             else:
+                # Modo Range — variante upstream OK (parametrização
+                # sobre `a` direto, não tem guard s_a >= 0 problemático).
                 sol = _solve_suspended_range_mode(
                     L_eff, h_drop, w, float(input_value), config,
                 )
@@ -341,8 +399,12 @@ def _build_internal_result(
     coords_y = np.sqrt(a * a + s_cat * s_cat) - math.sqrt(a * a + s_a * s_a)
 
     tension_x = np.full(n, H)
-    tension_y = w * s_cat
-    tension_mag = np.sqrt(tension_x * tension_x + tension_y * tension_y)
+    # Em uplift com s_a < 0 (vértice virtual entre anchor e fairlead),
+    # `w·s_cat` pode ser negativo no início da linha — `tension_y` é
+    # MAGNITUDE da componente vertical da força (sempre >= 0). Magnitude
+    # da tração total = sqrt(H² + V²) também sempre >= 0.
+    tension_y = np.abs(w * s_cat)
+    tension_mag = np.sqrt(tension_x * tension_x + (w * s_cat) ** 2)
 
     theta_h_fl = math.atan2(w * s_f, H)
     theta_v_fl = math.pi / 2.0 - theta_h_fl
