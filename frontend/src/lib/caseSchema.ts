@@ -19,8 +19,10 @@ import { z } from 'zod'
  */
 export const lineAttachmentSchema = z
   .object({
-    kind: z.enum(['clump_weight', 'buoy']),
-    submerged_force: z.number().positive('Força submersa deve ser > 0'),
+    kind: z.enum(['clump_weight', 'buoy', 'ahv']),
+    // submerged_force agora é optional para acomodar AHV (default 0).
+    // Para buoy/clump, validação cruzada >0 vem do .refine() abaixo.
+    submerged_force: z.number().min(0).default(0),
     position_index: z.number().int().min(0).nullable().optional(),
     position_s_from_anchor: z.number().positive().nullable().optional(),
     name: z.string().trim().max(80).nullable().optional(),
@@ -39,6 +41,12 @@ export const lineAttachmentSchema = z
     // F6 / Q4 — rastreabilidade ao catálogo de boias. Não-autoritativo
     // em runtime: solver ignora; serve apenas para auditoria.
     buoy_catalog_id: z.number().int().min(1).nullable().optional(),
+    // AHV — Anchor Handler Vessel (Fase 8). Required para kind='ahv'.
+    // Validação cruzada via .refine() abaixo.
+    ahv_bollard_pull: z.number().positive().nullable().optional(),
+    ahv_heading_deg: z.number().min(0).max(359.999).nullable().optional(),
+    ahv_stern_angle_deg: z.number().min(-180).max(180).nullable().optional(),
+    ahv_deck_level: z.number().min(0).nullable().optional(),
   })
   .refine(
     (a) =>
@@ -48,6 +56,29 @@ export const lineAttachmentSchema = z
       message:
         'Informe exatamente um entre position_index (junção) e ' +
         'position_s_from_anchor (distância da âncora)',
+    },
+  )
+  .refine(
+    (a) => a.kind === 'ahv' || a.submerged_force > 0,
+    {
+      message: 'Força submersa deve ser > 0 para boia/clump.',
+      path: ['submerged_force'],
+    },
+  )
+  .refine(
+    (a) =>
+      a.kind !== 'ahv' || (a.ahv_bollard_pull != null && a.ahv_bollard_pull > 0),
+    {
+      message: 'Bollard pull do AHV é obrigatório (> 0 N).',
+      path: ['ahv_bollard_pull'],
+    },
+  )
+  .refine(
+    (a) => a.kind !== 'ahv' || a.ahv_heading_deg != null,
+    {
+      message:
+        'Heading do AHV (eixo X global, anti-horário) é obrigatório.',
+      path: ['ahv_heading_deg'],
     },
   )
 

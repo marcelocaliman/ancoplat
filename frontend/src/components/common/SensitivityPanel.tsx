@@ -531,7 +531,7 @@ function AttachmentPosSlider({
   countOthers,
   onChangeS,
 }: {
-  kind: 'buoy' | 'clump_weight'
+  kind: 'buoy' | 'clump_weight' | 'ahv'
   name: string | null
   valueS: number
   baselineS: number

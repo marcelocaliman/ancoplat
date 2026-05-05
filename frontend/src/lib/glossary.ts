@@ -207,9 +207,8 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: 'Bollard pull',
     category: 'fisico',
     definition:
-      'Força de tração disponibilizada por um rebocador (AHV). Em AncoPlat estático (Fase 8), modelado como força lateral aplicada num ponto da linha — idealização que NÃO substitui análise dinâmica de instalação.',
+      'Força de tração disponibilizada por um rebocador (AHV). Spec do rebocador medido em toneladas-força (te) — ex.: 200 te = 1.96e6 N. Em AncoPlat (Fase 8) é o input `ahv_bollard_pull` da magnitude, complementado pelo heading horizontal. Idealização estática — D018 sempre dispara avisando que NÃO substitui análise dinâmica de instalação.',
     seeAlso: ['ahv'],
-    requirePhase: 'F8',
   },
 
   // ─── Componentes (5 + 1 F8) ────────────────────────────────────────
@@ -258,9 +257,8 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: 'AHV (Anchor Handler Vessel)',
     category: 'componentes',
     definition:
-      'Embarcação de manuseio de âncoras durante operação de instalação. AncoPlat (Fase 8) modela como força lateral estática num ponto da linha — idealização explícita. NÃO substitui análise dinâmica de instalação.',
+      'Embarcação de manuseio de âncoras durante operação de instalação. Implementado na Fase 8 (paridade total com QMoor) como `LineAttachment.kind="ahv"` aplicando carga estática pontual. **Idealização explícita** — operação real é dinâmica (rebocador se move, cabo oscila, hidrodinâmica). Mitigação obrigatória: D018 dispara automaticamente; Memorial PDF inclui seção "AHV — Domínio de aplicação"; manual de usuário (Fase 11) cobrirá detalhes. NÃO substitui análise dinâmica de instalação.',
     seeAlso: ['bollard-pull'],
-    requirePhase: 'F8',
   },
 
   // ─── Operacional (8) ───────────────────────────────────────────────

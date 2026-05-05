@@ -30,12 +30,12 @@ describe('Glossary data', () => {
     expect(GLOSSARY.length).toBeGreaterThanOrEqual(30)
   })
 
-  it('verbete F7 (anchor-uplift) destravado pós-F7 + F8 ainda preview', () => {
+  it('verbetes F7 (anchor-uplift) e F8 (AHV/bollard-pull) destravados pós-F8', () => {
     // Pós-Fase 7: anchor-uplift implementado → sem requirePhase
     expect(getGlossaryEntry('anchor-uplift')?.requirePhase).toBeUndefined()
-    // F8 ainda em desenvolvimento
-    expect(getGlossaryEntry('ahv')?.requirePhase).toBe('F8')
-    expect(getGlossaryEntry('bollard-pull')?.requirePhase).toBe('F8')
+    // Pós-Fase 8: AHV e bollard-pull também destravados
+    expect(getGlossaryEntry('ahv')?.requirePhase).toBeUndefined()
+    expect(getGlossaryEntry('bollard-pull')?.requirePhase).toBeUndefined()
   })
 
   it('cobre 5 categorias canônicas', () => {
@@ -81,10 +81,10 @@ describe('HelpGlossaryPage smoke (Fase 9)', () => {
     expect(screen.getAllByText(/AHV/).length).toBeGreaterThan(0)
   })
 
-  it('verbetes preview F8 têm badge "Preview · F8" (F7 destravado)', () => {
+  it('nenhum verbete preview pós-F8 (F7 e F8 destravados)', () => {
     renderPage()
-    // Pós-F7: F7 não é mais preview. F8 (AHV/bollard-pull) ainda é.
+    // Pós-F7+F8: nenhum verbete preview restante.
     expect(screen.queryAllByText(/Preview · F7/).length).toBe(0)
-    expect(screen.getAllByText(/Preview · F8/).length).toBeGreaterThan(0)
+    expect(screen.queryAllByText(/Preview · F8/).length).toBe(0)
   })
 })

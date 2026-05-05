@@ -244,6 +244,7 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
     name: `${basePath}.${realIndex}.kind` as Path<T>,
   })
   const isBuoy = kindWatched === 'buoy'
+  const isAHV = kindWatched === 'ahv'
   const p = (suffix: string): Path<T> =>
     `${basePath}.${realIndex}.${suffix}` as Path<T>
   // F6 / Q4+Q7: id da boia do catálogo (rastreabilidade não-autoritativa).
@@ -393,12 +394,16 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
                   <SelectContent>
                     <SelectItem value="buoy">Boia</SelectItem>
                     <SelectItem value="clump_weight">Clump</SelectItem>
+                    <SelectItem value="ahv">AHV (Fase 8)</SelectItem>
                   </SelectContent>
                 </Select>
               )}
             />
           </div>
         )}
+        {/* Em AHV, campos físicos são bollard_pull + heading (substituem
+            a UI de Boia/Clump). Em buoy/clump, segue padrão F5.x */}
+        {!isAHV && (
         <div className="flex flex-col gap-0.5">
           <Label className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
             Força submersa
@@ -428,6 +433,56 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
             )}
           />
         </div>
+        )}
+        {/* Fase 8 — AHV: bollard_pull (magnitude) + heading_deg (direção
+            horizontal global). Substitui "Força submersa" quando kind=ahv. */}
+        {isAHV && (
+        <div className="flex flex-col gap-0.5">
+          <Label className="text-[10px] font-medium text-muted-foreground">
+            Bollard pull
+          </Label>
+          <Controller
+            control={control}
+            name={p('ahv_bollard_pull')}
+            render={({ field }) => (
+              <UnitInput
+                value={(field.value as number | null) ?? 0}
+                onChange={field.onChange}
+                quantity="force"
+                digits={2}
+                className="h-8"
+              />
+            )}
+          />
+        </div>
+        )}
+        {isAHV && (
+        <div className="flex flex-col gap-0.5">
+          <Label
+            className="text-[10px] font-medium text-muted-foreground"
+            title="Heading horizontal global da força AHV. Referencial: 0° = eixo X global, anti-horário positivo (mesmo de F5.5)."
+          >
+            Heading (°)
+          </Label>
+          <Controller
+            control={control}
+            name={p('ahv_heading_deg')}
+            render={({ field }) => (
+              <Input
+                type="number"
+                step={1}
+                min={0}
+                max={359.99}
+                value={(field.value as number | null) ?? 0}
+                onChange={(e) =>
+                  field.onChange(parseFloat(e.target.value || '0'))
+                }
+                className="h-8 font-mono"
+              />
+            )}
+          />
+        </div>
+        )}
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center justify-between gap-1">
             <Label className="text-[10px] font-medium text-muted-foreground">
