@@ -34,6 +34,7 @@ Este é um projeto de aplicação web pessoal para análise estática de linhas 
 - ✅ F5.5 — Equilíbrio de plataforma sob carga ambiental — encerrada. Solver `solve_platform_equilibrium` (fsolve outer + per-line Range), endpoints REST, painel UI com plan view deslocado e setas de offset/carga. **Motor estático fechado em termos físicos.** Ver `docs/relatorio_F5_5.md`.
 - ✅ F5.6 — Watchcircle (envelope de offset sob carga rotacionada). `compute_watchcircle` reusa baseline; estratégia de chute robusta no fsolve (4 candidatos + descarte de soluções não-físicas). Frontend com card de varredura + animação play/pause/scrub varrendo 360°.
 - ✅ F5.7 — Boias profissionais com pendant + metadata (tipo, end_type, dimensões da boia, modelo do cabo do pendant). UI com painel "Detalhes" colapsável; PDF report estendido com tabela de attachment_details.
+- ✅ **F-prof.0** — Baseline pré-profissionalização: tag `v0.5-baseline`, snapshot dos cases em `docs/audit/cases_baseline_2026-05-04.json` (3 cases + 12 execs + 2 mooring systems), ambiente isolado de validação MoorPy em `tools/moorpy_env/`, baseline numérico dos 10 catenary cases do MoorPy em `docs/audit/moorpy_baseline_2026-05-04.json` (entrada do gate `BC-MOORPY-01..10` na Fase 1). 282 backend + 8 frontend testes verdes. Decisão fechada QMoor/GMoor com base no modelo NREL (ver seção "Modelo físico de QMoor vs GMoor"). Ver `docs/relatorio_F0_baseline.md`.
 - ✅ F5.7.1 — Boias na zona apoiada com força de elevação (lifted arches). Modelo físico: `s_arch = F_b / w_local` (equilíbrio vertical na boia, simétrico em material uniforme). Cada metade do arco é catenária com vértice em cada touchdown e kink na boia. Solver detecta automaticamente boias com posição em `[0, L_g_total]` em material uniforme e substitui o walk linear flat por integração com arches via `backend/solver/grounded_buoys.py`. Boias em junção heterogênea (chain↔wire) seguem o caminho legacy F5.2 (junction force jump). Suite: 281 testes (266 baseline + 15 BC-AT-GB-*) verde. Frontend rederiva `onGround` ponto-a-ponto comparando `y` ao seabed line — corrige o critério antigo `x ≤ td` que não distingue arches no grounded. Hover bidirecional na legenda↔segmento implementado na mesma fase (legenda do CatenaryPlot interativa).
 
 ### Documentação de referência (ordem de leitura recomendada)
@@ -55,7 +56,28 @@ Tomadas após inspeção de `docs/QMoor_database_inventory.xlsx` (522 entradas, 
 - Schema preserva ambas as colunas `qmoor_ea` e `gmoor_ea` (nomes do xlsx mantidos).
 - **Default do solver: `qmoor_ea`** — preserva comportamento do QMoor 0.8.5 original, que é o baseline de validação do projeto.
 - Cada caso pode sobrescrever via campo `ea_source: "qmoor" | "gmoor"` (default `"qmoor"`).
-- Motivação: poliéster exibe razão `gmoor_ea/qmoor_ea` de 10–22× (provável diferença estática vs dinâmica); wires EIPS ~1,45×; correntes ~0,88×. Não há base documental para escolher `gmoor_ea` — portanto default no legado.
+- Motivação: poliéster exibe razão `gmoor_ea/qmoor_ea` de 10–22×; wires EIPS ~1,45×; correntes ~0,88×.
+
+### Modelo físico de QMoor vs GMoor (decisão fechada — Fase 0 / B0.2)
+
+A premissa "não há base documental para escolher `gmoor_ea`" registrada na origem foi resolvida por inspeção do [MoorPy](https://github.com/NREL/MoorPy) (NREL, open-source, peer-reviewed em ASME 2025) durante a Fase 0 do plano de profissionalização. O modelo físico canônico é (`moorpy/line.py:1027-1044` e `moorpy/library/MoorProps_default.yaml`):
+
+```
+EA_estatico   = EA_MBL × MBL                    [QMoor — default]
+EA_dinamico   = EAd  × MBL  +  EAd_Lm × T_mean  [GMoor — opcional]
+              = α     +     β     × T_mean
+```
+
+Semântica:
+- **QMoor** (`qmoor_ea`) ≡ `EA_estatico` (`EA_MBL × MBL`). Rigidez quasi-estática, válida para análise de carga lentamente aplicada. **Default permanente do AncoPlat.**
+- **GMoor** (`gmoor_ea`) ≡ termo `α` (`EAd × MBL`) do modelo dinâmico. Rigidez dinâmica de offset — corresponde ao comportamento de curto prazo (após relaxamento elástico, antes de creep). Aplicável quando o caso requer análise de tensão dinâmica.
+
+#### β (`EAd_Lm`) NÃO implementado em v1.0
+
+`β` modela rigidez dinâmica linear no carregamento médio (slope da rigidez vs tensão). É a parte que torna o modelo verdadeiramente linear em `T_mean`. **Não está implementado na v1.0 — campo opcional reservado, valor padrão 0** (modelo dinâmico simplificado para `α` constante, equivalente a usar `gmoor_ea` direto). Reavaliar em Fase 4 ou pós-1.0 conforme demanda. Quando implementado, exigirá iteração externa: estima `T_mean` → calcula `EA(T_mean)` → solve catenária → atualiza `T_mean` → repete até convergência.
+
+#### Tooltip canônico (UI)
+"EA estático (QMoor): rigidez quasi-estática (carga lentamente aplicada). EA dinâmico (GMoor): rigidez de curto prazo após relaxamento, aplicável em análise de tensão dinâmica. Modelo NREL/MoorPy."
 
 ### Atrito de seabed — anomalia R5Studless
 - `seabed_friction_cf` é uniforme dentro de cada categoria exceto em `StudlessChain`:
