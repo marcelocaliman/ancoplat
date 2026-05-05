@@ -1,293 +1,548 @@
-# Manual do Usuário — AncoPlat
+# Manual do Usuário — AncoPlat v1.0
 
-> Versão do app: 0.1.0 (F4) · Última atualização: 25 de abril de 2026
+> Versão do app: **1.0.0** · Última atualização: 2026-05-05
+> URL pública: **https://ancoplat.duckdns.org**
+
+---
+
+## Sumário
+
+1. [O que é o AncoPlat](#1-o-que-é-o-ancoplat)
+2. [Conceitos físicos essenciais](#2-conceitos-físicos-essenciais)
+3. [Walkthrough — caso simples (single-segmento)](#3-walkthrough--caso-simples-single-segmento)
+4. [Walkthrough — multi-segmento e attachments](#4-walkthrough--multi-segmento-e-attachments)
+5. [Walkthrough — sistema de mooring (multi-linha)](#5-walkthrough--sistema-de-mooring-multi-linha)
+6. [Anchor uplift (linha suspensa)](#6-anchor-uplift-linha-suspensa)
+7. [AHV (Anchor Handler Vessel)](#7-ahv-anchor-handler-vessel)
+8. [Diagnostics — quando aparecem e como agir](#8-diagnostics--quando-aparecem-e-como-agir)
+9. [Importar / exportar](#9-importar--exportar)
+10. [Glossário](#10-glossário)
+11. [FAQ](#11-faq)
+12. [Disclaimer técnico](#12-disclaimer-técnico)
 
 ---
 
 ## 1. O que é o AncoPlat
 
-AncoPlat é um aplicativo local de **análise estática de linhas de
-ancoragem offshore**. Você descreve um cabo (geometria, propriedades,
-critério de utilização), o app resolve a equação da catenária elástica
-com contato no seabed e atrito de Coulomb, e devolve tração no fairlead,
-distribuição de tensões ao longo da linha, ângulos críticos e a
-classificação operacional (OK / amarelo / vermelho / broken). Os
-resultados foram validados contra o MoorPy (NREL) em 9 casos de
-benchmark, com desvio < 1 % em força e < 0,5 % em geometria.
+AncoPlat é um aplicativo web de **análise estática de linhas de
+ancoragem offshore**. Você descreve um cabo (geometria, propriedades
+do material, critério de utilização) e o app resolve a equação da
+**catenária elástica com contato no seabed e atrito de Coulomb**,
+devolvendo:
 
-O aplicativo roda inteiramente em `localhost:5173` (UI) e `localhost:8000`
-(API). Não envia dados a serviços externos.
+- Tração no fairlead e na âncora.
+- Distribuição de tensões ao longo da linha (T_max, T_min).
+- Geometria resolvida (touchdown, comprimento apoiado, elongação).
+- Ângulos críticos (anchor uplift, fairlead).
+- Classificação operacional (`ok | yellow | red | broken`) por
+  critério selecionado.
+- Memorial PDF, exportação CSV/XLSX, importação `.moor` v2.
+
+### Validação
+
+A v1.0 carrega **36 cases canônicos** validados:
+- **9 BC-MOORPY** ativos (catenária pura) vs MoorPy v1.x rtol≤1e-4.
+- **5 BC-UP** (anchor uplift) vs MoorPy rtol≤1e-2.
+- **4 BC-AHV** (Anchor Handler Vessel) vs cálculo manual rtol=1e-2
+  (catenária paramétrica, erro 0.0000%).
+- **7 BC-AT-GB** (lifted arches) com geometria analítica
+  s_arch=F_b/w confirmada.
+- **14 VV-01..14** (gate v1.0) com erro real medido em
+  [`docs/audit/vv_v1_errors.json`](audit/vv_v1_errors.json).
+
+### Limites de uso (escopo v1.0)
+
+- Análise **estática** — sem dinâmica, snap loads ou viscosidade.
+- 2D no plano vertical da linha — sem 3D.
+- AHV = idealização estática (vide §7).
+- Sem multi-seg + uplift, sem AHV + uplift, sem linha boiante (w<0).
+
+Roda inteiramente no servidor de produção; cases ficam em SQLite. UI
+em PT-BR, termos técnicos em inglês quando padrão internacional
+(catenary, fairlead, bollard pull).
 
 ---
 
-## 2. Criando um caso (passo a passo)
+## 2. Conceitos físicos essenciais
 
-### 2.1. Abrir o formulário
+### Catenária elástica com seabed
+
+A linha pendurada entre âncora e fairlead toma a forma de uma
+**catenária**. Uma fração pode estar **apoiada** no fundo (grounded)
+quando o peso supera a tensão horizontal — o ponto onde a linha
+descola do solo é o **touchdown point** (TD). Atrito de Coulomb
+(coeficiente `μ`) age na zona apoiada, transferindo tensão da âncora
+para a parte suspensa.
+
+### Modos de solução
+
+- **Tension** — você informa a tração desejada no fairlead `T_fl`.
+  Solver encontra a distância horizontal X que resulta nessa tensão.
+- **Range** — você informa a distância `X` entre âncora e fairlead.
+  Solver encontra `T_fl` correspondente.
+
+### Sistema de unidades
+
+Internamente sempre **SI** (metros, Newtons, kg). Conversões são
+apenas nas bordas (input/output de UI, exports). O usuário pode
+visualizar resultados em SI ou métrico (te, kgf/m). Conversão
+round-trip preserva precisão dentro de `rtol < 1e-10` (gate F10).
+
+### EA estático (QMoor) vs EA dinâmico (GMoor)
+
+Cada material do catálogo carrega dois valores de rigidez axial:
+- **EA estático** (default, `qmoor_ea`) — rigidez quasi-estática,
+  válida para análise de carga lentamente aplicada.
+- **EA dinâmico** (`gmoor_ea`) — rigidez de curto prazo após
+  relaxamento elástico. Aplicável quando a análise demanda tensão
+  dinâmica.
+
+Toggle por segmento via campo `ea_source: "qmoor" | "gmoor"`.
+Detalhes em [decisões fechadas §1](decisoes_fechadas.md#1).
+
+### ProfileType (taxonomia NREL/MoorPy)
+
+Cada solução é classificada em uma das categorias:
+- **PT_1** — fully suspended (linha não toca seabed).
+- **PT_2** — touchdown sem atrito (μ=0).
+- **PT_3** — touchdown com atrito (μ>0).
+- **PT_-1** — ill-conditioned (catenária degenerada, ex.: hardest
+  taut).
+- Outros (PT_4 boiante, PT_5 U-shape, PT_6 vertical) reservados
+  para v1.1+.
+
+Vide [decisões fechadas §5](decisoes_fechadas.md#5).
+
+### Convenção de sinal
+
+- Eixo X: horizontal, positivo do anchor para o fairlead.
+- Eixo Y: vertical, positivo apontando para CIMA.
+- Tensões reportadas em **magnitude positiva**.
+- `endpoint_grounded=True` (default): âncora apoiada no seabed.
+- `endpoint_grounded=False`: âncora elevada (anchor uplift, vide §6).
+
+---
+
+## 3. Walkthrough — caso simples (single-segmento)
+
+### 3.1. Abrir o formulário
 
 Caminhos equivalentes:
+- Sidebar → **"Casos"** → botão **"Novo caso"**.
+- Atalho `g c` (vai para Casos) e clicar em "Novo".
+- Atalho `g s` para abrir templates samples e duplicar caso pronto.
 
-- Sidebar → "Casos" → botão **"Novo caso"**.
-- Atalho de teclado **`Cmd+K`** → digite "novo caso" → Enter.
-- Atalho rápido `g c` (vai para Casos) e clicar em "Novo".
-
-### 2.2. Preencher metadados
-
-A faixa superior compacta tem três campos:
+### 3.2. Metadados
 
 - **Nome do caso** (obrigatório). Ex.: `BC-01 catenária suspensa`.
-- **Critério de utilização**. Default `MVP_Preliminary`. Use `API_RP_2SK`
-  para projetos formais. `UserDefined` libera os limites
-  yellow/red/broken para você customizar.
-- **Notas** (opcional, collapsible). Use para documentar o caso —
-  premissas de projeto, datas, referências cruzadas.
+- **Critério de utilização** (default `MVP_Preliminary`):
+  - `MVP_Preliminary` — yellow 0.50, red 0.60, broken 1.00 (T/MBL).
+  - `API_RP_2SK` — perfil oficial intacto/danificado (0.60/0.80).
+  - `DNV` — placeholder; análise dinâmica formal só em v3+.
+  - `UserDefined` — você define os limites yellow/red/broken.
+- **Notas** (opcional, collapsible).
 
-### 2.3. Definir o segmento de linha
+### 3.3. Definir o segmento de linha
 
 No card **Segmento de linha**:
 
-1. Clique no seletor de catálogo no topo do card. Pesquise o tipo
-   (ex.: `DiamondBlue`, `IWRCEIPS`, `R4Studless`). Ao escolher, os
-   campos abaixo são preenchidos automaticamente em SI a partir do
-   catálogo (522 entradas legacy_qmoor + suas customizadas).
+1. Clique no seletor de catálogo no topo. Pesquise (ex.: `IWRCEIPS`,
+   `R4Studless`, `DiamondBlue`). Ao escolher, os campos abaixo são
+   preenchidos automaticamente em SI a partir do catálogo legacy
+   (522 entradas).
+2. Você pode editar manualmente:
+   - **Comprimento `L`** (m).
+   - **Peso linear `w`** (N/m, peso submerso).
+   - **Rigidez axial `EA`** (N).
+   - **MBL** (Minimum Breaking Load, N).
+3. Toggles avançados:
+   - **EA source** — `qmoor` (default) ou `gmoor`.
+   - **μ override** — sobrescreve atrito do catálogo só neste
+     segmento.
 
-2. Você pode editar manualmente se quiser:
-   - **Comp.** (m): comprimento total da linha (não-esticado).
-   - **Diâmetro** (m): nominal, só para metadados / relatório.
-   - **Categoria**: Wire, Studded, Studless ou Poliéster — afeta
-     defaults de atrito.
-   - **Peso submerso** (N/m ou kgf/m): peso por metro com flutuação.
-   - **Peso seco** (N/m ou kgf/m): metadado.
-   - **EA** (N ou te): rigidez axial. **Atenção**: em sistema Metric
-     o app espera `te` (tonelada-força). Em SI, espera `N`.
-   - **MBL** (N ou te): Minimum Breaking Load.
-   - **Módulo** (Pa): aparente, metadado.
+### 3.4. Aba Ambiente
 
-> **Cuidado com unidades**: o seletor `Metric / SI` no canto superior
-> direito controla todos os campos de força do app. Em Metric os
-> chips dos inputs mostram `te` e `kgf/m`; em SI mostram `N` e `N/m`.
-> O estado interno é sempre SI; só o display muda.
+- **Geometria** — modo "batimetria 2 pontos" (default):
+  - Profundidade no fairlead `startpoint_depth` (sondagem 1).
+  - Profundidade na âncora `h` (sondagem 2).
+  - Slope é **derivado** read-only.
+  Modo avançado libera `slope_rad` direto.
+- **Fairlead** — tipo de plataforma (semisub default, AHV, Barge,
+  none) que determina o ícone do startpoint no plot.
+- **Seabed** — `mu` global (default catálogo do segmento se houver).
 
-### 2.4. Definir as condições
+### 3.5. Aba Linha → Modo + input
 
-No card **Condições**:
+- **Modo Tension**: campo `T_fl` (default) — força no fairlead.
+- **Modo Range**: campo `X` — distância horizontal âncora→fairlead.
 
-- **Lâmina d'água** (m): profundidade do seabed a partir da superfície.
-- **Prof. fairlead** (m): profundidade do ponto de fixação no vessel
-  abaixo da superfície. `0` = fairlead na superfície (caso clássico).
-  Igual à lâmina = linha horizontal no fundo (caso laid line).
-- **Modo**: `Tension` (você fornece T_fl, app calcula X) ou `Range`
-  (você fornece X, app calcula T_fl).
-- **T_fl (fairlead)** ou **X total**: o input do modo escolhido.
-- **μ (atrito)**: coeficiente de Coulomb do seabed. Wire ~0,3,
-  corrente ~0,7, poliéster ~0,25.
+### 3.6. Resolver
 
-### 2.5. Visualizar antes de salvar
-
-À medida que você preenche, o gráfico abaixo mostra o **preview ao
-vivo** da catenária. Os 4 cards no rodapé trazem T_fl, geometria,
-forças e status do solver. Não precisa salvar para testar combinações.
-
-### 2.6. Salvar e calcular
-
-- **Salvar**: persiste o caso sem rodar o solver (pode rodar depois).
-- **Salvar e calcular**: persiste e cria a primeira execução. Você é
-  redirecionado para a página de detalhe.
+Clique **"Resolver"**. Aparecem 3 abas de resultado:
+- **Plot** — geometria 2D com touchdown marcado, grounded em
+  pontilhado vermelho, suspended em sólido azul.
+- **Resultados** — cards com T_fl, T_anchor, T_max, ângulos,
+  alert_level.
+- **Diagnostics** — vide §8.
 
 ---
 
-## 3. Lendo os resultados
+## 4. Walkthrough — multi-segmento e attachments
 
-A página de detalhe (`/cases/{id}`) tem 4 abas:
+### 4.1. Adicionar segmentos
 
-### 3.1. Visão geral
+No card **Segmento de linha**, clique **"+ Adicionar segmento"**.
+Cada segmento herda config do catálogo independentemente — config
+típica: chain (heavy) + wire/polyester (light) + chain (heavy)
+para FPSO.
 
-- **Gráfico 2D** com fairlead à esquerda (em x = 0) e âncora à direita.
-  Eixo Y é elevação relativa à superfície do mar. Faixa cinza inferior
-  é o seabed. Hover mostra coordenadas + tração local.
-- **Análise de sensibilidade** (logo abaixo do gráfico): 3 sliders para
-  T_fl, comprimento e μ, com ±50 % do baseline. Mover o slider dispara
-  preview ao vivo no gráfico e nos cards. **Aplicar como nova execução**
-  persiste os novos valores como Run #N+1; **Resetar** volta ao baseline.
-- **6 cards categorizados**:
-  - **Tração no fairlead**: valor primário + utilização (T_fl/MBL) +
-    barra de gauge colorida.
-  - **Geometria**: X, lâmina, profundidade do fairlead, drop, touchdown.
-  - **Comprimentos**: L, L_esticado, L_suspenso, L_apoiado, ΔL, strain.
-  - **Forças**: H, T_fl, T_anchor, V_fl, V_anchor, ΔT (atrito).
-  - **Ângulos**: nos dois extremos, em graus, vs horizontal e vertical.
-    O ângulo na âncora (departure angle) é crítico para
-    dimensionamento de cravação.
-  - **Convergência**: status do solver, iterações, mensagem.
+O atrito é **per-segmento** com precedência canônica:
+```
+mu_override → seabed_friction_cf (catálogo) → seabed.mu (global) → 0
+```
+Vide [decisões fechadas §2](decisoes_fechadas.md#2).
 
-### 3.2. Resultados detalhados
+### 4.2. Attachments (boias e clump weights)
 
-6 tabelas key-value com todos os números em alta precisão:
-Forças, Geometria, Ângulos, Critério de utilização, Material e
-segmento, Diagnóstico do solver. Use esta aba para conferir
-manualmente ou copiar valores para um relatório externo.
+Em cada junção entre segmentos OU posição arbitrária ao longo da
+linha, você pode adicionar:
 
-### 3.3. Pontos discretizados
+- **Boia** (`kind=buoy`) — empurra a linha PARA CIMA. Campo
+  `submerged_force` em N (≥0).
+- **Clump weight** (`kind=clump_weight`) — puxa a linha PARA BAIXO.
+  Mesmo campo.
 
-Tabela com 5.000 pontos ao longo da linha (limite default — pode ser
-reduzido em `SolverConfig.n_plot_points` para benchmarks). Colunas:
+Posicionamento (mutuamente exclusivo):
+- `position_index` (legacy F5.2): índice da junção pré-existente.
+  0 = entre seg 0 e seg 1.
+- `position_s_from_anchor` (recomendado): arc length desde a âncora
+  (m). Solver divide o segmento contendo essa posição em
+  sub-segmentos automaticamente.
 
-| col | significado |
-|---|---|
-| `s (m)` | comprimento de arco a partir do fairlead |
-| `x (m)` | posição horizontal (frame surface-relative) |
-| `y (m)` | elevação (negativa = abaixo da superfície) |
-| `prof. (m)` | profundidade absoluta = `−y` |
-| `\|T\|` | módulo da tração local |
-| `T_h`, `T_v` | componentes horizontal e vertical |
-| `θ (°)` | ângulo da tangente vs horizontal |
-| `estado` | `suspenso` (azul) ou `apoiado` (laranja) |
+### 4.3. Boias profissionais (do catálogo)
 
-Render limitado a 200 linhas inicialmente (DOM com 5.000 trava o
-navegador). Use o botão **CSV completo** para baixar todos os pontos
-com cabeçalhos em SI.
+Tab **"Boias"** em `/catalog` (deep-link `?tab=buoys`) lista 11
+boias seed:
+- 1× `excel_buoy_calc_v1` (R7 do Excel `Buoy_Calculation_*.xlsx`).
+- 10× `generic_offshore` cobrindo dimensões D 1.0–3.0 m / L 2.0–4.5 m.
 
-### 3.4. Histórico
+`BuoyPicker` em `AttachmentsEditor` permite buscar e aplicar boia do
+catálogo. Override em qualquer dos 6 campos físicos zera
+`buoy_catalog_id` automaticamente (badge muda de azul "do catálogo"
+para laranja "modo manual"). Override deliberado preserva
+rastreabilidade — solver ignora `buoy_catalog_id` em runtime
+(verificado por teste).
 
-Cards de Run com numeração sequencial (`Run #ID`), badge **atual** no
-mais recente, status, alert level e delta vs run anterior em cada
-métrica (T_fl, X, utilização, iterações). Clicar em uma run faz os
-gráficos e tabelas das outras abas refletirem aquela versão.
+### 4.4. Lifted arches (boia na zona apoiada)
 
-O backend mantém as 10 execuções mais recentes por caso.
+Quando uma boia está em material UNIFORME e na zona grounded
+(posição em `[0, L_grounded_total]`), o solver detecta automaticamente
+e substitui o walk linear flat por **arcos catenários simétricos**
+em torno da boia. Geometria: `s_arch = F_b / w_local`.
+
+Boias em junção heterogênea (chain↔wire) seguem o caminho legacy
+(force jump na junção). Detecção é automática em
+[`backend/solver/grounded_buoys.py`](../backend/solver/grounded_buoys.py).
 
 ---
 
-## 4. Importar e exportar
+## 5. Walkthrough — sistema de mooring (multi-linha)
 
-### 4.1. Exportar
+### 5.1. Criar um sistema
 
-Na página de detalhe, menu `⋮` → **Exportar**:
+**Sidebar → "Mooring systems" → "Novo sistema"**.
 
-- **`.moor` (métrico ou imperial)**: JSON compatível com a Seção 5.2
-  do MVP v2 PDF do QMoor. Permite trocar casos com colegas.
-- **JSON**: input + última execução em SI puro.
-- **PDF**: relatório técnico com gráfico, métricas e tabelas. Só
-  disponível depois da primeira execução.
+Schema:
+- **Plataforma**: raio (m), tipo de plataforma.
+- **N linhas** com fairlead em coordenadas polares:
+  - `fairlead_azimuth_deg` (graus, eixo X global anti-horário).
+  - `fairlead_radius` (m, do centro).
+  - Cada linha carrega um caso completo (segmentos, boundary,
+    seabed) — pode reusar de um caso já criado.
 
-Atalho rápido: botão `</> JSON` no header da página → modal com sub-abas
-Input | Resultado e botão Copiar.
+### 5.2. Plan view
 
-### 4.2. Importar
+Aba **Plan view** mostra layout 2D do sistema (top-down): plataforma
+no centro, linhas radiais, âncoras como pontos.
 
-Página `/import-export`:
+### 5.3. Equilíbrio sob carga ambiental
 
-- **Cole JSON** no campo: o parser aceita o formato completo do QMoor
-  0.8.x (`mooringLines[0]` ou `mooringLine`), tanto `inputParam`
-  capitalizado quanto minúsculo, e unidades brasileiras (`te`, `kgf/m`).
-- Se o `.moor` falhar, a mensagem indica exatamente qual campo está
-  inválido (ex.: "v1 espera 1 segmento; recebeu 3").
+Aba **Equilíbrio**:
+- Informe carga horizontal externa `F_env` em (Fx, Fy) N.
+- Solver `solve_platform_equilibrium` itera offset (Δx, Δy) tal que
+  Σ F_lines(Δ) + F_env = 0.
+- Resultado: deslocamento da plataforma + resultado individual de
+  cada linha sob o novo arranjo.
 
----
+### 5.4. Watchcircle (envelope 360°)
 
-## 5. Atalhos de teclado
-
-| Atalho | Ação |
-|---|---|
-| `Cmd+K` (`Ctrl+K`) | Abrir paleta de comandos (busca global) |
-| `?` | Mostrar diálogo de ajuda |
-| `Cmd+B` (`Ctrl+B`) | Alternar sidebar |
-| `g c` | Ir para Casos |
-| `g a` | Ir para Catálogo |
-| `g i` | Ir para Importar/Exportar |
-| `g s` | Ir para Configurações |
-| `Esc` | Fechar diálogos / paleta |
-
-A paleta `Cmd+K` busca por nome em casos, tipos de linha, e oferece
-ações rápidas (novo caso, alternar tema, alternar Metric/SI, abrir
-ajuda). Use `↑↓` para navegar e `↵` para ativar.
+Aba **Watchcircle**:
+- Magnitude de carga fixa, varre 360° em N passos (default 36).
+- Plot mostra envelope de offsets + animação play/pause/scrub.
+- Performance: paralelizado via `ProcessPoolExecutor`. Spread 4×
+  resolve em ~17s (gate <30s); shallow chain 4× pode levar ~25s
+  (pendência v1.1 de heurística pré-fsolve).
+- Vide [decisões fechadas §11](decisoes_fechadas.md#11).
 
 ---
 
-## 6. FAQ
+## 6. Anchor uplift (linha suspensa)
 
-### 6.1. Por que meu caso retorna "T_fl insuficiente"?
+### 6.1. Quando usar
 
-`T_fl ≤ w·h` significa que a tração no fairlead é menor que o peso
-da coluna d'água suspensa entre fairlead e seabed. Aumente T_fl,
-reduza a lâmina ou troque por um cabo mais leve. O app calcula
-`w·h` na mensagem de erro.
+A maioria dos cases assume `endpoint_grounded=True` (âncora
+apoiada). Mas em águas profundas ou com tensão alta, a âncora pode
+ficar **elevada acima do seabed** — a linha não toca o solo na
+extremidade da âncora. Isso é **anchor uplift** (PT_1 em
+ProfileType).
 
-### 6.2. Por que aparece "strain final 11,8 % é fisicamente implausível"?
+Tipicamente requerido em:
+- Águas profundas (>500 m) com pré-tensão alta.
+- Pile/suction caisson anchors (toleram tração vertical).
+- Análise de cenários de tempestade onde linha levanta âncora.
 
-Quase sempre é input em unidade errada. Wire e correntes operacionais
-têm strain < 1 %. Se chegou em 5 %+, provavelmente `EA` está em `te`
-mas o app interpretou como `N` (10.000× menor que o real), ou `w` está
-em `kgf/m` e foi lido como `N/m` (10× menor). Confira o seletor
-Metric/SI no topo e os chips dos campos.
+### 6.2. Como ativar
 
-### 6.3. O que significa "Run #16 atual"?
+Aba **Ambiente** → grupo **Geometria**:
+- Radio: **Grounded** (default) ou **Suspended**.
+- Selecionar **Suspended** habilita o campo `endpoint_depth` (m,
+  profundidade onde a âncora está fisicamente).
 
-`#16` é o id sequencial dessa execução no banco. **atual** marca a
-última run; é a versão mostrada por default nas outras abas. Você pode
-clicar em qualquer outra run para inspecioná-la.
+Validações (Pydantic):
+- `endpoint_depth` é obrigatório quando `endpoint_grounded=False`.
+- `endpoint_depth` deve ser positivo e ≤ `h + ε`.
 
-### 6.4. Posso ter casos com fairlead afundado (semi-sub mooring)?
+### 6.3. Limitações em v1.0
 
-Sim, desde a F3. Defina `Prof. fairlead > 0`. O drop efetivo passa a
-ser `lâmina − prof. fairlead`. Caso o drop fique zero (fairlead no
-mesmo nível do seabed), o solver ativa o módulo `laid_line` (linha
-horizontal com atrito puro, sem catenária).
+A v1.0 suporta uplift apenas em:
+- **Single-segmento** (multi-seg + uplift bloqueado com
+  `NotImplementedError` específico → INVALID_CASE).
+- **Sem attachments** (uplift + boia/clump bloqueado).
+- **Sem AHV** (uplift + AHV bloqueado).
 
-### 6.5. Por que o gráfico do detalhe é igual ao da edição?
+Combinações pendentes documentadas em
+[`docs/proximas_fases/F7_anchor_uplift_miniplano.md`](proximas_fases/F7_anchor_uplift_miniplano.md)
+para v1.1+.
 
-Porque o solver é o mesmo. A diferença é que na edição o gráfico é um
-preview ao vivo (não persistido); na detalhe ele exibe a execução
-salva. Use a Análise de sensibilidade na detalhe para fazer
-ajustes pontuais sem alterar o caso.
+### 6.4. Diagnostics dedicados
 
-### 6.6. Como sei que o solver convergiu?
-
-Badges **Convergiu** + **OK/Yellow/Red** no topo do detalhe e dentro
-do card "Convergência" (status, iterações, mensagem). Status possíveis:
-`converged`, `ill_conditioned` (convergiu mas linha quase taut, alta
-sensibilidade), `max_iterations`, `invalid_case`, `numerical_error`.
-
-### 6.7. O que é "preview ao vivo" no detalhe?
-
-Quando você mexe os sliders de Análise de sensibilidade, o gráfico
-e cards mostram o resultado dos novos valores **sem salvar** no caso.
-Um badge azul **preview ao vivo** sinaliza isso. Clique **Aplicar
-como nova execução** para persistir, ou **Resetar** para voltar.
-
-### 6.8. Como adiciono um cabo customizado ao catálogo?
-
-Na página `/catalog`, botão **Novo tipo de linha**. As entradas com
-`data_source = legacy_qmoor` (522 originais) são imutáveis; as
-`user_input` podem ser editadas e removidas livremente.
-
-### 6.9. Onde ficam os logs do solver?
-
-`backend/data/logs/ancoplat.log` (rotação de 1 MB × 5 arquivos). Cada
-execução grava uma linha:
-`case_id=N status=converged alert=ok iterations=14 elapsed_ms=42.3`
-
-### 6.10. Posso rodar a análise sem internet?
-
-Sim, completamente. Tudo roda em `localhost`. A única exceção são os
-fontes (Inter, JetBrains Mono) que vêm do `@fontsource` empacotado
-junto com o frontend.
+- **D016** (high, error) — anchor uplift fora de domínio.
+- **D017** (medium, warning) — uplift desprezível (<1 m), sugere
+  voltar a `endpoint_grounded=True` para regime numericamente mais
+  robusto.
 
 ---
 
-## 7. Disclaimer técnico
+## 7. AHV (Anchor Handler Vessel)
 
-**Os resultados apresentados são estimativas de análise estática
-simplificada e não substituem análise de engenharia realizada com
-ferramenta validada, dados certificados, premissas aprovadas e
-revisão por responsável técnico habilitado.**
+> **Esta seção é leitura obrigatória antes de usar a feature AHV.**
 
-O solver implementa catenária elástica 2D, corpo único homogêneo,
-seabed plano com atrito de Coulomb. Não cobre:
+*(Conteúdo desta seção em commit dedicado — vide §7 abaixo.)*
 
-- Ondas / corrente / vento (análise dinâmica).
-- Linha multi-segmento (planejado para v2.1).
-- Bóias intermediárias / clumps / horizontais (planejado para v2+).
-- Análise de fadiga ULS/ALS/FLS (DNV formal).
+---
 
-Para projetos certificados use ferramentas validadas como OrcaFlex,
-Flexcom, MoorPy ou similar.
+## 8. Diagnostics — quando aparecem e como agir
+
+A v1.0 implementa **16 diagnostics** (D001..D015 + D900) cobrindo
+violações geométricas, físicas e numéricas. Cada um carrega:
+- **Severity**: `info | warning | error`.
+- **Confidence**: `high | medium | low` (vide
+  [decisões fechadas §6](decisoes_fechadas.md#6)).
+- **Cause**: explicação em PT-BR.
+- **Suggestion**: ação recomendada.
+- **Suggested changes**: quando aplicável, lista de mudanças
+  estruturadas que o usuário pode aplicar.
+- **Affected fields**: lista dos campos no schema.
+
+### Tabela rápida
+
+| Code | Significado | Confidence | Apply automatizável |
+|------|-------------|:----------:|:-------------------:|
+| D001 | Boia próxima da âncora | high | ✓ (mover) |
+| D002 | Boia próxima do fairlead | high | ✓ (mover) |
+| D003 | Arco overflow do grounded | high | narrativo |
+| D004 | Boia acima da superfície | high | ✓ (reduzir empuxo) |
+| D005 | Empuxo > peso da linha | high | ✓ (reduzir empuxo) |
+| D006 | Cabo curto demais (< chord) | high | ✓ (aumentar L) |
+| D007 | T_fl < T_critico horizontal | high | narrativo |
+| D008 | Margem ao taut próxima do limite | high | informativo |
+| D009 | Anchor uplift > 5° | high | ✓ (aumentar L) |
+| D010 | Alta utilização T/MBL | high | ✓ (aumentar MBL) |
+| D011 | Cabo abaixo do seabed | high | narrativo |
+| D012 | Slope > 30° | high | informativo |
+| D013 | μ=0 com catálogo populado | medium | ✓ (setar μ) |
+| D014 | gmoor sem β | high | ✓ (voltar qmoor) |
+| D015 | ProfileType raro (PT_4/5/-1) | medium | informativo |
+| D018 | AHV idealização estática | medium | sempre dispara |
+| D019 | AHV heading projeta <30% | high | informativo |
+| D900 | Não-convergência genérica | high | narrativo |
+
+### UI
+
+Card **"Diagnostics"** na aba de resultados:
+- Lista colapsada por severity (errors > warnings > info).
+- Cada item mostra severity badge + confidence badge + cause +
+  suggestion.
+- Botão "Aplicar sugestão" quando `suggested_changes` é estruturado.
+
+### Memorial PDF
+
+Cada execução do solver gera Memorial PDF rastreável (hash[:16] +
+solver_version + timestamp em footer). Diagnostics aparecem em
+seção dedicada com severity colorida + confidence indicado.
+
+---
+
+## 9. Importar / exportar
+
+### 9.1. Formato `.moor` v2
+
+JSON próprio do AncoPlat (compatível com Seção 5.2 do MVP v2 PDF).
+Schema versionado em `_v2`. Migrador automático `_migrate_v1_to_v2()`
+com **log estruturado** `{field, old, new, reason}` exposto via
+`POST /api/v1/import-moor` retornando `{case, migration_log}`.
+
+> O `.moor` original do QMoor 0.8.5 era binário proprietário (`.pyd`
+> do módulo `cppmoor`) — impossível replicar. Este formato é nosso.
+
+Caminho UI: aba **"Importar/Exportar"** → "Importar" → arrastar
+`.moor` ou clicar para selecionar.
+
+### 9.2. Memorial PDF
+
+Geração: botão **"Memorial PDF"** em CaseDetailPage. Conteúdo:
+- Cabeçalho com nome do caso, hash, solver_version, timestamp.
+- Geometria do caso (segmentos, boundary, seabed).
+- Resultado (tensões, ângulos, alert_level, ProfileType).
+- Diagnostics estruturados.
+- Tabela de attachment_details (boias profissionais com pendant).
+- **Seção AHV — Domínio de aplicação** quando `kind="ahv"` está
+  presente (vide §7).
+- Footer rastreável em cada página.
+
+### 9.3. CSV de geometria
+
+Botão **"Exportar CSV"**. Conteúdo:
+- Header com metadata como comentários (`#`).
+- ≥ 5000 pontos (s, x, y, T, V, H, on_ground).
+- Formato internacional: `,` separator, `.` decimal.
+
+### 9.4. XLSX
+
+Botão **"Exportar XLSX"**. Abas:
+- **Caso** — input geometry + boundary + seabed.
+- **Resultados** — tensões, ângulos, alert_level.
+- **Geometria** — pontos s, x, y, T, V, H.
+- **Diagnostics** (opcional, aparece se houver diagnostics).
+
+### 9.5. Importação batch
+
+Aba **"Importar/Exportar"** → "Exportar em lote" exporta múltiplos
+casos selecionados por checkbox.
+
+---
+
+## 10. Glossário
+
+Acessível em **Sidebar → "Ajuda" → "Glossário"** (rota
+`/help/glossary`). 40 verbetes canônicos em 5 categorias:
+- **geometria** — catenária, touchdown, fairlead, anchor.
+- **físico** — atrito, EA, MBL, T_fl, T_anchor.
+- **componentes** — segmento, attachment, line_type.
+- **operacional** — alert_level, critério, AHV, bollard pull.
+- **boia** — submerged_force, end_type, pendant.
+
+Busca textual filtra por termo + definição. Filtros por categoria.
+
+---
+
+## 11. FAQ
+
+**Q: Onde ficam meus casos salvos?**
+SQLite local em produção `/opt/ancoplat/data/cases.db`. Backup
+automático diário (vide
+[`operacao_producao.md`](operacao_producao.md) §9). Cases não saem
+do servidor.
+
+**Q: Posso usar o solver fora da UI (programaticamente)?**
+Sim. API REST documentada em `/api/v1/docs` (FastAPI auto-docs).
+Endpoints principais: `POST /api/v1/cases`, `POST /api/v1/cases/{id}/solve`,
+`GET /api/v1/cases/{id}/export/memorial-pdf`.
+
+**Q: O que faço se o solver não convergir?**
+Verifique os diagnostics retornados — geralmente apontam o problema
+exato (cabo curto, EA inválido, geometria infactível). Se status =
+`ill_conditioned`, o solver convergiu para uma solução numericamente
+delicada (típico de casos hardest taut) — resultado utilizável com
+ressalva.
+
+**Q: Cases salvos em v0.x produzem o mesmo resultado em v1.0?**
+Sim, **se** não tocarem nas features novas (atrito per-segmento,
+ea_source=gmoor, lifted arches em material uniforme, etc.). Lista
+exata em [`CHANGELOG.md`](../CHANGELOG.md) §"⚠ Mudanças numéricas".
+Regressão `cases_baseline.json` re-roda em rtol=1e-9 a cada PR.
+
+**Q: AHV substitui análise dinâmica de instalação?**
+**Não.** Vide §7. AHV é idealização estática útil para estimativa
+preliminar de carga em junção. Snap loads e dinâmica do rebocador
+NÃO são modelados.
+
+**Q: Como reportar bug?**
+Abra issue em https://github.com/marcelocaliman/ancoplat/issues com:
+- Versão do app (footer da UI).
+- Hash do caso (gerado em cada solve).
+- Descrição do que esperava vs o que aconteceu.
+- Memorial PDF se possível (anonimiza dados sensíveis).
+
+---
+
+## 12. Disclaimer técnico
+
+### Validação
+
+AncoPlat v1.0 é validado contra **MoorPy** (NREL, MIT-licensed) em
+9 cases ativos do `tests/test_catenary.py` (BC-MOORPY) + 5 cases de
+anchor uplift (BC-UP) + 4 BC-AHV vs cálculo manual + 7 BC-AT-GB
+analítico + 14 VV-01..14 (gate v1.0). Erro real medido em
+[`docs/audit/vv_v1_errors.json`](audit/vv_v1_errors.json).
+
+### Limitações de modelagem
+
+1. **Estática 2D** — sem dinâmica, snap loads, viscosidade ou 3D.
+2. **AHV é idealização** — vide §7.
+3. **Linha boiante (w<0)** não suportada — reservado para v1.2+.
+4. **Multi-seg + uplift, AHV + uplift, boia + uplift** bloqueados
+   em v1.0 — combinações para v1.1+.
+5. **Modelo dinâmico EA(T) com β** — `β=0` implícito em v1.0;
+   modelo completo `EA(T)=α+β·T_mean` reservado para v1.1+.
+
+### Reprodutibilidade científica
+
+- Cada caso gera hash SHA-256 canonicalizado em `case_input_hash()`
+  (sort_keys + separators sem whitespace, exclui `name`/`description`).
+- Memorial PDF carrega hash[:16] + solver_version + timestamp em
+  cada página.
+- Mudanças numéricas entre versões marcadas em
+  [`CHANGELOG.md`](../CHANGELOG.md) §"⚠ Mudanças numéricas".
+- Decisões físicas/numéricas/arquiteturais consolidadas em
+  [`docs/decisoes_fechadas.md`](decisoes_fechadas.md).
+
+### Responsabilidade
+
+AncoPlat é ferramenta de análise técnica. Resultados são
+estimativas baseadas em modelos físicos com tolerâncias documentadas
+— **não substituem** análise certificada por profissional habilitado
+(engenheiro offshore, certificação DNV/ABS/etc.) para projetos
+operacionais. O usuário é responsável pela aplicação dos resultados.
+
+### Licenças
+
+- AncoPlat: pessoal/research (verificar com autor).
+- Integração com MoorPy: MoorPy é MIT-licensed (NREL).
+- Catálogo de materiais: importado de QMoor 0.8.5 legacy (522
+  entradas, rastreabilidade preservada via `legacy_id`).
+
+---
+
+*Manual gerado para v1.0.0. Para versões anteriores, consulte o git
+log e CHANGELOG.md.*
