@@ -841,7 +841,8 @@ Cada subitem 12.x ativado independentemente, com base em:
 - ✅ **Fase 2** — fechada em 2026-05-05. Aba Ambiente refatorada (3 grupos + `BathymetryInputGroup` com slope derivado + modo avançado); `BathymetryPopover` deletado; offset cosmético `startpoint_offset_horz/vert` reservado; validação `startpoint_depth ≥ h` relaxada com slope (Q7) via `_x_estimate`; BC-FAIRLEAD-SLOPE-01 (3 testes); auditoria 29 raises em solver.py + multi_segment.py com classificação a/b/c (13a + 15b + 1c); 25 testes user-facing parametrizados em `test_validation_raises.py`; mensagens E4 hardenizadas. 365 backend + 32 frontend verdes. Round-trip Bathymetry em rtol=1e-9. Regressão baseline 3/3. Ver [`relatorio_F2_ambiente_validacoes.md`](relatorio_F2_ambiente_validacoes.md).
 - ✅ **Fase 3** — fechada em 2026-05-05. Quick wins UX: `LineSummaryPanel` com 4 agregados na aba Linha (A1.5); grounded pontilhado vermelho (D6 — decisão consciente, divergência do QMoor cinza, registrada em CLAUDE.md); `boundary.startpoint_type` enum cosmético + Select no grupo Fairlead + ícones SVG novos AHV/Barge/None via dispatcher `getStartpointSvg()` (A2.5+D7); 4 toggles compactos no plot (D9): equal-aspect / labels / legend / images. 372 backend + 41 frontend verdes. Solver intacto. Regressão baseline 3/3. Ver [`relatorio_F3_quick_wins.md`](relatorio_F3_quick_wins.md).
 - ✅ **Fase 4** — fechada em 2026-05-05. Diagnostics maturidade + ProfileType taxonomy: `ProfileType` enum (10 valores forward-compat) + `classify_profile_type()` puro em módulo dedicado; validação vs MoorPy 6/7 match + 1 divergência Cat-3 documentada; 4 diagnostics novos (D012 slope alto + D013 μ=0 com catálogo limiar 0.3 empírico + D014 gmoor sem β + D015 PT raro); cobertura `diagnostics.py` em **100%**; `confidence` field (high/medium/low) com critério documentado; `SurfaceViolationsCard` UI dedicada. 438 backend + 57 frontend verdes. Apply tests: 3 garantidos + 3 best-effort + 9 deferred para Fase 10. Ver [`relatorio_F4_diagnostics.md`](relatorio_F4_diagnostics.md).
-- ⬜ Fases 5–11 — pendentes
+- ✅ **Fase 5** — fechada em 2026-05-05. Reports, memorial e exportação: `case_input_hash()` SHA-256 canonicalizado (sort_keys + separators, exclui name/description) com 16 testes de canonicalização + estabilidade (Ajuste 1); `.moor` v2 schema versionado + migrador v1→v2 com **log estruturado** `{field, old, new, reason}` exposto via `/import/moor` retornando `{case, migration_log}` (Ajuste 2); `build_memorial_pdf()` com rastreabilidade total (hash[:16] + solver_version + timestamp em footer de cada página) + ProfileType + diagnostics estruturados (severity colorida + confidence) — content checks via PyPDF; CSV de geometria ≥ 5000 pontos international format (`,` separator, `.` decimal) com comentários de metadata; Excel `.xlsx` com 3 abas mínimas (Caso/Resultados/Geometria) + Diagnostics opcional consistente com Memorial PDF; UI com 3 botões em CaseDetail e ImportExportPage; 4 endpoints REST novos (`memorial-pdf`, `csv`, `xlsx`, `import/moor` v2). 499 backend + 4 skipped + 57 frontend verdes. Pendência herdada de F2: `.moor` schema sem `slope_rad`/`attachments` — round-trip dos baseline cases skipa quando aplicável. Ver [`relatorio_F5_reports.md`](relatorio_F5_reports.md).
+- ⬜ Fases 6–11 — pendentes
 
 ### 4.1 — Correção física
 - [ ] Atrito de seabed per-segmento (Fase 1)
@@ -875,15 +876,15 @@ Cada subitem 12.x ativado independentemente, com base em:
 ### 4.4 — Reprodutibilidade
 - [ ] Cada execução salva tem `solver_version` (✅ já existe)
 - [ ] Banner "Stale solver" funcional (✅ já existe)
-- [ ] Memorial PDF inclui hash do caso (Fase 5)
+- [x] Memorial PDF inclui hash do caso (Fase 5)
 - [ ] Changelog público com mudanças que afetam resultado numérico (Fase 11)
 - [ ] Cases salvos em v0.x abrem em v1.0 (Fase 11)
 
 ### 4.5 — Exportação e integração
-- [ ] PDF profissional (✅ existe; ampliar em Fase 5)
-- [ ] Memorial técnico (Fase 5)
-- [ ] Export CSV (geometria) e Excel (caso completo) (Fase 5)
-- [ ] `.moor` v2 com round-trip estável (Fase 5)
+- [x] PDF profissional (✅ existe; ampliado na Fase 5 com Memorial técnico)
+- [x] Memorial técnico (Fase 5)
+- [x] Export CSV (geometria) e Excel (caso completo) (Fase 5)
+- [x] `.moor` v2 com round-trip estável (Fase 5) — limitação herdada: schema sem slope_rad/attachments, pendente em Fase 5.x ou 12
 
 ### 4.6 — Catálogos
 - [ ] Cabos: 522 entradas legacy_qmoor (✅)
