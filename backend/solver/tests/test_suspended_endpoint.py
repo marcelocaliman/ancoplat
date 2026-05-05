@@ -117,23 +117,28 @@ def test_T_anchor_iguais_T_fl_menos_w_h_drop():
     )
 
 
-# ─── Translação de coordenadas para frame físico ────────────────────
+# ─── Convenção de coordenadas: frame solver (anchor em y=0) ─────────
+# Decisão pós-implementação: coords_y permanecem no FRAME SOLVER
+# (anchor em y=0, fairlead em y=h_drop). O frontend CatenaryPlot.tsx
+# translada para frame físico usando `endpoint_depth` (mesma convenção
+# do caminho grounded, que translada usando `water_depth`).
 
 
-def test_coordenadas_y_anchor_em_minus_endpoint_depth():
-    """coords_y[0] (anchor) = -endpoint_depth no frame físico."""
+def test_coordenadas_y_anchor_em_zero_frame_solver():
+    """coords_y[0] (anchor) = 0 no frame solver."""
     r = solve_suspended_endpoint(_seg(), _bc_uplift(300.0, 250.0))
-    assert abs(r.coords_y[0] - (-250.0)) < 1e-6
+    assert abs(r.coords_y[0] - 0.0) < 1e-6
 
 
-def test_coordenadas_y_fairlead_em_minus_startpoint_depth():
-    """coords_y[-1] (fairlead) = -startpoint_depth (default 0) no frame físico."""
+def test_coordenadas_y_fairlead_em_h_drop_frame_solver():
+    """coords_y[-1] (fairlead) = h_drop no frame solver."""
     r = solve_suspended_endpoint(_seg(), _bc_uplift(300.0, 250.0))
-    assert abs(r.coords_y[-1] - 0.0) < 1e-6  # startpoint_depth=0 default
+    h_drop = 250.0  # endpoint_depth - startpoint_depth(=0)
+    assert abs(r.coords_y[-1] - h_drop) < 1e-6
 
 
-def test_translacao_com_startpoint_depth_nao_zero():
-    """Fairlead submerso + uplift: ambos transladados consistentemente."""
+def test_frame_solver_com_startpoint_depth_nao_zero():
+    """Fairlead submerso: h_drop = endpoint_depth - startpoint_depth."""
     bc = BoundaryConditions(
         h=300.0, mode=SolutionMode.TENSION, input_value=850_000.0,
         endpoint_grounded=False, endpoint_depth=250.0,
@@ -141,8 +146,9 @@ def test_translacao_com_startpoint_depth_nao_zero():
     )
     r = solve_suspended_endpoint(_seg(), bc)
     assert r.status == ConvergenceStatus.CONVERGED
-    assert abs(r.coords_y[0] - (-250.0)) < 1e-6  # anchor
-    assert abs(r.coords_y[-1] - (-20.0)) < 1e-6  # fairlead
+    h_drop = 250.0 - 20.0  # = 230m
+    assert abs(r.coords_y[0] - 0.0) < 1e-6  # anchor
+    assert abs(r.coords_y[-1] - h_drop) < 1e-6  # fairlead
 
 
 # ─── Validações de domínio (defesa em profundidade) ─────────────────

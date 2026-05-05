@@ -211,13 +211,14 @@ def solve_suspended_endpoint(
             boundary,
         )
 
-    # ─── Translada coords_y do frame solver para frame físico ────────
-    # No frame interno, anchor=(0,0) e fairlead=(X, h_drop).
-    # No frame físico, anchor=(0, -endpoint_depth) e fairlead=(X, -startpoint_depth).
-    # → translation: y_phys = y_internal - endpoint_depth.
-    coords_y_phys = [y - boundary.endpoint_depth for y in result_internal.coords_y]
+    # ─── Frame solver: anchor em y=0, fairlead em y=h_drop ───────────
+    # Mantemos coords_y NO FRAME SOLVER (sem translação física aqui).
+    # O frontend `CatenaryPlot.tsx` faz a translação para frame físico
+    # usando `endpoint_depth` (mesma convenção que o caso grounded usa
+    # `water_depth`). Em grounded: endpoint_depth = h_drop ≈ water_depth,
+    # então a translação `y_plot = y_solver − endpoint_depth` é
+    # consistente para os dois caminhos.
 
-    # ─── Monta SolverResult final com campos preenchidos para uplift ─
     depth_at_fairlead = boundary.h - math.tan(seabed.slope_rad) * result_internal.total_horz_distance
 
     # ─── D017 — uplift desprezível (Fase 7 / Q8) ────────────────────
@@ -232,7 +233,7 @@ def solve_suspended_endpoint(
         diagnostics_list.append(d017.model_dump())
 
     return result_internal.model_copy(update={
-        "coords_y": coords_y_phys,
+        # coords_y SEM translação — solver-frame com anchor em y=0
         # Campos de auditoria/UI:
         "water_depth": boundary.h,
         "startpoint_depth": boundary.startpoint_depth,

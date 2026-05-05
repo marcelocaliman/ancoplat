@@ -44,16 +44,20 @@ describe('SamplesPage (Fase 9)', () => {
     }
   })
 
-  it('2 samples preview marcados (anchor-uplift F7 + ahv-pull F8)', () => {
+  it('1 sample preview restante pós-F7 (ahv-pull F8); anchor-uplift destravado', () => {
+    // Pós-Fase 7: anchor-uplift implementado → sem requirePhase.
+    // Apenas ahv-pull (F8) permanece preview até F8 fechar.
     const previews = CASE_TEMPLATES.filter((t) => t.requirePhase != null)
-    expect(previews.length).toBe(2)
-    const phases = previews.map((p) => p.requirePhase).sort()
-    expect(phases).toEqual(['F7', 'F8'])
+    expect(previews.length).toBe(1)
+    expect(previews[0]!.requirePhase).toBe('F8')
+    expect(previews[0]!.id).toBe('ahv-pull')
   })
 
-  it('cards preview têm banner "Preview · FX"', () => {
+  it('card preview F8 tem banner "Preview · F8"; F7 destravado', () => {
     renderPage()
-    expect(screen.getByText(/Preview · F7/)).toBeTruthy()
+    // anchor-uplift já não é preview (F7 fechado).
+    expect(screen.queryByText(/Preview · F7/)).toBeNull()
+    // ahv-pull continua preview até F8.
     expect(screen.getByText(/Preview · F8/)).toBeTruthy()
   })
 

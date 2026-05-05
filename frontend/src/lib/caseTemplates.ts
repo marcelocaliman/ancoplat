@@ -500,18 +500,15 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
   // ───────────────────────────────────────────────────────────────────
   {
     id: 'anchor-uplift',
-    name: 'Âncora elevada (preview F7)',
+    name: 'Âncora elevada (suspended)',
     description:
-      'Âncora 50m acima do seabed (suspended endpoint). Catenária livre nas duas pontas, sem touchdown. Preview da Fase 7 — solver retorna erro até a feature ser implementada.',
-    tag: 'preview',
-    requirePhase: 'F7',
-    previewMessage:
-      'Sample preview da Fase 7 (Anchor uplift). Você pode visualizar a configuração, mas o solve retornará erro INVALID_CASE até a feature ser implementada.',
+      'Âncora 50m acima do seabed (h=300m, endpoint_depth=250m). Catenária livre nas duas pontas, sem touchdown. Caso BC-UP-01 do gate da Fase 7.',
+    tag: 'classic',
     values: {
-      name: 'Âncora elevada (preview)',
+      name: 'Âncora elevada — BC-UP-01',
       description:
-        'Preview F7: anchor 50m acima do seabed em 300m d\'água. ' +
-        'endpoint_grounded=false ainda não suportado pelo solver.',
+        'Anchor uplift: 50m acima do seabed em 300m d\'água. '
+        + 'endpoint_grounded=false + endpoint_depth=250m. PT_1 fully suspended.',
       segments: [
         {
           length: 500,
@@ -531,7 +528,8 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
         mode: 'Tension',
         input_value: 850_000,
         startpoint_depth: 0,
-        endpoint_grounded: false, // <-- preview F7
+        endpoint_grounded: false,
+        endpoint_depth: 250,  // anchor 50m acima do seabed (uplift=50m)
         startpoint_offset_horz: 0,
         startpoint_offset_vert: 0,
         startpoint_type: 'semisub',

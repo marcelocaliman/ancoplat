@@ -765,7 +765,94 @@ export function CaseFormPage() {
                   </InlineField>
                 </div>
 
-                {/* Grupo 3 — Seabed */}
+                {/* Grupo 3 — Anchor (Fase 7 — uplift) */}
+                <div className="space-y-1.5">
+                  <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Âncora
+                  </h4>
+                  <Controller
+                    control={control}
+                    name="boundary.endpoint_grounded"
+                    render={({ field: groundedField }) => (
+                      <Controller
+                        control={control}
+                        name="boundary.endpoint_depth"
+                        render={({ field: depthField }) => (
+                          <div className="space-y-1.5">
+                            <fieldset className="space-y-1">
+                              <legend className="text-[10px] font-medium text-muted-foreground">
+                                Tipo de fixação
+                              </legend>
+                              <label className="flex cursor-pointer items-center gap-1.5 text-[11px]">
+                                <input
+                                  type="radio"
+                                  name="endpoint_grounded_radio"
+                                  checked={groundedField.value === true}
+                                  onChange={() => {
+                                    groundedField.onChange(true)
+                                    depthField.onChange(null)
+                                  }}
+                                  className="h-3 w-3"
+                                />
+                                <span>Âncora cravada (grounded)</span>
+                              </label>
+                              <label className="flex cursor-pointer items-center gap-1.5 text-[11px]">
+                                <input
+                                  type="radio"
+                                  name="endpoint_grounded_radio"
+                                  checked={groundedField.value === false}
+                                  onChange={() => {
+                                    groundedField.onChange(false)
+                                    // Default sensato: anchor 50m acima do seabed
+                                    const h = (values.boundary?.h as number) ?? 300
+                                    depthField.onChange(
+                                      depthField.value ?? Math.max(1, h - 50),
+                                    )
+                                  }}
+                                  className="h-3 w-3"
+                                />
+                                <span>Âncora elevada (suspended) — Fase 7</span>
+                              </label>
+                            </fieldset>
+                            {groundedField.value === false && (
+                              <InlineField
+                                label="Profundidade do anchor"
+                                unit="m"
+                                tooltip="Profundidade do anchor abaixo da superfície (m). Uplift = h − endpoint_depth. Range válido: 0 < endpoint_depth ≤ h."
+                                error={
+                                  errors.boundary &&
+                                  'endpoint_depth' in errors.boundary
+                                    ? (
+                                        errors.boundary.endpoint_depth as
+                                          | { message?: string }
+                                          | undefined
+                                      )?.message
+                                    : undefined
+                                }
+                              >
+                                <Input
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={(depthField.value as number | null) ?? ''}
+                                  onChange={(e) => {
+                                    const v = parseFloat(e.target.value)
+                                    depthField.onChange(
+                                      Number.isFinite(v) && v > 0 ? v : null,
+                                    )
+                                  }}
+                                  className="h-8 font-mono"
+                                />
+                              </InlineField>
+                            )}
+                          </div>
+                        )}
+                      />
+                    )}
+                  />
+                </div>
+
+                {/* Grupo 4 — Seabed */}
                 <div className="space-y-1.5">
                   <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Seabed

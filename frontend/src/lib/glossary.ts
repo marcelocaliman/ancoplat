@@ -109,9 +109,8 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: 'Anchor uplift / suspended endpoint',
     category: 'geometria',
     definition:
-      'Configuração em que a âncora está elevada do seabed (não cravada). Sem touchdown na âncora — catenária livre nas duas pontas. Profundidade do anchor é `endpoint_depth` (m).',
+      'Configuração em que a âncora está elevada do seabed (não cravada). Sem touchdown na âncora — catenária livre nas duas pontas (PT_1 fully suspended). Profundidade do anchor é `endpoint_depth` (m); uplift = `h − endpoint_depth`. Implementado na Fase 7 do plano de profissionalização para single-segmento sem attachments (multi-seg + uplift fica para F7.x).',
     seeAlso: ['anchor', 'profile-type'],
-    requirePhase: 'F7',
   },
   {
     id: 'bathymetry',
