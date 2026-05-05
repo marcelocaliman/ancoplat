@@ -179,6 +179,23 @@ MVP v1 **rejeita** `endpointGrounded=false` com INVALID_CASE + mensagem. Casos c
 ### Critérios de utilização: 4 perfis disponíveis desde v1
 Conforme Seção 5 do Documento A: `MVP_Preliminary` (default, 0.60 MBL), `API_RP_2SK` (intacto 0.60 / danificado 0.80), `DNV` (placeholder; formal só em v3+ com análise dinâmica), `UserDefined`. `SolverResult` retorna `alert_level: ok | yellow | red | broken`.
 
+## Pendências F1–F6 → Fases futuras
+
+Itens identificados durante as fases F1–F6 que não entraram no escopo da fase original e foram empurrados para fases posteriores. Registro centralizado para não perder no caminho até v1.0.
+
+### Para Fase 9 (UI polish)
+- **Testes E2E do popover BuoyPicker** (F6) — smokes atuais em `frontend/src/test/buoy-picker-smoke.test.tsx` cobrem render + fallback id + callbacks, mas não exercitam o popover Radix (portal + lista clicável). Esperar `@testing-library/user-event` flow completo: abrir popover → digitar busca → selecionar boia → confirmar `onPick` chamado com payload correto.
+
+### Para Fase 10 (V&V completo)
+- **Identidade matemática `V_hemi = V_conic`** (F6) — caso onde fórmulas de hemispherical e semi_conical produzem volumes idênticos pela especificação do Excel `Formula Guide` R5/R7. Bug que troque hemi↔conic não é detectável pelo gate ±1% atual de `test_buoy_buoyancy.py`. Adicionar 1 caso na F10 com **dimensão tampa ≠ raio** (ex.: tampa hemisférica com altura customizada h ≠ D/2) onde as duas fórmulas produziriam resultados distintos, garantindo que estão de fato implementadas separadamente. Documentado em `docs/relatorio_F6_buoys.md` §6.
+- **Boias com `manufacturer`** (F6) — catálogo seed atual de 11 boias (1× excel_buoy_calc_v1 + 10× generic_offshore) não inclui modelos comerciais reais. F10 ou pós-v1.0 pode adicionar entradas com `data_source="manufacturer_<X>"` (Crosby, Trelleborg, etc.) quando houver documentação de campo.
+
+### Para v1.1+ (pós-1.0)
+- **Anchor uplift / suspended endpoint** (Fase 7 do plano original) — mini-plano detalhado arquivado em `docs/futuro_F7_anchor_uplift_miniplano.md`. Retomar quando houver demanda explícita de usuário em produção.
+- **AHV** (Fase 8 do plano original) — no-go definitivo para v1.0; revisitar só com demanda explícita.
+- **Library paramétrica MoorPy** (origem F6 / Q1) — schema `material_coefficients` espelhando `MoorProps_default.yaml` + endpoint `POST /line-types/from-parametric` + tab "Calculadora paramétrica" no `LineTypePicker`. Reservada para **Fase 12.x** (features avançadas pós-1.0). Catálogo legacy de 522 entradas cobre uso prático em v1.0.
+- **`.moor` schema com `slope_rad` + `attachments`** (origem F2 / F5) — `.moor` v2 atual não cobre esses campos. Round-trip dos baseline cases skipa quando aplicável. Reservar bump v3 para fase pós-v1.0 quando houver redemanda real.
+
 ## Convenções de código
 
 - Backend: type hints obrigatórios, docstrings em funções públicas
