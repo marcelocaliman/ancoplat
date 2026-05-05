@@ -837,7 +837,7 @@ Cada subitem 12.x ativado independentemente, com base em:
 ### Estado de progresso por fase (atualizado a cada fase fechada)
 
 - ✅ **Fase 0** — fechada em 2026-05-04. Tag `v0.5-baseline`, snapshots `docs/audit/cases_baseline_2026-05-04.json` e `docs/audit/moorpy_baseline_2026-05-04.json`, ambiente MoorPy isolado em `tools/moorpy_env/`, decisão fechada QMoor/GMoor (modelo NREL `α + β·T_mean`) registrada em CLAUDE.md. 290 testes verdes (282 backend + 8 frontend). Ver [`relatorio_F0_baseline.md`](relatorio_F0_baseline.md).
-- ⬜ Fase 1 — pendente
+- ✅ **Fase 1** — fechada em 2026-05-04. Atrito per-segmento (B3) via helper `_resolve_mu_per_seg`; toggle `ea_source` qmoor/gmoor por segmento (A1.4+B4); gate `BC-MOORPY-01..10` (7 ativos + 3 skipados); BC-FR-01 (capstan manual ±2%) e BC-EA-01 (ratio gmoor/qmoor ~12×); frontend com Select EA source + μ override + card "Atrito & EA". 334 backend + 17 frontend verdes. Regressão `cases_baseline` 3/3. Decisão consciente: sem feature-flag (defaults idempotentes). Ver [`relatorio_F1_correcoes_fisicas.md`](relatorio_F1_correcoes_fisicas.md).
 - ⬜ Fase 2 — pendente
 - ⬜ Fases 3–11 — pendentes
 

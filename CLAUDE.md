@@ -35,6 +35,7 @@ Este é um projeto de aplicação web pessoal para análise estática de linhas 
 - ✅ F5.6 — Watchcircle (envelope de offset sob carga rotacionada). `compute_watchcircle` reusa baseline; estratégia de chute robusta no fsolve (4 candidatos + descarte de soluções não-físicas). Frontend com card de varredura + animação play/pause/scrub varrendo 360°.
 - ✅ F5.7 — Boias profissionais com pendant + metadata (tipo, end_type, dimensões da boia, modelo do cabo do pendant). UI com painel "Detalhes" colapsável; PDF report estendido com tabela de attachment_details.
 - ✅ **F-prof.0** — Baseline pré-profissionalização: tag `v0.5-baseline`, snapshot dos cases em `docs/audit/cases_baseline_2026-05-04.json` (3 cases + 12 execs + 2 mooring systems), ambiente isolado de validação MoorPy em `tools/moorpy_env/`, baseline numérico dos 10 catenary cases do MoorPy em `docs/audit/moorpy_baseline_2026-05-04.json` (entrada do gate `BC-MOORPY-01..10` na Fase 1). 282 backend + 8 frontend testes verdes. Decisão fechada QMoor/GMoor com base no modelo NREL (ver seção "Modelo físico de QMoor vs GMoor"). Ver `docs/relatorio_F0_baseline.md`.
+- ✅ **F-prof.1** — Correções físicas críticas: atrito per-segmento (B3) com helper `_resolve_mu_per_seg` (precedência `mu_override → seabed_friction_cf → seabed.mu → 0`); toggle `ea_source` per-segmento (A1.4+B4); gate `BC-MOORPY-01..10` (7 ativos passando rtol=1e-4 ou justificado, 3 skipados nominalmente até Fase 7/12); BC-FR-01 (capstan manual) e BC-EA-01 (ratio gmoor/qmoor). Frontend ganhou Select "EA source" + Input "μ override" no SegmentEditor + card "Atrito & EA por segmento" no detail. Suite: 334 backend + 17 frontend verdes. Regressão `cases_baseline.json`: 3/3 cases preservam resultado (rtol=1e-9). Ver `docs/relatorio_F1_correcoes_fisicas.md`.
 - ✅ F5.7.1 — Boias na zona apoiada com força de elevação (lifted arches). Modelo físico: `s_arch = F_b / w_local` (equilíbrio vertical na boia, simétrico em material uniforme). Cada metade do arco é catenária com vértice em cada touchdown e kink na boia. Solver detecta automaticamente boias com posição em `[0, L_g_total]` em material uniforme e substitui o walk linear flat por integração com arches via `backend/solver/grounded_buoys.py`. Boias em junção heterogênea (chain↔wire) seguem o caminho legacy F5.2 (junction force jump). Suite: 281 testes (266 baseline + 15 BC-AT-GB-*) verde. Frontend rederiva `onGround` ponto-a-ponto comparando `y` ao seabed line — corrige o critério antigo `x ≤ td` que não distingue arches no grounded. Hover bidirecional na legenda↔segmento implementado na mesma fase (legenda do CatenaryPlot interativa).
 
 ### Documentação de referência (ordem de leitura recomendada)
@@ -78,6 +79,21 @@ Semântica:
 
 #### Tooltip canônico (UI)
 "EA estático (QMoor): rigidez quasi-estática (carga lentamente aplicada). EA dinâmico (GMoor): rigidez de curto prazo após relaxamento, aplicável em análise de tensão dinâmica. Modelo NREL/MoorPy."
+
+### Atrito de seabed per-segmento (decisão fechada — Fase 1 / B3)
+
+Implementado na Fase 1 do plano de profissionalização. Helper centralizado `_resolve_mu_per_seg` no `backend/solver/solver.py` resolve o coeficiente efetivo de cada segmento aplicando precedência canônica:
+
+```
+1. segment.mu_override         — override explícito do usuário
+2. segment.seabed_friction_cf  — valor do catálogo (line_type)
+3. seabed.mu                   — valor global do caso
+4. 0.0                         — fallback final
+```
+
+Decisão consciente — **NÃO há feature-flag `use_per_segment_friction`** (originalmente prevista em R1.1 do plano). Defaults `None` em `mu_override` e `seabed_friction_cf` preservam comportamento legado naturalmente: quando ambos são `None`, solver cai no `seabed.mu` global, equivalente a antes da Fase 1. Cases salvos em produção (`docs/audit/cases_baseline_2026-05-04.json`) re-rodam com mesmo resultado dentro de `rtol=1e-9` — verificado por `test_baseline_regression.py` que entra como gate em todo PR que toque `backend/solver/`.
+
+Validação física: `BC-FR-01` em `test_friction_per_seg.py` confirma `ΔT = μ · w · L_grounded` (Coulomb axial) dentro de ±2% do cálculo manual em regime onde `T_anchor > 0`.
 
 ### Atrito de seabed — anomalia R5Studless
 - `seabed_friction_cf` é uniforme dentro de cada categoria exceto em `StudlessChain`:
