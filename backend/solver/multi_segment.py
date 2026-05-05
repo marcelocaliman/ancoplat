@@ -104,10 +104,75 @@ def _signed_force(att: LineAttachment) -> float:
     Converte LineAttachment em força líquida signada aplicada à V acumulada
     na junção: clump_weight tende a aumentar V (peso → puxa para baixo);
     buoy tende a diminuir V (empuxo → empurra para cima).
+
+    DEPRECATED em favor de `_signed_force_2d` que retorna (H_jump, V_jump).
+    Mantido para compatibilidade com código que ainda só processa V.
     """
     if att.kind == "buoy":
         return -att.submerged_force
+    if att.kind == "ahv":
+        # AHV — apenas componente vertical via _signed_force legado.
+        # Componente horizontal é tratada via _signed_force_2d em
+        # _integrate_segments.
+        return 0.0
     return att.submerged_force  # clump_weight ou default
+
+
+def _signed_force_2d(
+    att: LineAttachment, line_azimuth_deg: float = 0.0
+) -> tuple[float, float]:
+    """
+    Fase 8 — Força 2D aplicada por um attachment numa junção.
+
+    Retorna `(H_jump, V_jump)` para somar à força horizontal/vertical
+    acumulada IMEDIATAMENTE ANTES do segmento seguinte.
+
+    Convenção do solver (frame da catenária):
+      - H_jump > 0: força horizontal puxando o fairlead (sentido +X local).
+      - H_jump < 0: força horizontal puxando o anchor (sentido -X local).
+      - V_jump > 0: força vertical para BAIXO (clump → +V).
+      - V_jump < 0: força vertical para CIMA (buoy → -V).
+
+    Por kind:
+      - clump_weight: (0, +submerged_force)
+      - buoy:         (0, -submerged_force)
+      - ahv:          (F_x_local, 0). F_x_local = bollard_pull · cos(Δθ)
+        onde Δθ = (heading_deg - line_azimuth_deg) é o ângulo entre a
+        força horizontal global e o eixo da linha. Componente
+        perpendicular (sin(Δθ)) é IGNORADA — solver é 2D (D019 alerta
+        quando essa componente é majoritária).
+
+    Em caso isolado (CaseInput sem MooringSystem), `line_azimuth_deg=0`
+    é o default — assume que a linha está alinhada com o eixo X global.
+    """
+    if att.kind == "buoy":
+        return (0.0, -att.submerged_force)
+    if att.kind == "clump_weight":
+        return (0.0, att.submerged_force)
+    if att.kind == "ahv":
+        bollard = att.ahv_bollard_pull or 0.0
+        heading = att.ahv_heading_deg or 0.0
+        delta_theta_rad = math.radians(heading - line_azimuth_deg)
+        h_jump = bollard * math.cos(delta_theta_rad)
+        return (h_jump, 0.0)
+    return (0.0, 0.0)
+
+
+def ahv_in_plane_fraction(
+    att: LineAttachment, line_azimuth_deg: float = 0.0
+) -> float:
+    """
+    Fração da magnitude da força AHV que projeta no plano vertical da
+    linha (em [0, 1]). Usado pelo D019 (limiar 30%).
+
+    `att.kind` precisa ser "ahv"; outros kinds retornam 1.0 (totalmente
+    no plano por convenção, embora D019 só seja relevante para AHV).
+    """
+    if att.kind != "ahv":
+        return 1.0
+    heading = att.ahv_heading_deg or 0.0
+    delta_theta_rad = math.radians(heading - line_azimuth_deg)
+    return abs(math.cos(delta_theta_rad))
 
 
 # ==============================================================================
@@ -166,7 +231,11 @@ def _integrate_segments(
     # Pré-tabela: força signada por junção (índice da junção = posição
     # entre segmento i e i+1, que é também o número da junção). Junções
     # válidas: 0 .. N-2.
-    junction_force: dict[int, float] = {}
+    #
+    # Fase 8: força 2D — V_jump (vertical, buoy/clump) + H_jump (horizontal,
+    # AHV). H_jump altera o H local do próximo segmento; V_jump altera
+    # apenas V_local.
+    junction_force: dict[int, tuple[float, float]] = {}  # idx → (H_jump, V_jump)
     for att in attachments:
         # (a) Fisicamente justificada: position_index referencia uma
         # junção entre segmentos consecutivos, válido apenas em [0, N-2].
@@ -177,13 +246,19 @@ def _integrate_segments(
                 f"{att.position_index} fora do range válido "
                 f"[0, {len(segments) - 2}] para {len(segments)} segmentos."
             )
+        h_jump_att, v_jump_att = _signed_force_2d(att)
+        prev_h, prev_v = junction_force.get(att.position_index, (0.0, 0.0))
         junction_force[att.position_index] = (
-            junction_force.get(att.position_index, 0.0) + _signed_force(att)
+            prev_h + h_jump_att,
+            prev_v + v_jump_att,
         )
 
     x_acc = 0.0
     y_acc = 0.0
     V_local = V_anchor  # vai acumulando peso suspenso a cada segmento
+    # Fase 8: H_local é PER-SEGMENTO (mudou se há AHV em junção anterior).
+    # H_local[0] = H (input do solver). H_local[i+1] = H_local[i] + H_jump_i.
+    H_local = H
 
     boundaries.append(0)
     for i, (seg, L_i) in enumerate(zip(segments, L_effs)):
@@ -199,10 +274,22 @@ def _integrate_segments(
         # NO FAIRLEAD final (V_fairlead deve ser ≥ 0; cabo precisa puxar
         # pra cima no fairlead).
         if i > 0 and (i - 1) in junction_force:
-            V_local = V_local + junction_force[i - 1]
+            h_jump, v_jump = junction_force[i - 1]
+            V_local = V_local + v_jump
+            # Fase 8 — H_local muda na junção AHV. Convenção:
+            # H_jump > 0 puxa fairlead (aumenta H no segmento à direita).
+            H_local = H_local + h_jump
+            # H_local <= 0 significa que a força do AHV reverte a tração
+            # horizontal — geometria fisicamente impossível na catenária
+            # paramétrica clássica. Sinaliza infactível para o brentq.
+            if H_local <= 0:
+                raise ValueError(
+                    f"H_local <= 0 após junção AHV {i-1} (H_jump={h_jump:.0f}). "
+                    "Bollard pull excede H — geometria infactível."
+                )
 
         w_i = seg.w
-        a_i = H / w_i
+        a_i = H_local / w_i
         s_start = V_local / w_i
         s_end = (V_local + w_i * L_i) / w_i
 
@@ -222,9 +309,11 @@ def _integrate_segments(
         seg_x = x_acc + x_local
         seg_y = y_acc + y_local
 
-        # Tração: T(s) = w_i · sqrt(a_i² + s²); H constante; V = w_i · s
+        # Tração: T(s) = w_i · sqrt(a_i² + s²); H constante DENTRO do
+        # segmento (mas pode mudar entre segmentos via H_jump em junção
+        # AHV — Fase 8); V = w_i · s.
         T_seg = w_i * np.sqrt(a_i * a_i + s_local * s_local)
-        Tx_seg = np.full_like(T_seg, H)
+        Tx_seg = np.full_like(T_seg, H_local)
         Ty_seg = w_i * s_local
 
         # Concatena (evita duplicar a junção: pulo o primeiro ponto exceto no segmento 0)
@@ -255,8 +344,10 @@ def _integrate_segments(
     X_total = x_acc
     h_total = y_acc
     V_fairlead = V_local
+    # Fase 8: T_anchor usa H[0] (input); T_fairlead usa H_local final
+    # (após todos os AHVs). Em casos sem AHV, H_local == H[0] = H input.
     T_anchor = math.sqrt(H * H + V_anchor * V_anchor)
-    T_fairlead = math.sqrt(H * H + V_fairlead * V_fairlead)
+    T_fairlead = math.sqrt(H_local * H_local + V_fairlead * V_fairlead)
 
     return {
         "X_total": X_total,
@@ -266,6 +357,7 @@ def _integrate_segments(
         "T_fairlead": T_fairlead,
         "T_anchor": T_anchor,
         "H": H,
+        "H_fairlead": H_local,  # Fase 8: H no fairlead (= H input em casos sem AHV)
         "coords_x": coords_x,
         "coords_y": coords_y,
         "tension_magnitude": tension_mag,
@@ -306,8 +398,18 @@ def _solve_suspended_tension(
     # patológico que vai cair em V_anchor inviável).
     sum_total = sum_wL + sum_F
 
+    # Fase 8 — soma de H_jumps em junções AHV. Em casos sem AHV, sum_H_jump=0
+    # → fallback para o comportamento pré-F8 (H_anchor == H_fairlead).
+    # Caso isolado: line_azimuth_deg=0 (linha alinhada com +X global).
+    sum_H_jump = sum(
+        _signed_force_2d(att, line_azimuth_deg=0.0)[0] for att in attachments
+    )
+
     def residual(H: float) -> float:
-        V_fl_sq = T_fl * T_fl - H * H
+        # Fase 8: H_fairlead = H + sum_H_jump (H aqui é H[0] = anchor end).
+        # T_fl é magnitude no fairlead → T_fl² = H_fairlead² + V_fl².
+        H_fl = H + sum_H_jump
+        V_fl_sq = T_fl * T_fl - H_fl * H_fl
         if V_fl_sq < 0:
             return float("inf")
         V_fl = math.sqrt(V_fl_sq)
@@ -358,18 +460,28 @@ def _solve_suspended_tension(
             f"{sum_total:.1f} N <= 0: empuxo das boias excede o peso da "
             "linha. Geometria invertida não suportada."
         )
-    H_max_sq = T_fl * T_fl - sum_total * sum_total
+    # H_max é o H no FAIRLEAD em que V_anchor → 0 (touchdown iminente).
+    # Para o brentq sobre H_anchor (variável), o limite superior é
+    # H_max_anchor = H_max_fairlead - sum_H_jump.
+    H_max_fl_sq = T_fl * T_fl - sum_total * sum_total
     # (a) Fisicamente justificada: T_fl² >= V_total² para que H² seja real.
-    # Quando T_fl ≤ Σw·L, o cabo não pode sustentar o peso pendurado e a
-    # equação T² = H² + V² não tem solução com H > 0.
-    if H_max_sq <= 0:
+    if H_max_fl_sq <= 0:
         raise ValueError(
             f"T_fl={T_fl:.1f} N <= soma de pesos suspensos {sum_total:.1f} N "
             "(incluindo attachments): linha não consegue sustentar o peso "
             "pendurado. Reduza algum w·L, aumente T_fl, ou troque clump "
             "weights por boias."
         )
-    H_max = math.sqrt(H_max_sq)
+    H_max_fl = math.sqrt(H_max_fl_sq)
+    # Fase 8: H_max no anchor = H_max_fairlead - sum_H_jump. Quando AHV
+    # puxa fairlead (sum_H_jump > 0), H_anchor é menor.
+    H_max = H_max_fl - sum_H_jump
+    if H_max <= 0:
+        raise ValueError(
+            f"AHV bollard pull horizontal (sum_H_jump={sum_H_jump:.0f} N) "
+            f"≥ H_max_fairlead ({H_max_fl:.0f} N): força do AHV reverteria "
+            "a tração horizontal no anchor (geometria infactível)."
+        )
 
     # Em H pequeno: a_i = H/w_i pequeno, catenária muito acentuada, h_total
     # grande. Em H próximo de H_max: V_anchor → 0, h_total → h_critico
@@ -412,7 +524,9 @@ def _solve_suspended_tension(
         residual, H_lo, H_hi,
         xtol=1e-3, rtol=1e-6, maxiter=config.max_brent_iter,
     )
-    V_fl = math.sqrt(T_fl * T_fl - H_sol * H_sol)
+    # Fase 8 — V_fl em função de H_fairlead (não H_anchor) com AHV.
+    H_fl = H_sol + sum_H_jump
+    V_fl = math.sqrt(T_fl * T_fl - H_fl * H_fl)
     V_anchor = V_fl - sum_total
     return _integrate_segments(
         segments, L_effs, H_sol, V_anchor, attachments=attachments,
