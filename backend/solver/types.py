@@ -429,6 +429,20 @@ class LineAttachment(BaseModel):
         description="Diâmetro do cabo do pendant (m). Metadado.",
     )
 
+    # ─── Rastreabilidade ao catálogo de boias (F6 / Q4) ──────
+    buoy_catalog_id: Optional[int] = Field(
+        default=None, ge=1,
+        description=(
+            "ID da boia no catálogo (`buoys.id`). RASTREABILIDADE — "
+            "NÃO autoritativo em runtime: o solver usa apenas "
+            "`submerged_force` (e demais campos físicos) para o "
+            "cálculo. Este campo serve para auditoria ('foi populado a "
+            "partir do catálogo'). Quando o usuário edita qualquer "
+            "campo físico após popular do picker, a UI deve setar este "
+            "campo de volta para None — vide F6 / Q7 (override → null)."
+        ),
+    )
+
     @model_validator(mode="after")
     def _exactly_one_position(self) -> "LineAttachment":
         has_idx = self.position_index is not None
