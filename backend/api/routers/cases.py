@@ -40,6 +40,28 @@ def _case_not_found(case_id: int) -> HTTPException:
     )
 
 
+def _gmoor_not_available(
+    err: case_service.GmoorNotAvailableInCatalog,
+) -> HTTPException:
+    """Converte exceção de validação Fase 1 em HTTP 422 estruturado.
+
+    O exception handler global em main.py espera dict com keys
+    `code`/`message`/`detail` (ErrorDetail schema). Metadados específicos
+    (segment_index, line_type) vão dentro de `detail`.
+    """
+    return HTTPException(
+        status_code=422,
+        detail={
+            "code": "gmoor_not_available",
+            "message": str(err),
+            "detail": {
+                "segment_index": err.segment_index,
+                "line_type": err.line_type,
+            },
+        },
+    )
+
+
 @router.get(
     "",
     response_model=PaginatedResponse[CaseSummary],
@@ -86,7 +108,10 @@ def list_cases(
 def create_case(
     case_input: CaseInput, db: Session = Depends(get_db)
 ) -> CaseOutput:
-    rec = case_service.create_case(db, case_input)
+    try:
+        rec = case_service.create_case(db, case_input)
+    except case_service.GmoorNotAvailableInCatalog as err:
+        raise _gmoor_not_available(err)
     return case_service.case_record_to_output(rec)
 
 
@@ -125,6 +150,8 @@ def update_case(
         rec = case_service.update_case(db, case_id, case_input)
     except case_service.CaseNotFound:
         raise _case_not_found(case_id)
+    except case_service.GmoorNotAvailableInCatalog as err:
+        raise _gmoor_not_available(err)
     return case_service.case_record_to_output(rec)
 
 

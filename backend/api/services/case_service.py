@@ -12,7 +12,7 @@ from typing import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.api.db.models import CaseRecord, ExecutionRecord
+from backend.api.db.models import CaseRecord, ExecutionRecord, LineTypeRecord
 
 logger = logging.getLogger("ancoplat.api.cases")
 from backend.api.schemas.cases import (
@@ -22,6 +22,67 @@ from backend.api.schemas.cases import (
     ExecutionOutput,
 )
 from backend.solver.types import SolverResult
+
+
+# ==============================================================================
+# Validações específicas (Fase 1)
+# ==============================================================================
+
+
+class GmoorNotAvailableInCatalog(Exception):
+    """
+    Disparada quando um segmento pede `ea_source="gmoor"` mas o
+    `line_type` referenciado tem `gmoor_ea = NULL` no catálogo.
+
+    Esta validação é defesa em profundidade no backend (Q4 da Fase 1):
+    a UI já desabilita a opção GMoor visualmente quando catálogo não tem
+    o coeficiente, mas chamadas via API direta (sem frontend) precisam
+    rejeitar com mensagem orientadora citando o tipo específico.
+    """
+
+    def __init__(self, segment_index: int, line_type: str) -> None:
+        self.segment_index = segment_index
+        self.line_type = line_type
+        super().__init__(
+            f"Linha '{line_type}' (segmento #{segment_index + 1}) não tem "
+            f"coeficiente GMoor no catálogo. Use ea_source='qmoor' ou "
+            f"escolha outro tipo."
+        )
+
+
+def _validate_ea_source_against_catalog(
+    db: Session, case_input: CaseInput
+) -> None:
+    """
+    Para cada segmento com `line_type` definido E `ea_source="gmoor"`,
+    confirma que o catálogo tem `gmoor_ea` populado.
+
+    Comportamento:
+      - segmento sem `line_type` (custom do usuário): não valida — confia
+        no EA fornecido pelo usuário.
+      - `line_type` no payload mas não no catálogo: passa silenciosamente
+        (custom line_type, não está no catálogo legado).
+      - `line_type` existe no catálogo, `ea_source="gmoor"`, gmoor_ea NULL:
+        levanta `GmoorNotAvailableInCatalog`.
+      - `ea_source="qmoor"` (default): nunca valida.
+    """
+    for i, seg in enumerate(case_input.segments):
+        if seg.line_type is None or seg.ea_source != "gmoor":
+            continue
+        # `line_type` é uma família (ex.: "IWRCEIPS", "R4Studless"), pode
+        # haver múltiplas entradas no catálogo (uma por diâmetro). A
+        # existência de `gmoor_ea` é uniforme dentro da família — basta
+        # checar qualquer registro com esse `line_type`.
+        rec = db.execute(
+            select(LineTypeRecord)
+            .where(LineTypeRecord.line_type == seg.line_type)
+            .limit(1)
+        ).scalar_one_or_none()
+        if rec is None:
+            # line_type custom (não está no catálogo) — confia no EA fornecido
+            continue
+        if rec.gmoor_ea is None:
+            raise GmoorNotAvailableInCatalog(i, seg.line_type)
 
 
 # ==============================================================================
@@ -105,7 +166,11 @@ def create_case(db: Session, case_input: CaseInput) -> CaseRecord:
       - line_type = primeiro line_type não-nulo (ou junção 'A+B+C' para
         listagens) — adotamos o primeiro pra manter compatibilidade.
       - line_length = soma dos comprimentos.
+
+    Fase 1: valida `ea_source="gmoor"` contra o catálogo (defesa em
+    profundidade — UI também valida).
     """
+    _validate_ea_source_against_catalog(db, case_input)
     first = case_input.segments[0]
     rec = CaseRecord(
         name=case_input.name,
@@ -134,7 +199,12 @@ def get_case(db: Session, case_id: int) -> CaseRecord:
 def update_case(
     db: Session, case_id: int, case_input: CaseInput
 ) -> CaseRecord:
-    """Atualiza campos do caso (substitui input_json integralmente)."""
+    """Atualiza campos do caso (substitui input_json integralmente).
+
+    Fase 1: valida `ea_source="gmoor"` contra o catálogo antes de
+    persistir.
+    """
+    _validate_ea_source_against_catalog(db, case_input)
     rec = get_case(db, case_id)
     first = case_input.segments[0]
     rec.name = case_input.name
@@ -183,6 +253,7 @@ def list_cases(
 
 __all__ = [
     "CaseNotFound",
+    "GmoorNotAvailableInCatalog",
     "case_record_to_output",
     "case_record_to_summary",
     "create_case",
