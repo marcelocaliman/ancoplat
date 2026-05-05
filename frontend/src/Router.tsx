@@ -66,6 +66,11 @@ const NotFoundPage = lazy(() =>
 const SamplesPage = lazy(() =>
   import('@/pages/SamplesPage').then((m) => ({ default: m.SamplesPage })),
 )
+const HelpGlossaryPage = lazy(() =>
+  import('@/pages/HelpGlossaryPage').then((m) => ({
+    default: m.HelpGlossaryPage,
+  })),
+)
 
 function PageFallback() {
   return (
@@ -100,6 +105,8 @@ const router = createBrowserRouter([
       { path: 'samples', element: wrap(<SamplesPage />) },
       { path: 'catalog', element: wrap(<CatalogPage />) },
       { path: 'import-export', element: wrap(<ImportExportPage />) },
+      { path: 'help', element: <Navigate to="/help/glossary" replace /> },
+      { path: 'help/glossary', element: wrap(<HelpGlossaryPage />) },
       { path: 'settings', element: wrap(<SettingsPage />) },
       { path: '*', element: wrap(<NotFoundPage />) },
     ],
