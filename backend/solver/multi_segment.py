@@ -71,7 +71,7 @@ analítica (continuidade nas junções, conservação de H).
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from typing import Optional, Sequence
 
 import numpy as np
 from scipy.optimize import brentq, fsolve
@@ -1229,6 +1229,7 @@ def solve_multi_segment(
     config: SolverConfig | None = None,
     attachments: Sequence[LineAttachment] = (),
     slope_rad: float = 0.0,
+    mu_per_seg: Optional[Sequence[float]] = None,
 ) -> SolverResult:
     """
     Solver multi-segmento (F5.1). Ver docstring do módulo.
@@ -1242,6 +1243,22 @@ def solve_multi_segment(
 
     Retorna SolverResult com status CONVERGED ou levanta ValueError em
     casos infactíveis.
+
+    ─── Atrito per-segmento (Fase 1 / B3) ──────────────────────────────
+    `mu_per_seg`: lista opcional com μ efetivo de cada segmento
+    (resolvido pela facade `solve()` via `_resolve_mu_per_seg`).
+
+    Quando fornecido, é usado preferencialmente sobre o `mu` global.
+    Comportamento atual: trecho grounded fica sempre no segmento 0
+    (F5.1 + F5.7.1 mesmo com arches mantêm a propriedade de mesmo
+    material), portanto o atrito relevante é `mu_per_seg[0]`. O resto
+    da lista é mantido para futura extensão (múltiplos segmentos em
+    contato com o seabed).
+
+    Quando `mu_per_seg=None`, comportamento legado: todos os segmentos
+    veem o `mu` global. Essa é a preservação de retro-compatibilidade
+    que decidimos manter na Fase 1 em substituição à feature-flag
+    `use_per_segment_friction` originalmente prevista no plano.
     """
     if config is None:
         config = SolverConfig()
@@ -1249,6 +1266,16 @@ def solve_multi_segment(
         raise ValueError(f"h={h} deve ser > 0 para o solver suspenso")
     if not segments:
         raise ValueError("segments vazio")
+
+    # Validação leve: se mu_per_seg fornecido, deve casar em cardinalidade.
+    if mu_per_seg is not None and len(mu_per_seg) != len(segments):
+        raise ValueError(
+            f"mu_per_seg tem {len(mu_per_seg)} entradas mas há "
+            f"{len(segments)} segmentos"
+        )
+
+    # μ efetivo no trecho grounded — sempre segmento 0 na arquitetura atual.
+    mu_grounded = mu_per_seg[0] if mu_per_seg is not None else mu
 
     # Iteração elástica ponto-fixo: começa com L_eff = L_unstretched.
     L_unstretched = [s.length for s in segments]
@@ -1278,7 +1305,7 @@ def solve_multi_segment(
                     has_grounded = True
                     rigid = _solve_multi_sloped(
                         segments, L_effs, h, mode, input_value,
-                        mu, slope_rad, config, attachments,
+                        mu_grounded, slope_rad, config, attachments,
                     )
             except ValueError:
                 # Solver fully-suspended falhou (não conseguiu bracketar):

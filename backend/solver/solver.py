@@ -53,6 +53,44 @@ from .types import (
 )
 
 
+def _resolve_mu_per_seg(
+    line_segments: Sequence[LineSegment],
+    seabed: SeabedConfig,
+) -> list[float]:
+    """
+    Resolve o coeficiente de atrito efetivo de CADA segmento aplicando a
+    precedência canônica da Fase 1 do plano de profissionalização.
+
+    Precedência (mais específico → mais geral):
+
+        1. ``segment.mu_override``    — override explícito do usuário no segmento
+        2. ``segment.seabed_friction_cf`` — valor do catálogo (line_type)
+        3. ``seabed.mu``              — valor global do caso (default 0.0)
+        4. ``0.0``                    — fallback final (sem atrito)
+
+    Cada nível só é consultado se o anterior for ``None``. Defaults
+    ``None`` em ambos `mu_override` e `seabed_friction_cf` preservam o
+    comportamento legado (cai em ``seabed.mu`` global), garantindo
+    retro-compatibilidade com cases salvos antes da Fase 1 — esta é
+    decisão consciente em substituição à feature-flag
+    ``use_per_segment_friction`` originalmente prevista no plano.
+
+    Retorna lista de floats com mesma cardinalidade de ``line_segments``.
+
+    Garantia: cada elemento é >= 0.0 (validador Pydantic do LineSegment
+    e SeabedConfig já enforça isto).
+    """
+    out: list[float] = []
+    for seg in line_segments:
+        if seg.mu_override is not None:
+            out.append(seg.mu_override)
+        elif seg.seabed_friction_cf is not None:
+            out.append(seg.seabed_friction_cf)
+        else:
+            out.append(seabed.mu)
+    return out
+
+
 def _validate_inputs(
     line_segments: Sequence[LineSegment],
     boundary: BoundaryConditions,
@@ -180,6 +218,17 @@ def solve(
     # Quando startpoint_depth = 0 (fairlead na superfície), drop = h.
     h_drop = boundary.h - boundary.startpoint_depth
 
+    # Resolve μ por segmento (Fase 1 / B3). Helper centralizado documenta
+    # a precedência: mu_override → seabed_friction_cf → seabed.mu → 0.
+    # Aplicado APÓS resolve_attachments para que sub-segmentos gerados
+    # pelo split de attachment herdem o μ corretamente (model_copy
+    # preserva mu_override e seabed_friction_cf).
+    mu_per_seg = _resolve_mu_per_seg(resolved_segments, seabed)
+    # μ efetivo do primeiro segmento (segmento 0 — em contato com o
+    # seabed na zona grounded). Single-segment paths usam este valor;
+    # multi-segment recebe a lista completa.
+    mu_seg0 = mu_per_seg[0] if mu_per_seg else seabed.mu
+
     try:
         n_segments = len(resolved_segments)
         slope = seabed.slope_rad
@@ -199,10 +248,11 @@ def solve(
                 h=h_drop,
                 mode=boundary.mode,
                 input_value=boundary.input_value,
-                mu=seabed.mu,
+                mu=mu_seg0,  # μ no trecho grounded (sempre o segmento 0)
                 config=config,
                 attachments=resolved_attachments,
                 slope_rad=slope,
+                mu_per_seg=mu_per_seg,  # Fase 1: per-seg disponível p/ futuro
             )
         elif slope_is_significant:
             # F5.3 completa: single-segmento em rampa.
@@ -227,14 +277,14 @@ def solve(
                     result = solve_elastic_iterative(
                         L=segment.length, h=h_drop, w=segment.w, EA=segment.EA,
                         mode=boundary.mode, input_value=boundary.input_value,
-                        config=config, mu=seabed.mu, MBL=segment.MBL,
+                        config=config, mu=mu_seg0, MBL=segment.MBL,
                     )
                 else:
                     # Touchdown em rampa
                     result = solve_sloped_seabed_single_segment(
                         L=segment.length, h=h_drop, w=segment.w, EA=segment.EA,
                         mode=boundary.mode, input_value=boundary.input_value,
-                        mu=seabed.mu, slope_rad=slope, MBL=segment.MBL,
+                        mu=mu_seg0, slope_rad=slope, MBL=segment.MBL,
                         config=config,
                     )
             elif boundary.mode == SolutionMode.RANGE:
@@ -244,14 +294,14 @@ def solve(
                     result = solve_elastic_iterative(
                         L=segment.length, h=h_drop, w=segment.w, EA=segment.EA,
                         mode=boundary.mode, input_value=boundary.input_value,
-                        config=config, mu=seabed.mu, MBL=segment.MBL,
+                        config=config, mu=mu_seg0, MBL=segment.MBL,
                     )
                 else:
                     # Touchdown em rampa, modo Range
                     result = solve_sloped_seabed_single_segment(
                         L=segment.length, h=h_drop, w=segment.w, EA=segment.EA,
                         mode=boundary.mode, input_value=boundary.input_value,
-                        mu=seabed.mu, slope_rad=slope, MBL=segment.MBL,
+                        mu=mu_seg0, slope_rad=slope, MBL=segment.MBL,
                         config=config,
                     )
             else:
@@ -265,7 +315,7 @@ def solve(
                 EA=segment.EA,
                 mode=boundary.mode,
                 input_value=boundary.input_value,
-                mu=seabed.mu,
+                mu=mu_seg0,
                 MBL=segment.MBL,
                 config=config,
             )
@@ -278,7 +328,7 @@ def solve(
                 mode=boundary.mode,
                 input_value=boundary.input_value,
                 config=config,
-                mu=seabed.mu,
+                mu=mu_seg0,
                 MBL=segment.MBL,
             )
     except ValueError as exc:
