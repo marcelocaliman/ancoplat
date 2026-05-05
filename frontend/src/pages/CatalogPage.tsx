@@ -62,9 +62,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useDebounce } from '@/hooks/useDebounce'
 import { cn, fmtNumber } from '@/lib/utils'
 import { MoreHorizontal } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { BuoysTab } from '@/pages/BuoysTab'
 
 const lineTypeSchema = z.object({
   line_type: z.string().trim().min(1).max(50),
@@ -103,7 +106,53 @@ const EMPTY_LT: LineTypeForm = {
 
 const PAGE_SIZE = 30
 
+/**
+ * F6 / Q6: tabs Cabos | Boias com URL deep-linking via `?tab=`.
+ * - tab=cables (default)
+ * - tab=buoys
+ */
+type CatalogTab = 'cables' | 'buoys'
+const VALID_TABS: readonly CatalogTab[] = ['cables', 'buoys']
+
 export function CatalogPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab: CatalogTab = (
+    VALID_TABS as readonly string[]
+  ).includes(tabParam ?? '') ? (tabParam as CatalogTab) : 'cables'
+
+  function setActiveTab(tab: CatalogTab) {
+    const next = new URLSearchParams(searchParams)
+    if (tab === 'cables') next.delete('tab')
+    else next.set('tab', tab)
+    setSearchParams(next, { replace: true })
+  }
+
+  return (
+    <>
+      <Topbar />
+      <div className="flex-1 overflow-auto custom-scroll p-6">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as CatalogTab)}
+        >
+          <TabsList className="mb-4">
+            <TabsTrigger value="cables">Cabos</TabsTrigger>
+            <TabsTrigger value="buoys">Boias</TabsTrigger>
+          </TabsList>
+          <TabsContent value="cables">
+            <CablesTab />
+          </TabsContent>
+          <TabsContent value="buoys">
+            <BuoysTab />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </>
+  )
+}
+
+function CablesTab() {
   const queryClient = useQueryClient()
 
   const [search, setSearch] = useState('')
@@ -167,8 +216,10 @@ export function CatalogPage() {
 
   return (
     <>
-      <Topbar actions={actions} />
-      <div className="flex-1 overflow-auto custom-scroll p-6">
+      <div className="mb-4 flex items-center justify-end gap-2">
+        {actions}
+      </div>
+      <>
         {/* Filtros */}
         <div className="mb-5 flex flex-wrap items-end gap-3">
           <div className="min-w-64 flex-1">
@@ -398,7 +449,7 @@ export function CatalogPage() {
             </div>
           </div>
         )}
-      </div>
+      </>
 
       {/* Dialog de criar/editar/duplicar */}
       {(creating || editing) && (
