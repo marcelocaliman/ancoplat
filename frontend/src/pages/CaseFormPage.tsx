@@ -31,7 +31,7 @@ import {
 } from '@/api/endpoints'
 import type { SolverResult } from '@/api/types'
 import { AttachmentsEditor } from '@/components/common/AttachmentsEditor'
-import { BathymetryPopover } from '@/components/common/BathymetryPopover'
+import { BathymetryInputGroup } from '@/components/common/BathymetryInputGroup'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
 import {
   DiagnosticsProvider,
@@ -588,95 +588,151 @@ export function CaseFormPage() {
                 />
               </TabsContent>
 
-              {/* ───────── Aba Ambiente: seabed + fairlead depth ───────── */}
+              {/* ───────── Aba Ambiente: batimetria 2-pontos + fairlead + seabed (Fase 2) ───────── */}
               <TabsContent
                 forceMount
                 value="ambiente"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-              <div className="flex max-w-[320px] flex-col gap-3">
-                <InlineField
-                  label="Lâmina d'água (sob âncora)"
-                  unit="m"
-                  tooltip="Profundidade do seabed na coluna da âncora, medida da superfície"
-                >
-                  <Input
-                    type="number"
-                    step="1"
-                    {...register('boundary.h', { valueAsNumber: true })}
-                    className="h-8 font-mono"
-                  />
-                </InlineField>
-                <InlineField
-                  label="Prof. do fairlead"
-                  unit="m"
-                  tooltip="Profundidade do fairlead abaixo da superfície. 0 = na superfície. Igual à lâmina = linha horizontal no fundo."
-                >
-                  <Input
-                    type="number"
-                    step="1"
-                    min="0"
-                    {...register('boundary.startpoint_depth', {
-                      valueAsNumber: true,
-                    })}
-                    className="h-8 font-mono"
-                  />
-                </InlineField>
-                <InlineField
-                  label="μ (atrito do seabed)"
-                  tooltip="Wire ~0,3 · Corrente ~0,7 · Poliéster ~0,25"
-                >
-                  <Input
-                    type="number"
-                    step="0.05"
-                    min="0"
-                    {...register('seabed.mu', { valueAsNumber: true })}
-                    className="h-8 font-mono"
-                  />
-                </InlineField>
-                <InlineField
-                  label="Inclinação seabed"
-                  unit="°"
-                  tooltip={
-                    '0° = horizontal. Positivo: seabed sobe em direção ao fairlead. ' +
-                    'Use o ícone ao lado para calcular pela batimetria nos dois pontos.'
-                  }
-                >
+              <div className="flex max-w-[340px] flex-col gap-4">
+
+                {/* Grupo 1 — Geometria (batimetria 2-pontos primária) */}
+                <div className="space-y-1.5">
+                  <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Geometria
+                  </h4>
                   <Controller
                     control={control}
-                    name="seabed.slope_rad"
-                    render={({ field }) => (
-                      <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1">
-                        <input
-                          type="number"
-                          step={0.5}
-                          min={-45}
-                          max={45}
-                          value={
-                            field.value != null
-                              ? ((field.value * 180) / Math.PI).toFixed(2)
-                              : '0'
-                          }
-                          onChange={(e) => {
-                            const deg = parseFloat(e.target.value)
-                            field.onChange(
-                              Number.isFinite(deg) ? (deg * Math.PI) / 180 : 0,
-                            )
-                          }}
-                          className="min-w-0 flex-1 bg-transparent px-2 py-1 font-mono text-sm tabular-nums focus:outline-none"
-                        />
-                        <BathymetryPopover
-                          currentSlopeRad={field.value ?? 0}
-                          currentH={watch('boundary.h') ?? 0}
-                          currentXTotal={
-                            previewQuery.data?.total_horz_distance ?? undefined
-                          }
-                          onApplyRad={(rad) => field.onChange(rad)}
-                        />
-                      </div>
+                    name="boundary.h"
+                    render={({ field: hField }) => (
+                      <Controller
+                        control={control}
+                        name="seabed.slope_rad"
+                        render={({ field: slopeField }) => (
+                          <BathymetryInputGroup
+                            depthAnchor={(hField.value as number) ?? 0}
+                            setDepthAnchor={(v) => hField.onChange(v)}
+                            slopeRad={(slopeField.value as number) ?? 0}
+                            onSlopeChange={(rad) => slopeField.onChange(rad)}
+                            xTotalEstimate={
+                              previewQuery.data?.total_horz_distance ?? undefined
+                            }
+                          />
+                        )}
+                      />
                     )}
                   />
-                </InlineField>
+                </div>
+
+                {/* Grupo 2 — Fairlead */}
+                <div className="space-y-1.5">
+                  <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Fairlead
+                  </h4>
+                  <InlineField
+                    label="Profundidade abaixo da água"
+                    unit="m"
+                    tooltip="Profundidade do PONTO de fairlead abaixo da superfície. 0 = na superfície (default). Para FPSO típico, 20-40 m."
+                  >
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      {...register('boundary.startpoint_depth', {
+                        valueAsNumber: true,
+                      })}
+                      className="h-8 font-mono"
+                    />
+                  </InlineField>
+                  <InlineField
+                    label="Offset horizontal (cosmético)"
+                    unit="m"
+                    tooltip="Afeta APENAS a visualização do plot — não entra no cálculo do solver. Reservado para fase futura."
+                  >
+                    <Input
+                      type="number"
+                      step="1"
+                      {...register('boundary.startpoint_offset_horz', {
+                        valueAsNumber: true,
+                      })}
+                      className="h-8 font-mono"
+                    />
+                  </InlineField>
+                  <InlineField
+                    label="Offset vertical (cosmético)"
+                    unit="m"
+                    tooltip="Equivalente ao 'Deck Level above SWL' do QMoor. Afeta APENAS a visualização do plot — não entra no cálculo."
+                  >
+                    <Input
+                      type="number"
+                      step="0.5"
+                      {...register('boundary.startpoint_offset_vert', {
+                        valueAsNumber: true,
+                      })}
+                      className="h-8 font-mono"
+                    />
+                  </InlineField>
+                </div>
+
+                {/* Grupo 3 — Seabed */}
+                <div className="space-y-1.5">
+                  <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Seabed
+                  </h4>
+                  <InlineField
+                    label="μ (atrito) — global"
+                    tooltip="Atrito global do seabed. Pode ser sobrescrito por segmento na aba Linha (μ override). Wire ~0,3 · Corrente ~1,0 · Poliéster ~0,25"
+                  >
+                    <Input
+                      type="number"
+                      step="0.05"
+                      min="0"
+                      {...register('seabed.mu', { valueAsNumber: true })}
+                      className="h-8 font-mono"
+                    />
+                  </InlineField>
+                  {/* Modo avançado — slope direto */}
+                  <details className="text-[10px]">
+                    <summary className="cursor-pointer select-none py-0.5 text-muted-foreground hover:text-foreground">
+                      Avançado — slope direto
+                    </summary>
+                    <div className="mt-1.5 space-y-1.5 rounded-md border border-border/40 bg-muted/20 p-2">
+                      <p className="text-[9px] text-muted-foreground">
+                        Para uso quando você tem o ângulo medido (inclinômetro,
+                        sonar) sem batimetria nos dois pontos. Esta entrada
+                        sobrescreve o slope derivado da Geometria acima.
+                      </p>
+                      <InlineField label="Slope direto" unit="°">
+                        <Controller
+                          control={control}
+                          name="seabed.slope_rad"
+                          render={({ field }) => (
+                            <input
+                              type="number"
+                              step={0.5}
+                              min={-45}
+                              max={45}
+                              value={
+                                field.value != null
+                                  ? ((field.value * 180) / Math.PI).toFixed(2)
+                                  : '0'
+                              }
+                              onChange={(e) => {
+                                const deg = parseFloat(e.target.value)
+                                field.onChange(
+                                  Number.isFinite(deg)
+                                    ? (deg * Math.PI) / 180
+                                    : 0,
+                                )
+                              }}
+                              className="h-8 w-full rounded-md border border-input bg-background px-2 font-mono text-sm tabular-nums"
+                            />
+                          )}
+                        />
+                      </InlineField>
+                    </div>
+                  </details>
+                </div>
               </div>
             </TabsContent>
 
