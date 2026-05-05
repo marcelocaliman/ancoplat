@@ -808,6 +808,108 @@ def D015_rare_profile_type(
 
 
 # =============================================================================
+# Diagnostics novos da Fase 7 — D016, D017 (anchor uplift)
+# =============================================================================
+
+
+def D016_anchor_uplift_invalid(
+    *,
+    endpoint_depth: float,
+    h: float,
+) -> SolverDiagnostic:
+    """
+    Anchor uplift fora do domínio válido (0 < endpoint_depth ≤ h).
+
+    Dispara quando:
+      - endpoint_depth ≤ 0 (anchor acima ou na superfície da água)
+      - endpoint_depth > h + 1e-6 (anchor abaixo do seabed)
+
+    Pré-validação Pydantic já bloqueia esse cenário, mas D016 é mantido
+    como diagnostic estruturado caso o validador seja contornado (ex.:
+    dados vindos de import .moor antigo com bug).
+
+    Confidence: high — violação determinística de domínio físico.
+    Severity: error — caso impossível, solver não pode prosseguir.
+    """
+    if endpoint_depth <= 0:
+        cause = (
+            f"endpoint_depth={endpoint_depth:.2f} m ≤ 0: a âncora estaria "
+            f"acima ou na superfície da água. Anchor uplift requer 0 < "
+            f"endpoint_depth ≤ h ({h:.2f} m)."
+        )
+        suggestion = (
+            f"Informe endpoint_depth no intervalo (0, {h:.2f}] m. Tipicamente "
+            "anchor 5-50% acima do seabed."
+        )
+    elif endpoint_depth > h + 1e-6:
+        cause = (
+            f"endpoint_depth={endpoint_depth:.2f} m > h={h:.2f} m: a "
+            f"âncora estaria abaixo do seabed (geometria impossível)."
+        )
+        suggestion = (
+            "Para anchor cravado no seabed use endpoint_grounded=True "
+            f"(omita endpoint_depth). Para anchor elevado use "
+            f"endpoint_depth ∈ (0, {h:.2f}] m."
+        )
+    else:
+        # Defesa em profundidade — não deveria atingir
+        cause = f"endpoint_depth={endpoint_depth:.2f} m fora do domínio."
+        suggestion = "Verifique o input."
+
+    return SolverDiagnostic(
+        code="D016_ANCHOR_UPLIFT_INVALID",
+        severity="error",
+        title="Anchor uplift: domínio violado",
+        cause=cause,
+        suggestion=suggestion,
+        confidence="high",
+        affected_fields=["boundary.endpoint_depth"],
+    )
+
+
+def D017_anchor_uplift_negligible(
+    *,
+    endpoint_depth: float,
+    h: float,
+    threshold_m: float = 1.0,
+) -> SolverDiagnostic:
+    """
+    Uplift "desprezível" — anchor a poucos metros do seabed.
+
+    Dispara quando 0 < (h - endpoint_depth) < threshold_m (default 1m).
+    Numericamente, casos quase-grounded podem ter convergência menos
+    estável que o caminho dedicado de grounded (com touchdown). Sugere
+    que o engenheiro reconsidere usar endpoint_grounded=True para
+    obter solução mais robusta numericamente.
+
+    Confidence: medium — heurística calibrada (1m é convencional);
+    valor exato do limiar pode mudar com calibração futura.
+    Severity: warning — caso solúvel, mas há alternativa mais robusta.
+    """
+    uplift = h - endpoint_depth
+    return SolverDiagnostic(
+        code="D017_ANCHOR_UPLIFT_NEGLIGIBLE",
+        severity="warning",
+        title=f"Anchor uplift desprezível ({uplift:.2f} m)",
+        cause=(
+            f"endpoint_depth={endpoint_depth:.2f} m está a apenas "
+            f"{uplift:.2f} m do seabed (h={h:.2f} m). Uplift < {threshold_m:.0f} m "
+            "indica anchor praticamente cravado — caso de fronteira "
+            "que numericamente pode oscilar entre regimes."
+        ),
+        suggestion=(
+            "Considere endpoint_grounded=True (anchor cravado no seabed) "
+            "que usa solver dedicado com touchdown, mais robusto "
+            "numericamente. Mantenha endpoint_grounded=False apenas se "
+            "o anchor fica fisicamente elevado por design (ex.: pile "
+            "com flutuabilidade)."
+        ),
+        confidence="medium",
+        affected_fields=["boundary.endpoint_depth", "boundary.endpoint_grounded"],
+    )
+
+
+# =============================================================================
 # Helper para classes de exceção que carregam diagnóstico
 # =============================================================================
 
@@ -848,6 +950,8 @@ __all__ = [
     "D013_mu_zero_with_catalog_friction",
     "D014_gmoor_without_beta",
     "D015_rare_profile_type",
+    "D016_anchor_uplift_invalid",
+    "D017_anchor_uplift_negligible",
     "D900_generic_nonconvergence",
     "SolverDiagnostic",
     "SolverDiagnosticError",

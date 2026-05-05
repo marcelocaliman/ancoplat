@@ -547,7 +547,11 @@ def solve(
     #   • D009 (warning/error) para anchor uplift alto
     #   • D010 (warning) para utilização > 60% (threshold operacional)
     #   • D008 (info) para margens de segurança apertadas
-    diagnostics_list: list[dict] = []
+    #
+    # Fase 7: preserva diagnostics já populados por solvers especializados
+    # (ex.: D017 do suspended_endpoint). A lista pode chegar não-vazia
+    # quando o caminho upstream emitiu diagnostics próprios.
+    diagnostics_list: list[dict] = list(result.diagnostics or [])
     if surface_violations:
         for v in surface_violations:
             buoy_idx = v["index"]

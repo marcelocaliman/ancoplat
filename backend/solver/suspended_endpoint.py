@@ -220,6 +220,17 @@ def solve_suspended_endpoint(
     # ─── Monta SolverResult final com campos preenchidos para uplift ─
     depth_at_fairlead = boundary.h - math.tan(seabed.slope_rad) * result_internal.total_horz_distance
 
+    # ─── D017 — uplift desprezível (Fase 7 / Q8) ────────────────────
+    diagnostics_list = list(result_internal.diagnostics or [])
+    uplift = boundary.h - boundary.endpoint_depth
+    if 0 < uplift < 1.0:
+        from .diagnostics import D017_anchor_uplift_negligible
+        d017 = D017_anchor_uplift_negligible(
+            endpoint_depth=boundary.endpoint_depth,
+            h=boundary.h,
+        )
+        diagnostics_list.append(d017.model_dump())
+
     return result_internal.model_copy(update={
         "coords_y": coords_y_phys,
         # Campos de auditoria/UI:
@@ -230,13 +241,14 @@ def solve_suspended_endpoint(
         "message": (
             f"Anchor uplift (Fase 7): suspended endpoint a "
             f"{boundary.endpoint_depth:.1f} m de profundidade, "
-            f"uplift = {boundary.h - boundary.endpoint_depth:.1f} m. "
+            f"uplift = {uplift:.1f} m. "
             "Catenária livre nas duas pontas (PT_1)."
         ),
         # `total_grounded_length` = 0 por hipótese (anchor não no seabed).
         "total_grounded_length": 0.0,
         # `dist_to_first_td` = None (não há touchdown).
         "dist_to_first_td": None,
+        "diagnostics": diagnostics_list,
     })
 
 
