@@ -106,14 +106,20 @@ def _validate_inputs(
     """
     # (a) Fisicamente justificada: solver precisa de pelo menos um segmento.
     if not line_segments:
-        raise ValueError("line_segments vazia: forneça pelo menos um segmento")
+        raise ValueError(
+            "segments: lista vazia recebida; esperado pelo menos 1 segmento. "
+            "Verifique que segments[] no CaseInput não está vazio."
+        )
     # (b) Defensiva: Pydantic LineSegment já enforça `length>0, EA>0, MBL>0, w>0`
     # via @field_validator. Mantemos como rede de segurança caso o solver seja
     # chamado fora da rota API (testes diretos, scripts).
     for i, s in enumerate(line_segments):
         if s.length <= 0 or s.EA <= 0 or s.MBL <= 0 or s.w <= 0:
             raise ValueError(
-                f"segmento {i} com grandeza não-positiva (validado também por Pydantic)"
+                f"segments[{i}]: grandeza não-positiva detectada "
+                f"(length={s.length}, w={s.w}, EA={s.EA}, MBL={s.MBL}); "
+                "esperado todas > 0. Pydantic deveria ter rejeitado antes — "
+                "verifique se LineSegment foi construído via model_validate."
             )
     # Despacho single vs multi acontece em solve(): aqui retornamos o
     # primeiro segmento como conveniência para o caso single (mantém o
@@ -122,16 +128,27 @@ def _validate_inputs(
     # (a) Fisicamente justificada: h é a profundidade do seabed sob a âncora.
     # h=0 implicaria âncora na superfície — caso degenerado fora do escopo.
     if boundary.h <= 0:
-        raise ValueError("lâmina d'água h deve ser > 0")
+        raise ValueError(
+            f"boundary.h (water_depth_at_anchor): valor recebido={boundary.h:.2f} m; "
+            "esperado > 0. Especifique a profundidade do seabed sob a âncora."
+        )
     # (a) Fisicamente justificada: T_fl/X positivos definem boundary condition
     # válida. T_fl=0 (linha frouxa absoluta) e X=0 (fairlead sobre a âncora)
     # são casos degenerados que exigem lógica especial.
     if boundary.input_value <= 0:
-        raise ValueError("input_value (T_fl ou X) deve ser > 0")
+        raise ValueError(
+            f"boundary.input_value: valor recebido={boundary.input_value:.2f} "
+            f"({'T_fl' if boundary.mode == SolutionMode.TENSION else 'X'}); "
+            "esperado > 0. T_fl=0 (frouxa) ou X=0 (fairlead sobre âncora) "
+            "são casos degenerados não suportados."
+        )
     # (a) Fisicamente justificada: atrito de Coulomb por definição é μ ≥ 0.
     # Pydantic SeabedConfig também enforça via Field(ge=0).
     if seabed.mu < 0:
-        raise ValueError("coeficiente de atrito μ deve ser >= 0")
+        raise ValueError(
+            f"seabed.mu: valor recebido={seabed.mu}; esperado >= 0. "
+            "Coeficiente de atrito de Coulomb não pode ser negativo."
+        )
     # (b) Defensiva: o Pydantic SolutionMode (Enum) já garante este invariante.
     # Mantemos por simetria com tratamento textual em logs/diagnostics.
     if boundary.mode not in (SolutionMode.TENSION, SolutionMode.RANGE):
