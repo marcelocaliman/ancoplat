@@ -1,7 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { ExternalLink, Info, Keyboard, Moon, Sun, SunMoon } from 'lucide-react'
+import { ExternalLink, Info, Keyboard, Moon, RotateCw, Sun, SunMoon } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import { fetchVersion } from '@/api/endpoints'
 import { Topbar } from '@/components/layout/Topbar'
+import {
+  OnboardingTour,
+  resetOnboardingTour,
+} from '@/components/common/OnboardingTour'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -31,6 +37,8 @@ export function SettingsPage() {
     queryFn: fetchVersion,
     staleTime: 5 * 60_000,
   })
+  // F9 / Q10 — controla re-exibição programática do tour.
+  const [tourForceShow, setTourForceShow] = useState(false)
 
   const resolvedTheme = resolveTheme(theme)
 
@@ -126,6 +134,39 @@ export function SettingsPage() {
                 <ShortcutRow keys={['Cmd', 'B']} label="Alternar sidebar" />
                 <ShortcutRow keys={['Esc']} label="Fechar diálogos" />
               </dl>
+            </CardContent>
+          </Card>
+
+          {/* F9 / Q10 — botão de reset do tour de boas-vindas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RotateCw className="h-4 w-4" />
+                Onboarding
+              </CardTitle>
+              <CardDescription>
+                Tour de boas-vindas em 5 etapas (~2 min) para usuários novos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  resetOnboardingTour()
+                  setTourForceShow(true)
+                  toast.success('Tour reiniciado')
+                }}
+              >
+                <RotateCw className="h-3.5 w-3.5" />
+                Refazer tour de boas-vindas
+              </Button>
+              {tourForceShow && (
+                <OnboardingTour
+                  forceShow
+                  onComplete={() => setTourForceShow(false)}
+                />
+              )}
             </CardContent>
           </Card>
 
