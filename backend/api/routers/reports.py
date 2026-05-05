@@ -8,8 +8,10 @@ from backend.api.db.session import get_db
 from backend.api.schemas.errors import ErrorResponse
 from backend.api.services import case_service
 from backend.api.services.case_service import CaseNotFound
+from backend.api.schemas.cases import CaseInput
 from backend.api.services.csv_export import build_geometry_csv
 from backend.api.services.pdf_report import build_memorial_pdf, build_pdf
+from backend.api.services.xlsx_export import build_xlsx
 from backend.solver.types import SolverResult
 
 router = APIRouter(tags=["import-export"])
@@ -169,6 +171,59 @@ def export_csv(case_id: int, db: Session = Depends(get_db)) -> Response:
     return Response(
         content=csv_text,
         media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get(
+    "/cases/{case_id}/export/xlsx",
+    summary="Exportar caso completo em Excel (.xlsx)",
+    description=(
+        "Gera arquivo Excel com 3 abas + Diagnostics opcional:\n\n"
+        "**Aba Caso**: metadados + inputs (segments + boundary + seabed)\n\n"
+        "**Aba Resultados**: escalares (T_fl, T_anc, X, L_susp/grnd, "
+        "ângulos, ProfileType detectado, utilização, alert level)\n\n"
+        "**Aba Geometria**: ≥ 5000 linhas com x, y, T_x, T_y, T_mag\n\n"
+        "**Aba Diagnostics** (condicional): tabela de diagnostics "
+        "estruturados se houver, com severity colorida e confidence — "
+        "estrutura consistente com Memorial PDF (Fase 5 / Q6 detail).\n\n"
+        "Sem solve, só aba Caso é gerada."
+    ),
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Excel gerado com sucesso",
+        },
+        404: {"model": ErrorResponse},
+    },
+)
+def export_xlsx(case_id: int, db: Session = Depends(get_db)) -> Response:
+    try:
+        rec = case_service.get_case(db, case_id)
+    except CaseNotFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "case_not_found",
+                "message": f"Caso id={case_id} não encontrado.",
+            },
+        )
+    case_input = CaseInput.model_validate_json(rec.input_json)
+    result = None
+    if rec.executions:
+        result = SolverResult.model_validate_json(rec.executions[0].result_json)
+    xlsx_bytes = build_xlsx(case_input, result)
+    filename = f"ancoplat_caso_{case_id}.xlsx"
+    return Response(
+        content=xlsx_bytes,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
