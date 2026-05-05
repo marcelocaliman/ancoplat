@@ -26,7 +26,10 @@ import {
   deleteCase,
   exportJsonUrl,
   exportMoorUrl,
+  exportCsvUrl,
+  exportMemorialPdfUrl,
   exportPdfUrl,
+  exportXlsxUrl,
   getCase,
   solveCase,
 } from '@/api/endpoints'
@@ -273,6 +276,53 @@ export function CaseDetailPage() {
                 PDF (calcule primeiro)
               </span>
             )}
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="gap-2">
+            {latest ? (
+              <a
+                href={exportMemorialPdfUrl(caseId)}
+                target="_blank"
+                rel="noreferrer"
+                title="Memorial técnico expandido para entrega ao cliente"
+              >
+                <FileText className="h-4 w-4" />
+                Memorial técnico (PDF)
+              </a>
+            ) : (
+              <span className="flex items-center gap-2 opacity-60">
+                <FileText className="h-4 w-4" />
+                Memorial (calcule primeiro)
+              </span>
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="gap-2">
+            {latest ? (
+              <a
+                href={exportCsvUrl(caseId)}
+                target="_blank"
+                rel="noreferrer"
+                title="CSV da geometria — formato international (decimal '.', separator ','). Para Excel BR use Importar Dados → Texto."
+              >
+                <FileText className="h-4 w-4" />
+                CSV (geometria)
+              </a>
+            ) : (
+              <span className="flex items-center gap-2 opacity-60">
+                <FileText className="h-4 w-4" />
+                CSV (calcule primeiro)
+              </span>
+            )}
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="gap-2">
+            <a
+              href={exportXlsxUrl(caseId)}
+              target="_blank"
+              rel="noreferrer"
+              title="Excel com 3 abas (Caso, Resultados, Geometria) + Diagnostics opcional"
+            >
+              <FileText className="h-4 w-4" />
+              Excel (caso completo)
+            </a>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem

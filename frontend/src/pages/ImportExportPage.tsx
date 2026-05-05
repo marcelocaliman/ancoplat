@@ -14,7 +14,10 @@ import { ApiError } from '@/api/client'
 import {
   exportJsonUrl,
   exportMoorUrl,
+  exportCsvUrl,
+  exportMemorialPdfUrl,
   exportPdfUrl,
+  exportXlsxUrl,
   importMoor,
   listCases,
 } from '@/api/endpoints'
@@ -242,7 +245,14 @@ function ImportPanel() {
 
 // ──────────────────────────────── EXPORT ─────────────────────────────────────
 
-type ExportFmt = 'moor-metric' | 'moor-imperial' | 'json' | 'pdf'
+type ExportFmt =
+  | 'moor-metric'
+  | 'moor-imperial'
+  | 'json'
+  | 'pdf'
+  | 'memorial-pdf'
+  | 'csv'
+  | 'xlsx'
 
 function ExportPanel() {
   const { data, isLoading } = useQuery({
@@ -277,7 +287,13 @@ function ExportPanel() {
             ? exportMoorUrl(id, 'imperial')
             : format === 'json'
               ? exportJsonUrl(id)
-              : exportPdfUrl(id)
+              : format === 'memorial-pdf'
+                ? exportMemorialPdfUrl(id)
+                : format === 'csv'
+                  ? exportCsvUrl(id)
+                  : format === 'xlsx'
+                    ? exportXlsxUrl(id)
+                    : exportPdfUrl(id)
       // Dispara downloads com pequeno atraso para não ser bloqueado pelo browser
       setTimeout(() => {
         const a = document.createElement('a')
@@ -311,6 +327,9 @@ function ExportPanel() {
                 ['moor-metric', '.moor (métrico)'],
                 ['moor-imperial', '.moor (imperial)'],
                 ['pdf', 'PDF'],
+                ['memorial-pdf', 'Memorial (PDF)'],
+                ['csv', 'CSV (geometria)'],
+                ['xlsx', 'Excel (.xlsx)'],
               ] as Array<[ExportFmt, string]>
             ).map(([v, label]) => (
               <Button

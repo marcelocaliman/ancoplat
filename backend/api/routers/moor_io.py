@@ -29,7 +29,6 @@ router = APIRouter(tags=["import-export"])
 
 @router.post(
     "/import/moor",
-    response_model=CaseOutput,
     status_code=status.HTTP_201_CREATED,
     summary="Importar caso no formato .moor",
     description=(
@@ -61,16 +60,26 @@ router = APIRouter(tags=["import-export"])
 def import_moor(
     payload: dict[str, Any] = Body(..., description="JSON no formato .moor"),
     db: Session = Depends(get_db),
-) -> CaseOutput:
+) -> dict[str, Any]:
+    """
+    Importa `.moor` v1 ou v2. Retorna `{case: CaseOutput, migration_log:
+    list[dict]}`. `migration_log` é não-vazio quando o payload era v1 e
+    o migrador populou defaults — UI deve renderizar como warnings
+    estruturados (Fase 5 / Ajuste 2).
+    """
     try:
-        case_input = moor_service.parse_moor_payload(payload)
+        case_input, migration_log = moor_service.parse_moor_payload_with_log(payload)
     except MoorFormatError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "moor_format_error", "message": str(exc)},
         )
     rec = case_service.create_case(db, case_input)
-    return case_service.case_record_to_output(rec)
+    case_output = case_service.case_record_to_output(rec)
+    return {
+        "case": case_output.model_dump(mode="json"),
+        "migration_log": migration_log,
+    }
 
 
 @router.get(
