@@ -21,8 +21,11 @@ function deriveBreadcrumbs(pathname: string): BreadcrumbItem[] {
   const root = segments[0]
   const map: Record<string, string> = {
     cases: 'Casos',
+    'mooring-systems': 'Mooring systems',
+    samples: 'Samples',
     catalog: 'Catálogo',
     'import-export': 'Importar/Exportar',
+    help: 'Ajuda',
     settings: 'Configurações',
   }
   items.push({ label: map[root] ?? root, to: `/${root}` })

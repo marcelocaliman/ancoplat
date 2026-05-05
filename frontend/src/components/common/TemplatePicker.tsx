@@ -5,7 +5,7 @@
  * é um starting point que sabidamente converge — engenheiro novato
  * usa pra ter um exemplo funcional, depois ajusta parâmetros.
  */
-import { Anchor, BookmarkCheck, Sparkles, Waves } from 'lucide-react'
+import { AlertTriangle, Anchor, BookmarkCheck, Mountain, Package, Sparkles, Waves } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -25,6 +25,9 @@ const TAG_ICON: Record<CaseTemplate['tag'], typeof Anchor> = {
   shallow: Waves,
   deep: Waves,
   spread: Sparkles,
+  attachment: Package,
+  slope: Mountain,
+  preview: AlertTriangle,
 }
 
 const TAG_COLOR: Record<CaseTemplate['tag'], string> = {
@@ -34,6 +37,9 @@ const TAG_COLOR: Record<CaseTemplate['tag'], string> = {
   shallow: 'text-amber-400',
   deep: 'text-indigo-400',
   spread: 'text-pink-400',
+  attachment: 'text-cyan-400',
+  slope: 'text-orange-400',
+  preview: 'text-warning',
 }
 
 export interface TemplatePickerProps {

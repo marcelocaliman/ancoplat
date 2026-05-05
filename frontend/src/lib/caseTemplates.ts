@@ -17,8 +17,30 @@ export interface CaseTemplate {
   name: string
   description: string
   /** Tag visual (cor + label curta). */
-  tag: 'classic' | 'lazyS' | 'taut' | 'shallow' | 'deep' | 'spread'
+  tag:
+    | 'classic'
+    | 'lazyS'
+    | 'taut'
+    | 'shallow'
+    | 'deep'
+    | 'spread'
+    | 'attachment'
+    | 'slope'
+    | 'preview'
   values: CaseFormValues
+  /**
+   * Quando definido, marca o template como **preview** de feature
+   * ainda em desenvolvimento. Cards mostram banner; CaseFormPage
+   * exibe alerta explicativo após carregar; teste de regressão
+   * skipa preview-solve até o requirePhase fechar.
+   *
+   * Valores: 'F7' (Anchor uplift) | 'F8' (AHV).
+   */
+  requirePhase?: 'F7' | 'F8'
+  /**
+   * Mensagem do banner quando o sample preview é carregado no form.
+   */
+  previewMessage?: string
 }
 
 export const CASE_TEMPLATES: CaseTemplate[] = [
@@ -315,9 +337,268 @@ export const CASE_TEMPLATES: CaseTemplate[] = [
       attachments: [],
     },
   },
+  // ───────────────────────────────────────────────────────────────────
+  // F9 — 3 samples novos cobrindo features F5.x não cobertas pelos 6
+  // existentes: clump isolado, lifted-arch (F5.7.1), seabed inclinado.
+  // ───────────────────────────────────────────────────────────────────
+  {
+    id: 'clump-weight',
+    name: 'Catenária com clump',
+    description:
+      'Wire 3" em 300m d\'água com clump weight a meia distância da linha. Demonstra como peso pontual reduz o range a igual T_fl.',
+    tag: 'attachment',
+    values: {
+      name: 'Catenária com clump',
+      description:
+        'Template: catenária wire com 1 clump pontual no meio da linha.',
+      segments: [
+        {
+          length: 600,
+          w: 201.1,
+          EA: 3.425e7,
+          MBL: 3.78e6,
+          category: 'Wire',
+          line_type: null,
+          diameter: 0.0762,
+          dry_weight: 242.3,
+          modulus: 6.76e10,
+          ea_source: 'qmoor',
+        },
+      ],
+      boundary: {
+        h: 300,
+        mode: 'Tension',
+        input_value: 600_000,
+        startpoint_depth: 0,
+        endpoint_grounded: true,
+        startpoint_offset_horz: 0,
+        startpoint_offset_vert: 0,
+        startpoint_type: 'semisub',
+      },
+      seabed: { mu: 0.6, slope_rad: 0 },
+      criteria_profile: 'MVP_Preliminary',
+      user_defined_limits: null,
+      attachments: [
+        {
+          kind: 'clump_weight',
+          submerged_force: 100_000,
+          position_s_from_anchor: 350,
+          name: 'Clump central',
+          tether_length: null,
+          buoy_type: null,
+          buoy_end_type: null,
+          buoy_outer_diameter: null,
+          buoy_length: null,
+          buoy_weight_in_air: null,
+          pendant_line_type: null,
+          pendant_diameter: null,
+        },
+      ],
+    },
+  },
+  // ───────────────────────────────────────────────────────────────────
+  {
+    id: 'lifted-arch',
+    name: 'Boia em arc grounded (F5.7.1)',
+    description:
+      'Boia posicionada na zona apoiada em material uniforme. Solver detecta automaticamente e gera arco de levantamento (lifted arch) — porção da linha sobe acima do seabed pela ação da boia.',
+    tag: 'attachment',
+    values: {
+      name: 'Boia em arc grounded',
+      description:
+        'Template F5.7.1: boia em material uniforme com posição na zona apoiada — gera lifted arch.',
+      segments: [
+        {
+          length: 800,
+          w: 1058,
+          EA: 6.0e8,
+          MBL: 6.0e6,
+          category: 'StudlessChain',
+          line_type: null,
+          diameter: 0.076,
+          dry_weight: 1240,
+          modulus: 1.5e11,
+          ea_source: 'qmoor',
+        },
+      ],
+      boundary: {
+        h: 200,
+        mode: 'Tension',
+        input_value: 250_000,
+        startpoint_depth: 0,
+        endpoint_grounded: true,
+        startpoint_offset_horz: 0,
+        startpoint_offset_vert: 0,
+        startpoint_type: 'semisub',
+      },
+      seabed: { mu: 0.6, slope_rad: 0 },
+      criteria_profile: 'MVP_Preliminary',
+      user_defined_limits: null,
+      attachments: [
+        {
+          kind: 'buoy',
+          submerged_force: 80_000,
+          position_s_from_anchor: 100, // zona apoiada
+          name: 'Boia grounded',
+          tether_length: null,
+          buoy_type: 'submersible',
+          buoy_end_type: 'elliptical',
+          buoy_outer_diameter: null,
+          buoy_length: null,
+          buoy_weight_in_air: null,
+          pendant_line_type: null,
+          pendant_diameter: null,
+        },
+      ],
+    },
+  },
+  // ───────────────────────────────────────────────────────────────────
+  {
+    id: 'sloped-seabed',
+    name: 'Seabed inclinado (5°)',
+    description:
+      'Seabed com inclinação de ~5° (slope ≠ 0). Profundidade do seabed sob a âncora difere da profundidade sob o fairlead. Configuração via batimetria 2-pontos no painel Ambiente.',
+    tag: 'slope',
+    values: {
+      name: 'Seabed inclinado 5°',
+      description:
+        'Template: seabed com slope_rad ≈ 5° demonstrando batimetria 2-pontos.',
+      segments: [
+        {
+          length: 700,
+          w: 201.1,
+          EA: 3.425e7,
+          MBL: 3.78e6,
+          category: 'Wire',
+          line_type: null,
+          diameter: 0.0762,
+          dry_weight: 242.3,
+          modulus: 6.76e10,
+          ea_source: 'qmoor',
+        },
+      ],
+      boundary: {
+        h: 350,
+        mode: 'Tension',
+        input_value: 500_000,
+        startpoint_depth: 0,
+        endpoint_grounded: true,
+        startpoint_offset_horz: 0,
+        startpoint_offset_vert: 0,
+        startpoint_type: 'semisub',
+      },
+      seabed: { mu: 0.6, slope_rad: 0.0873 }, // ~5° em radianos
+      criteria_profile: 'MVP_Preliminary',
+      user_defined_limits: null,
+      attachments: [],
+    },
+  },
+  // ───────────────────────────────────────────────────────────────────
+  // Preview samples — F7 (anchor uplift) + F8 (AHV).
+  // Cards têm banner "Preview — requires Phase X". Quando F7/F8 fecharem,
+  // o sample destrava: payload já está pronto, basta remover preview flag.
+  // ───────────────────────────────────────────────────────────────────
+  {
+    id: 'anchor-uplift',
+    name: 'Âncora elevada (preview F7)',
+    description:
+      'Âncora 50m acima do seabed (suspended endpoint). Catenária livre nas duas pontas, sem touchdown. Preview da Fase 7 — solver retorna erro até a feature ser implementada.',
+    tag: 'preview',
+    requirePhase: 'F7',
+    previewMessage:
+      'Sample preview da Fase 7 (Anchor uplift). Você pode visualizar a configuração, mas o solve retornará erro INVALID_CASE até a feature ser implementada.',
+    values: {
+      name: 'Âncora elevada (preview)',
+      description:
+        'Preview F7: anchor 50m acima do seabed em 300m d\'água. ' +
+        'endpoint_grounded=false ainda não suportado pelo solver.',
+      segments: [
+        {
+          length: 500,
+          w: 201.1,
+          EA: 3.425e7,
+          MBL: 3.78e6,
+          category: 'Wire',
+          line_type: null,
+          diameter: 0.0762,
+          dry_weight: 242.3,
+          modulus: 6.76e10,
+          ea_source: 'qmoor',
+        },
+      ],
+      boundary: {
+        h: 300,
+        mode: 'Tension',
+        input_value: 850_000,
+        startpoint_depth: 0,
+        endpoint_grounded: false, // <-- preview F7
+        startpoint_offset_horz: 0,
+        startpoint_offset_vert: 0,
+        startpoint_type: 'semisub',
+      },
+      seabed: { mu: 0.6, slope_rad: 0 },
+      criteria_profile: 'MVP_Preliminary',
+      user_defined_limits: null,
+      attachments: [],
+    },
+  },
+  // ───────────────────────────────────────────────────────────────────
+  {
+    id: 'ahv-pull',
+    name: 'AHV bollard pull (preview F8)',
+    description:
+      'Anchor Handler Vessel aplicando bollard pull lateral durante operação de instalação. Preview da Fase 8 — schema AHV ainda não definido. AHV em solver estático é idealização (não substitui análise dinâmica).',
+    tag: 'preview',
+    requirePhase: 'F8',
+    previewMessage:
+      'Sample preview da Fase 8 (AHV). Schema AHV ainda não disponível. Quando F8 fechar, o sample será atualizado com o payload de bollard pull. Atenção: análise estática de AHV é idealização — não substitui análise dinâmica de instalação.',
+    values: {
+      name: 'AHV bollard pull (preview)',
+      description:
+        'Preview F8: catenária wire 3" com AHV aplicando bollard pull lateral em arc length intermediária. Schema AHV pendente.',
+      segments: [
+        {
+          length: 600,
+          w: 201.1,
+          EA: 3.425e7,
+          MBL: 3.78e6,
+          category: 'Wire',
+          line_type: null,
+          diameter: 0.0762,
+          dry_weight: 242.3,
+          modulus: 6.76e10,
+          ea_source: 'qmoor',
+        },
+      ],
+      boundary: {
+        h: 300,
+        mode: 'Tension',
+        input_value: 700_000,
+        startpoint_depth: 0,
+        endpoint_grounded: true,
+        startpoint_offset_horz: 0,
+        startpoint_offset_vert: 0,
+        startpoint_type: 'ahv', // ícone AHV no plot já existe
+      },
+      seabed: { mu: 0.6, slope_rad: 0 },
+      criteria_profile: 'MVP_Preliminary',
+      user_defined_limits: null,
+      attachments: [],
+    },
+  },
 ]
 
 /** Encontra um template pelo id. */
 export function getTemplate(id: string): CaseTemplate | undefined {
   return CASE_TEMPLATES.find((t) => t.id === id)
+}
+
+/** Filtra apenas samples preview (F7/F8 ainda não disponíveis). */
+export function listPreviewTemplates(): CaseTemplate[] {
+  return CASE_TEMPLATES.filter((t) => t.requirePhase != null)
+}
+
+/** Filtra apenas samples totalmente funcionais (sem preview). */
+export function listFunctionalTemplates(): CaseTemplate[] {
+  return CASE_TEMPLATES.filter((t) => t.requirePhase == null)
 }
