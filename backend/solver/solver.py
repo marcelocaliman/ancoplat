@@ -153,14 +153,19 @@ def _validate_inputs(
     # Mantemos por simetria com tratamento textual em logs/diagnostics.
     if boundary.mode not in (SolutionMode.TENSION, SolutionMode.RANGE):
         raise ValueError(f"modo inválido: {boundary.mode}")
-    # (b) Limite explícito de escopo MVP v1 (CLAUDE.md / Decisões F2).
-    # Anchor uplift fica para Fase 7 — não é validação física, é
-    # marcação de feature pendente.
+    # (a) Fase 7: anchor uplift é suportado para single-segment SEM
+    # attachments. Multi-segmento ou attachments combinado com uplift
+    # ainda não — fica para F7.x. Aqui o guard só barra essas combinações;
+    # o caminho válido (single + sem-attachments + uplift) NÃO levanta —
+    # o dispatcher no facade solve() chama suspended_endpoint.
     if not boundary.endpoint_grounded:
-        raise NotImplementedError(
-            "endpoint_grounded=False (âncora elevada do seabed) não é suportado "
-            "ainda. Forneça endpoint_grounded=True."
-        )
+        if len(line_segments) > 1:
+            raise NotImplementedError(
+                "Anchor uplift (endpoint_grounded=False) com multi-segmento "
+                "ainda não suportado (Fase 7 cobriu single-segment apenas; "
+                "multi-segmento + uplift fica para F7.x). Use 1 segmento ou "
+                "endpoint_grounded=True."
+            )
     # (a) Fisicamente justificada: fairlead no ou abaixo do seabed é inviável.
     # Em seabed inclinado, a profundidade do seabed SOB O FAIRLEAD difere
     # de h (= prof. sob a âncora) — depende de slope_rad e da distância
@@ -303,9 +308,30 @@ def solve(
         slope = seabed.slope_rad
         slope_is_significant = abs(slope) > 1e-6
 
+        # ─── Fase 7 — Dispatcher de anchor uplift ─────────────────────
+        # Single-segment SEM attachments + endpoint_grounded=False:
+        # delega para suspended_endpoint.solve_suspended_endpoint().
+        # Multi-seg + uplift já barrado por _validate_inputs (raise).
+        # Attachments + uplift barrado aqui com mensagem clara.
+        if not boundary.endpoint_grounded:
+            if resolved_attachments:
+                raise NotImplementedError(
+                    "Anchor uplift (endpoint_grounded=False) com "
+                    "attachments (boia/clump) ainda não suportado "
+                    "(Fase 7 cobriu single-segment puro; attachments + "
+                    "uplift fica para F7.x). Remova attachments ou "
+                    "use endpoint_grounded=True."
+                )
+            from .suspended_endpoint import solve_suspended_endpoint
+            result = solve_suspended_endpoint(
+                segment=resolved_segments[0],
+                boundary=boundary,
+                seabed=seabed,
+                config=config,
+            )
         # F5.3.y: attachments + slope agora suportados via integrador
         # com grounded estendido para aplicar saltos em V nas junções.
-        if n_segments > 1 or resolved_attachments:
+        elif n_segments > 1 or resolved_attachments:
             # Linha composta heterogênea (F5.1) ou com attachments (F5.2).
             # F5.4.6a: para ter ≥ 2 segmentos pós-resolver, ou o usuário
             # já passou multi-segmento, ou usou `position_s_from_anchor`
@@ -403,6 +429,19 @@ def solve(
                 mu=mu_seg0,
                 MBL=segment.MBL,
             )
+    except NotImplementedError as exc:
+        # Fase 7: feature não-suportada (multi-seg + uplift, attachments
+        # + uplift). Retorna INVALID_CASE com mensagem clara em vez de
+        # propagar — UI mostra ao engenheiro que combinação não é
+        # suportada e como contornar.
+        return SolverResult(
+            status=ConvergenceStatus.INVALID_CASE,
+            message=str(exc),
+            water_depth=boundary.h,
+            startpoint_depth=boundary.startpoint_depth,
+            endpoint_depth=boundary.endpoint_depth or boundary.h,
+            solver_version=SOLVER_VERSION,
+        )
     except ValueError as exc:
         # Erros físicos previsíveis — F5.7.4 extrai diagnóstico
         # estruturado quando a exceção é SolverDiagnosticError, ou usa

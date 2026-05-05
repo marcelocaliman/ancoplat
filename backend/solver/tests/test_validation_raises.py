@@ -127,22 +127,16 @@ def test_raise_a5_endpoint_grounded_false_sem_endpoint_depth_rejeita_no_pydantic
         _bc(endpoint_grounded=False)
 
 
-def test_raise_a5_endpoint_grounded_false_com_endpoint_depth_invalido_uplift_diagnostic():
+def test_raise_a5_endpoint_grounded_false_com_endpoint_depth_converge():
     """
-    Fase 7: solver pré-Commit-3 retorna INVALID_CASE quando recebe
-    endpoint_grounded=False (NotImplementedError interno). Após Commit 3
-    (dispatcher uplift) este teste será atualizado para expectar CONVERGED.
-
-    Validação de domínio (endpoint_depth=h+ε ou ≤0) é Pydantic; aqui
-    cobrimos um caso DENTRO do domínio que o solver ainda não suporta.
+    Fase 7 / pós-Commit-3: dispatcher uplift remove NotImplementedError
+    para single-segment + sem attachments. Caso BC-UP-01-like converge.
     """
     bc = _bc(endpoint_grounded=False, endpoint_depth=150.0)  # h=200, uplift=50m
     r = solve([_seg()], bc)
-    # Pré-Commit-3: NotImplementedError interno → INVALID_CASE.
-    # Pós-Commit-3 (dispatcher uplift): CONVERGED. Quando F7 fechar,
-    # atualizar este teste para `assert r.status == CONVERGED`.
-    assert r.status == ConvergenceStatus.INVALID_CASE
-    assert "endpoint_grounded" in r.message or "uplift" in r.message.lower() or "âncora" in r.message.lower()
+    assert r.status == ConvergenceStatus.CONVERGED
+    assert r.endpoint_depth == 150.0
+    assert "uplift" in r.message.lower() or "suspended endpoint" in r.message.lower()
 
 
 def test_no_raise_a5_endpoint_grounded_true():

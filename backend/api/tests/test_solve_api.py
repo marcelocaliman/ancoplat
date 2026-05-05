@@ -96,23 +96,24 @@ def test_create_case_ancora_elevada_sem_endpoint_depth_retorna_422(client: TestC
     assert resp.status_code == 422
 
 
-def test_solve_ancora_elevada_pre_commit3_retorna_422(client: TestClient) -> None:
+def test_solve_ancora_elevada_pos_commit3_converge(client: TestClient) -> None:
     """
-    Fase 7 / pré-Commit-3: caso com endpoint_grounded=false +
-    endpoint_depth válido é criado (201) mas solve interno ainda
-    bloqueado por NotImplementedError → 422 INVALID_CASE.
-
-    Pós-Commit-3 (dispatcher uplift), este teste será atualizado
-    para expectar 200 + CONVERGED.
+    Fase 7 / pós-Commit-3: caso com endpoint_grounded=false +
+    endpoint_depth válido é criado (201) e solve retorna 200 + CONVERGED
+    via dispatcher para suspended_endpoint.solve_suspended_endpoint().
     """
     payload = deepcopy(BC01_LIKE_INPUT)
     payload["boundary"]["endpoint_grounded"] = False
     payload["boundary"]["endpoint_depth"] = 250.0  # h=300 → uplift=50m
     case_id = _create_case(client, payload)
     resp = client.post(f"/api/v1/cases/{case_id}/solve")
-    assert resp.status_code == 422
+    assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["error"]["code"] == "solver_invalid_case"
+    # Resposta tem o SolverResult dentro de result_json (deserializado)
+    # — adequa formato conforme retorno do endpoint
+    assert body["result"]["status"] == "converged"
+    assert body["result"]["endpoint_depth"] == 250.0
+    assert body["result"]["water_depth"] == 300.0
 
 
 def test_solve_caso_inexistente_retorna_404(client: TestClient) -> None:
