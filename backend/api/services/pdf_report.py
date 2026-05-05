@@ -1311,4 +1311,300 @@ def build_mooring_system_pdf(
     return buf.getvalue()
 
 
-__all__ = ["build_pdf", "build_mooring_system_pdf", "DISCLAIMER"]
+# ──────────────────────────────────────────────────────────────────────
+# Memorial técnico (Fase 5 / Q1+Q2)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _memorial_cover_page(case_rec, case_input, hash_str, styles) -> list:
+    """
+    Capa do memorial: título "MEMORIAL TÉCNICO" + nome do caso + hash
+    SHA-256 (16 chars) + solver_version + data de geração.
+    """
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    elements = []
+    elements.append(Spacer(1, 4 * cm))
+    elements.append(Paragraph(
+        "MEMORIAL TÉCNICO",
+        ParagraphStyle(
+            "MemorialTitle", parent=styles["Title"],
+            fontSize=24, alignment=1, spaceAfter=20,
+        ),
+    ))
+    elements.append(Paragraph(
+        "Análise estática de linha de amarração",
+        ParagraphStyle(
+            "MemorialSubtitle", parent=styles["Heading2"],
+            fontSize=14, alignment=1, spaceAfter=40,
+        ),
+    ))
+    elements.append(Spacer(1, 2 * cm))
+
+    cover_data = [
+        ["Caso:", case_input.name or "—"],
+        ["ID interno:", str(case_rec.id)],
+        ["Hash do caso:", f"{hash_str}…"],
+        ["Solver versão:", SOLVER_VERSION],
+        ["Gerado em:", now],
+        ["Critério de utilização:", case_input.criteria_profile.value],
+    ]
+    if case_input.description:
+        cover_data.append(["Descrição:", case_input.description[:120]])
+    table = Table(cover_data, colWidths=[5 * cm, 11 * cm])
+    table.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 11),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#1F2937")),
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 4 * cm))
+    elements.append(Paragraph(
+        "Documento técnico gerado automaticamente pelo AncoPlat. "
+        "Para reprodutibilidade científica, o hash acima identifica "
+        "exclusivamente esta configuração física do caso (independente "
+        "de nome ou descrição).",
+        ParagraphStyle(
+            "Reprod", parent=styles["Caption"],
+            fontSize=8, alignment=1, textColor=colors.grey,
+        ),
+    ))
+    elements.append(PageBreak())
+    return elements
+
+
+def _memorial_premissas_block(case_input, styles) -> list:
+    """Premissas e escopo do estudo (Fase 5 / Q2)."""
+    elements = []
+    elements.append(Paragraph("1. Premissas e escopo", styles["SectionTitle"]))
+    text = (
+        "Esta análise considera o comportamento <b>quasi-estático</b> de "
+        "uma única linha de amarração sob carga estática "
+        f"(<b>{case_input.boundary.mode.value}</b>), aplicando o modelo "
+        "de catenária elástica com contato no seabed e atrito de Coulomb. "
+        f"O critério de utilização adotado é <b>{case_input.criteria_profile.value}</b>. "
+        "Análises dinâmicas (FLS) ou de cargas extremas (ULS) NÃO estão "
+        "no escopo. Resultados são adequados para projeto preliminar e "
+        "verificação operacional; certificação requer análise dinâmica."
+    )
+    elements.append(Paragraph(text, styles["Normal"]))
+    elements.append(Spacer(1, 0.3 * cm))
+    return elements
+
+
+def _memorial_profile_type_block(result, styles) -> list:
+    """Bloco descritivo do ProfileType detectado (Fase 4)."""
+    elements = []
+    pt = getattr(result, "profile_type", None)
+    if pt is None:
+        return elements
+
+    pt_descriptions = {
+        "PT_0": "Linha inteira apoiada no seabed (sem catenária suspensa).",
+        "PT_1": "Catenária livre — nenhuma porção da linha em contato com o seabed.",
+        "PT_2": "Touchdown com atrito ativo: trecho apoiado no seabed + tensão na âncora.",
+        "PT_3": "Touchdown com tensão na âncora ≈ 0 (atrito saturado ou μ=0).",
+        "PT_4": "Linha boiante (negativamente flutuante) — RESERVADO p/ Fase 12.",
+        "PT_5": "Linha em U slack — RESERVADO p/ Fase 7+.",
+        "PT_6": "Linha completamente vertical (caso degenerado).",
+        "PT_7": "Touchdown em seabed inclinado.",
+        "PT_8": "Linha apoiada em rampa (laid em seabed inclinado).",
+        "PT_U": "Multi-segmento com seabed inclinado e contato intermediário.",
+    }
+    pt_value = pt.value if hasattr(pt, "value") else str(pt)
+    desc = pt_descriptions.get(pt_value, "Regime catenário detectado.")
+    elements.append(Paragraph(
+        f"<b>Regime catenário detectado:</b> {pt_value} — {desc} "
+        "(taxonomia MoorPy/NREL — Fase 4 do plano de profissionalização)",
+        styles["Normal"],
+    ))
+    elements.append(Spacer(1, 0.3 * cm))
+    return elements
+
+
+def _memorial_diagnostics_table(result, styles) -> Optional[Table]:
+    """Tabela de diagnostics estruturados com severity + confidence."""
+    diagnostics = result.diagnostics or []
+    if not diagnostics:
+        return None
+
+    rows = [["Code", "Severity", "Confidence", "Mensagem"]]
+    for d in diagnostics:
+        rows.append([
+            d.get("code", "—")[:30],
+            d.get("severity", "—"),
+            d.get("confidence", "—"),
+            d.get("title", "")[:80] + ("…" if len(d.get("title", "")) > 80 else ""),
+        ])
+    table = Table(rows, colWidths=[5 * cm, 2.2 * cm, 2.2 * cm, 7 * cm])
+    style = _data_table_style()
+    # Colorização por severity
+    sev_colors = {
+        "critical": colors.HexColor("#FEE2E2"),
+        "error": colors.HexColor("#FED7AA"),
+        "warning": colors.HexColor("#FEF3C7"),
+        "info": colors.HexColor("#DBEAFE"),
+    }
+    for i, d in enumerate(diagnostics, 1):
+        bg = sev_colors.get(d.get("severity"), colors.white)
+        style.add("BACKGROUND", (1, i), (1, i), bg)
+    table.setStyle(style)
+    return table
+
+
+def build_memorial_pdf(
+    case_rec, execution
+) -> bytes:
+    """
+    Memorial técnico expandido (Fase 5 / Q1+Q2). Diferente do
+    build_pdf resumido: pensado para entrega ao cliente, com
+    rastreabilidade total (hash, solver_version, timestamp), todas
+    as seções das Fases 1-4 (EA source per seg, μ_eff per seg,
+    ProfileType, diagnostics estruturados com confidence).
+
+    Strings-chave garantidas no conteúdo (Q8 — content checks):
+      - "MEMORIAL TÉCNICO"
+      - SOLVER_VERSION
+      - hash[:16] do caso
+      - "ProfileType" (se houver classificação)
+      - código do primeiro diagnostic (se houver)
+    """
+    from backend.api.services.case_hash import case_input_short_hash
+
+    case_input = CaseInput.model_validate_json(case_rec.input_json)
+    hash_str = case_input_short_hash(case_input)
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=2 * cm, rightMargin=2 * cm,
+        topMargin=1.5 * cm, bottomMargin=1.5 * cm,
+        title=f"AncoPlat Memorial — {case_input.name}",
+    )
+    styles = _build_styles()
+    story: list = []
+
+    # --- Capa ---
+    story.extend(_memorial_cover_page(case_rec, case_input, hash_str, styles))
+
+    # --- Premissas ---
+    story.extend(_memorial_premissas_block(case_input, styles))
+
+    # --- Sumário executivo (resultado) ---
+    result = None
+    if execution is not None:
+        result = SolverResult.model_validate_json(execution.result_json)
+        story.append(Paragraph("2. Sumário executivo", styles["SectionTitle"]))
+        story.append(_summary_box_case(result))
+        story.append(Spacer(1, 0.4 * cm))
+        story.extend(_memorial_profile_type_block(result, styles))
+
+    # --- Configuração ---
+    story.append(Paragraph("3. Identificação", styles["SectionTitle"]))
+    story.append(_case_metadata_table(case_rec, case_input))
+    story.append(Spacer(1, 0.4 * cm))
+
+    story.append(Paragraph(
+        "4. Condições de contorno e seabed", styles["SectionTitle"],
+    ))
+    story.append(_case_boundary_table(case_input))
+    story.append(Spacer(1, 0.4 * cm))
+
+    story.append(Paragraph(
+        f"5. Segmentos da linha ({len(case_input.segments)})",
+        styles["SectionTitle"],
+    ))
+    story.append(_case_segments_table(case_input))
+    story.append(Spacer(1, 0.4 * cm))
+
+    att_table = _case_attachments_table(case_input)
+    if att_table is not None:
+        story.append(Paragraph(
+            f"6. Attachments — boias e clump weights "
+            f"({len(case_input.attachments)})",
+            styles["SectionTitle"],
+        ))
+        story.append(att_table)
+        story.append(Spacer(1, 0.4 * cm))
+
+    if result is None:
+        story.append(Paragraph(
+            "<b>Memorial parcial — caso não foi resolvido ainda.</b>",
+            styles["Normal"],
+        ))
+        doc.build(story)
+        return buf.getvalue()
+
+    # --- Resultados ---
+    story.append(PageBreak())
+    story.append(Paragraph("7. Perfil da linha", styles["SectionTitle"]))
+    profile_png = _profile_png(result, case_input)
+    story.append(Image(io.BytesIO(profile_png), width=17 * cm, height=9.2 * cm))
+    story.append(Spacer(1, 0.4 * cm))
+
+    story.append(Paragraph("8. Distribuição de tensão", styles["SectionTitle"]))
+    tension_png = _tension_distribution_png(result)
+    story.append(Image(io.BytesIO(tension_png), width=17 * cm, height=7.3 * cm))
+    story.append(Spacer(1, 0.4 * cm))
+
+    story.append(PageBreak())
+    story.append(Paragraph("9. Geometria", styles["SectionTitle"]))
+    story.append(_case_geometry_table(result))
+    story.append(Spacer(1, 0.4 * cm))
+
+    story.append(Paragraph("10. Forças e ângulos", styles["SectionTitle"]))
+    story.append(_case_forces_table(result))
+    story.append(Spacer(1, 0.4 * cm))
+
+    # --- Diagnostics estruturados (Fase 4) ---
+    diag_table = _memorial_diagnostics_table(result, styles)
+    if diag_table is not None:
+        story.append(Paragraph(
+            f"11. Diagnósticos estruturados ({len(result.diagnostics)})",
+            styles["SectionTitle"],
+        ))
+        story.append(diag_table)
+        story.append(Paragraph(
+            "Severities: <b>critical</b> = inviável, <b>error</b> = "
+            "geometria viola física, <b>warning</b> = ill-conditioned, "
+            "<b>info</b> = observação. Confidence: <b>high</b> = "
+            "determinístico, <b>medium</b> = heurística calibrada, "
+            "<b>low</b> = pattern detection.",
+            styles["Caption"],
+        ))
+        story.append(Spacer(1, 0.4 * cm))
+
+    # --- Convergência do solver (sempre por último) ---
+    story.append(Paragraph(
+        "12. Convergência do solver", styles["SectionTitle"],
+    ))
+    story.append(_case_diagnostic_table(result))
+
+    # Footer customizado em cada página com hash + solver_version + data.
+    def _footer(canvas, doc):
+        from datetime import datetime, timezone
+        canvas.saveState()
+        canvas.setFont("Helvetica", 8)
+        canvas.setFillColor(colors.grey)
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        page_w, _ = A4
+        footer_text = (
+            f"AncoPlat Memorial · hash {hash_str} · "
+            f"solver {SOLVER_VERSION} · {ts} · página {doc.page}"
+        )
+        canvas.drawString(2 * cm, 1 * cm, footer_text)
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=_footer, onLaterPages=_footer)
+    return buf.getvalue()
+
+
+__all__ = [
+    "build_pdf",
+    "build_memorial_pdf",
+    "build_mooring_system_pdf",
+    "DISCLAIMER",
+]
