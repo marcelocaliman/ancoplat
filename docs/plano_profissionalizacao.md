@@ -78,7 +78,7 @@ Nenhum.
 - `git tag v0.5-baseline` criada e empurrada.
 - `cases_baseline.json` salvo e validado por re-import.
 - Decisão registrada em CLAUDE.md: QMoor permanece default (EA_MBL); GMoor passa a ter base documental (EAd via MoorPy/NREL); semântica documentada com referência ao paper ASME 2025.
-- `moorpy_baseline_2026-05-04.json` salvo com 10 outputs de referência; reprodutível via `make moorpy-baseline`.
+- `moorpy_baseline_2026-05-04.json` salvo com 10 outputs de referência; reprodutível via `bash tools/moorpy_env/regenerate_baseline.sh` (decisão Q5 da Fase 0 — shell script em vez de Makefile, aplicada na Fase 1).
 
 ### Riscos
 - Usuário pode não conseguir reproduzir os erros → mitigação: instrumentar logs de erro detalhados em produção (já há `api.log`; verificar conteúdo).

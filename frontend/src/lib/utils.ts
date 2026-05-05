@@ -117,3 +117,46 @@ export function resolveSeabedDepths(
     : computedFairlead
   return { atAnchor, atFairlead }
 }
+
+/**
+ * Resolve o coeficiente de atrito efetivo de um segmento aplicando a
+ * mesma precedência canônica de `_resolve_mu_per_seg` do backend
+ * (Fase 1 / B3):
+ *
+ *   1. segment.mu_override        — override explícito do usuário
+ *   2. segment.seabed_friction_cf — valor do catálogo (line_type)
+ *   3. seabed.mu                  — valor global do caso
+ *   4. 0.0                        — fallback final
+ *
+ * Retorna o valor + a origem (para a UI explicar de onde vem o número).
+ */
+export function resolveMuEffective(
+  segment: {
+    mu_override?: number | null
+    seabed_friction_cf?: number | null
+  },
+  seabedMu: number,
+): { value: number; source: string; shortLabel: string } {
+  if (segment.mu_override != null) {
+    return {
+      value: segment.mu_override,
+      source: 'Override do usuário (precedência 1)',
+      shortLabel: 'override',
+    }
+  }
+  if (segment.seabed_friction_cf != null) {
+    return {
+      value: segment.seabed_friction_cf,
+      source: 'Catálogo do tipo de linha (precedência 2)',
+      shortLabel: 'catálogo',
+    }
+  }
+  if (seabedMu > 0) {
+    return {
+      value: seabedMu,
+      source: 'μ global do seabed (precedência 3)',
+      shortLabel: 'global',
+    }
+  }
+  return { value: 0, source: 'Default 0 (sem atrito)', shortLabel: 'default' }
+}

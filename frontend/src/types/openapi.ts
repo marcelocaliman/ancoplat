@@ -1040,6 +1040,26 @@ export interface components {
              * @description Módulo axial aparente (Pa) — metadado
              */
             modulus?: number | null;
+            /**
+             * Mu Override
+             * @description (Fase 1) Coeficiente de atrito específico do segmento, sobrescrevendo seabed.mu global e o do catálogo.
+             */
+            mu_override?: number | null;
+            /**
+             * Seabed Friction Cf
+             * @description (Fase 1) Coeficiente de atrito do catálogo (line_type.seabed_friction_cf). Populado pelo API service ao traduzir do catálogo.
+             */
+            seabed_friction_cf?: number | null;
+            /**
+             * Ea Source
+             * @description (Fase 1) 'qmoor' (estático, default) ou 'gmoor' (dinâmico, modelo NREL/MoorPy).
+             */
+            ea_source?: "qmoor" | "gmoor";
+            /**
+             * Ea Dynamic Beta
+             * @description (Fase 1) Reservado — coeficiente β do modelo dinâmico α + β·T_mean. NÃO implementado em v1.0.
+             */
+            ea_dynamic_beta?: number | null;
         };
         /**
          * LineTypeCreate

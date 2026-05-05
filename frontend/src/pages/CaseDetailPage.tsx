@@ -78,6 +78,7 @@ import {
   fmtMeters,
   fmtNumber,
   fmtPercent,
+  resolveMuEffective,
   resolveSeabedDepths,
 } from '@/lib/utils'
 import { fmtForce, fmtForcePair, fmtForcePerM } from '@/lib/units'
@@ -693,6 +694,42 @@ function OverviewCards({
             label="Âncora (vs vertical)"
             value={fmtAngleDeg(result.angle_wrt_vert_anchor, 2)}
           />
+        </CardContent>
+      </Card>
+
+      {/* Atrito & EA por segmento (Fase 1) */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            Atrito & EA por segmento
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1.5 font-mono text-[11px] tabular-nums">
+          {input.segments.map((seg, i) => {
+            const muEff = resolveMuEffective(seg, input.seabed?.mu ?? 0)
+            const seg_label = `Seg ${i + 1}`
+            const ea_label =
+              (seg.ea_source ?? 'qmoor') === 'gmoor' ? 'GMoor' : 'QMoor'
+            return (
+              <div
+                key={i}
+                className="flex items-center justify-between border-b border-border/40 py-0.5 last:border-0"
+              >
+                <span className="text-muted-foreground">{seg_label}</span>
+                <span className="flex gap-3">
+                  <span title="EA source aplicado">
+                    EA: <strong>{ea_label}</strong>
+                  </span>
+                  <span title={muEff.source}>
+                    μ: <strong>{fmtNumber(muEff.value, 2)}</strong>
+                    <span className="ml-1 text-[9px] text-muted-foreground">
+                      ({muEff.shortLabel})
+                    </span>
+                  </span>
+                </span>
+              </div>
+            )
+          })}
         </CardContent>
       </Card>
 
