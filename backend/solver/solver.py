@@ -612,6 +612,56 @@ def solve(
                     ).model_dump()
                 )
 
+    # ─── Diagnostics novos da Fase 4 (D012, D013, D014) ──────────────
+    # Esses 3 são checks "do input" (não dependem do resultado físico),
+    # injetados aqui ao invés do _validate_inputs porque alguns são
+    # warnings (não bloqueiam o solve) e queremos mostrá-los junto com
+    # os outros diagnósticos pós-solve.
+
+    # D012: slope > 30° (geometria atípica). Ajuste 1 / Q3 da Fase 4.
+    slope_deg_abs = abs(math.degrees(seabed.slope_rad))
+    if slope_deg_abs > 30.0:
+        from .diagnostics import D012_slope_high
+        diagnostics_list.append(
+            D012_slope_high(slope_deg=math.copysign(slope_deg_abs, seabed.slope_rad)).model_dump()
+        )
+
+    # D013: μ global = 0 mas catálogo do segmento tem cf >= 0.3.
+    # Limiar 0.3 é justificativa empírica — todas as categorias do
+    # catálogo do AncoPlat têm cf mínimo 0.6 (ver docstring de
+    # D013_mu_zero_with_catalog_friction).
+    if seabed.mu == 0.0:
+        from .diagnostics import D013_mu_zero_with_catalog_friction
+        for i, seg in enumerate(line_segments):
+            if (
+                seg.line_type is not None
+                and seg.seabed_friction_cf is not None
+                and seg.seabed_friction_cf >= 0.3
+                and seg.mu_override is None  # não tem override próprio
+            ):
+                diagnostics_list.append(
+                    D013_mu_zero_with_catalog_friction(
+                        segment_index=i,
+                        catalog_cf=seg.seabed_friction_cf,
+                        line_type=seg.line_type,
+                    ).model_dump()
+                )
+                break  # 1 diagnostic por caso é suficiente — não inunda UI
+
+    # D014: ea_source="gmoor" sem ea_dynamic_beta. Modelo β=0 implícito.
+    from .diagnostics import D014_gmoor_without_beta
+    for i, seg in enumerate(line_segments):
+        if (
+            seg.ea_source == "gmoor"
+            and (seg.ea_dynamic_beta is None or seg.ea_dynamic_beta == 0.0)
+        ):
+            diagnostics_list.append(
+                D014_gmoor_without_beta(
+                    segment_index=i,
+                    line_type=seg.line_type or f"segmento {i + 1}",
+                ).model_dump()
+            )
+
     result = result.model_copy(update={
         "water_depth": boundary.h,
         "startpoint_depth": boundary.startpoint_depth,
@@ -702,11 +752,22 @@ def solve(
         # re-solve. None quando status != CONVERGED/ILL_CONDITIONED.
         from .profile_type import classify_profile_type as _classify_pt
         pt = _classify_pt(result, line_segments, seabed)
+
+        # D015: ProfileType raro (PT_4, PT_5, PT_6). Append no diagnostics
+        # existentes do result.
+        existing_diags = list(result.diagnostics or [])
+        if pt is not None and pt.value in ("PT_4", "PT_5", "PT_6"):
+            from .diagnostics import D015_rare_profile_type
+            existing_diags.append(
+                D015_rare_profile_type(profile_type=pt.value).model_dump()
+            )
+
         return SolverResult(
             **{
                 **result.model_dump(),
                 "alert_level": alert,
                 "profile_type": pt,
+                "diagnostics": existing_diags,
             }
         )
 

@@ -619,6 +619,195 @@ def D900_generic_nonconvergence(
 
 
 # =============================================================================
+# Diagnostics novos da Fase 4 — D012, D013, D014, D015
+# =============================================================================
+
+
+def D012_slope_high(*, slope_deg: float) -> SolverDiagnostic:
+    """
+    Slope alto detectado (> 30°). Solver continua válido mas o engenheiro
+    deve estar ciente que rampas muito íngremes são raras no mundo real
+    e podem indicar erro de input ou caso de baixa precisão numérica.
+
+    Confidence: high — limiar 30° é determinístico (well-defined boundary).
+    Severity: warning — não bloqueia, alerta.
+    """
+    return SolverDiagnostic(
+        code="D012_SLOPE_HIGH",
+        severity="warning",
+        title=f"Slope do seabed alto ({slope_deg:.1f}°)",
+        cause=(
+            f"O slope informado ({slope_deg:.1f}°) é maior que 30°. Rampas "
+            "tão íngremes são incomuns em batimetria offshore real (típicas "
+            "ficam < 10°). Pode indicar inversão de sinal entre âncora e "
+            "fairlead, ou caso atípico onde o solver tem precisão reduzida."
+        ),
+        suggestion=(
+            "Verifique a batimetria nos dois pontos (profundidade do seabed "
+            "sob a âncora vs sob o fairlead). Se o caso é correto, considere "
+            "validar contra solução analítica simplificada."
+        ),
+        confidence="high",
+        affected_fields=["seabed.slope_rad"],
+    )
+
+
+def D013_mu_zero_with_catalog_friction(
+    *,
+    segment_index: int,
+    catalog_cf: float,
+    line_type: str,
+) -> SolverDiagnostic:
+    """
+    Atrito global zerado (`seabed.mu = 0`) mas catálogo do segmento sugere
+    atrito não-trivial (`seabed_friction_cf >= 0.3`). Indica configuração
+    inconsistente: o usuário pegou um line_type do catálogo mas zerou o
+    atrito global sem usar o `mu_override` ou `seabed_friction_cf` por seg.
+
+    Limiar 0.3 — justificativa empírica (Ajuste 2 do mini-plano F4):
+      Catálogo do AncoPlat tem os seguintes mínimos por categoria:
+        - Polyester: 1.0
+        - StuddedChain: 1.0
+        - StudlessChain: 0.6 (R5) ou 1.0 (R4)
+        - Wire: 0.6
+      Mínimo absoluto observado: 0.6. Limiar 0.3 captura todas as
+      categorias com folga (50% abaixo do mínimo real). Caso o catálogo
+      ganhe entradas com cf entre 0.1 e 0.3, ajustar limiar para 0.2.
+
+    Confidence: medium — heurística calibrada empiricamente; pode ter
+    falso positivo se o engenheiro intencionalmente está modelando solo
+    super liso (caso raro).
+    """
+    return SolverDiagnostic(
+        code="D013_MU_ZERO_CATALOG_HAS_FRICTION",
+        severity="warning",
+        title=(
+            f"Atrito global = 0 mas '{line_type}' tem μ_catálogo "
+            f"= {catalog_cf:.2f}"
+        ),
+        cause=(
+            f"O segmento #{segment_index + 1} usa o tipo '{line_type}', "
+            f"que segundo o catálogo tem coeficiente de atrito típico de "
+            f"{catalog_cf:.2f}. O caso atual zerou o atrito global "
+            "(`seabed.mu = 0`). Configuração inconsistente — o solver vai "
+            "ignorar atrito completamente."
+        ),
+        suggestion=(
+            "Se você queria usar o atrito do catálogo, deixe `seabed.mu` "
+            "vazio (None) — o solver cai no `seabed_friction_cf` do "
+            "catálogo. Se realmente queria μ=0 (solo perfeitamente liso), "
+            "ignore este aviso."
+        ),
+        suggested_changes=[
+            SuggestedChange(
+                field="seabed.mu",
+                value=catalog_cf,
+                label=f"Usar μ do catálogo ({catalog_cf:.2f})",
+            ),
+        ],
+        confidence="medium",
+        affected_fields=["seabed.mu", f"segments[{segment_index}].line_type"],
+    )
+
+
+def D014_gmoor_without_beta(
+    *,
+    segment_index: int,
+    line_type: str,
+) -> SolverDiagnostic:
+    """
+    Segmento usa `ea_source="gmoor"` (EA dinâmico) mas `ea_dynamic_beta` é
+    None (= 0). Modelo dinâmico completo é `EA = α + β × T_mean`; sem β,
+    cai em modelo simplificado com α constante.
+
+    Em v1.0 do AncoPlat β NÃO É implementado (decisão fechada na Fase 0,
+    registrada em CLAUDE.md). Este diagnostic torna explícito que a
+    aproximação está sendo aplicada — engenheiro consciente sabe que é
+    OK; engenheiro distraído tem aviso.
+
+    Confidence: high — é uma observação determinística sobre o modelo,
+    não uma heurística.
+    Severity: info — não bloqueia, é informativo.
+    """
+    return SolverDiagnostic(
+        code="D014_GMOOR_WITHOUT_BETA",
+        severity="info",
+        title=f"Segmento '{line_type}' usa EA dinâmico simplificado (β=0)",
+        cause=(
+            f"O segmento #{segment_index + 1} foi configurado com "
+            f"`ea_source='gmoor'` (EA dinâmico, modelo NREL/MoorPy "
+            f"`α + β × T_mean`). Como `ea_dynamic_beta` não foi informado, "
+            "o solver aplica modelo simplificado com α constante (β=0). "
+            "Resultado é correto se T_mean estiver na faixa de operação "
+            "típica do material."
+        ),
+        suggestion=(
+            "Implementação do termo β é planejada para Fase 4+ — quando "
+            "disponível, o solver iterará T_mean → EA(T_mean) → solve → "
+            "atualiza T_mean. Por ora, esta aproximação é aceita como "
+            "padrão NREL para análise quasi-estática."
+        ),
+        confidence="high",
+        affected_fields=[
+            f"segments[{segment_index}].ea_source",
+            f"segments[{segment_index}].ea_dynamic_beta",
+        ],
+    )
+
+
+def D015_rare_profile_type(
+    *,
+    profile_type: str,
+) -> SolverDiagnostic:
+    """
+    ProfileType detectado é um dos casos raros (PT_5 U-shape slack, PT_6
+    completamente vertical). PT_4 (linha boiante) está fora do escopo MVP
+    v1 (w > 0 enforced) e não dispara este diagnostic.
+
+    Confidence: high — classificação determinística do PT.
+    Severity: warning — geometria válida mas atípica.
+    """
+    descriptions = {
+        "PT_5": (
+            "linha em U totalmente slack",
+            "Geralmente acontece quando T_fl é muito baixo e ambos os "
+            "extremos ficam acima de uma porção apoiada — caso pouco "
+            "comum em mooring offshore.",
+        ),
+        "PT_6": (
+            "linha completamente vertical",
+            "X (distância horizontal âncora-fairlead) ≈ 0 — fairlead "
+            "está praticamente em cima da âncora. Caso degenerado, "
+            "típico de testes ou erro de input.",
+        ),
+        "PT_4": (
+            "linha boiante com seabed",
+            "Linha negativamente flutuante (w < 0) — não suportado em "
+            "v1.0. Dispara pendência para Fase 12.",
+        ),
+    }
+    pt_name, pt_explanation = descriptions.get(
+        profile_type, (profile_type, "Regime catenário atípico.")
+    )
+    return SolverDiagnostic(
+        code="D015_RARE_PROFILE_TYPE",
+        severity="warning",
+        title=f"Regime catenário raro: {profile_type} ({pt_name})",
+        cause=(
+            f"O classificador detectou {profile_type}: {pt_name}. "
+            f"{pt_explanation}"
+        ),
+        suggestion=(
+            "Verifique se a geometria do caso (T_fl, comprimento, "
+            "lâmina d'água) corresponde à intenção. Resultados em "
+            "regimes raros podem ter precisão numérica reduzida."
+        ),
+        confidence="high",
+        affected_fields=[],
+    )
+
+
+# =============================================================================
 # Helper para classes de exceção que carregam diagnóstico
 # =============================================================================
 
@@ -655,6 +844,10 @@ __all__ = [
     "D009_anchor_uplift_high",
     "D010_high_utilization",
     "D011_cable_below_seabed",
+    "D012_slope_high",
+    "D013_mu_zero_with_catalog_friction",
+    "D014_gmoor_without_beta",
+    "D015_rare_profile_type",
     "D900_generic_nonconvergence",
     "SolverDiagnostic",
     "SolverDiagnosticError",

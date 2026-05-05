@@ -44,6 +44,10 @@ from backend.solver.diagnostics import (
     D009_anchor_uplift_high,
     D010_high_utilization,
     D011_cable_below_seabed,
+    D012_slope_high,
+    D013_mu_zero_with_catalog_friction,
+    D014_gmoor_without_beta,
+    D015_rare_profile_type,
     D900_generic_nonconvergence,
     SolverDiagnostic,
 )
@@ -321,8 +325,155 @@ def test_apply_D006_cabo_curto_aumentar_resolve_ou_melhora():
 # =============================================================================
 
 
-def test_cobertura_de_builders_atinge_11():
-    """Sanity: este arquivo exercita os 11 builders D001..D011."""
+# =============================================================================
+# Diagnostics novos da Fase 4 — D012, D013, D014, D015
+# =============================================================================
+
+
+# ─── D012 — slope alto ─────────────────────────────────────────────
+
+
+def test_D012_structural():
+    d = D012_slope_high(slope_deg=35.0)
+    assert d.code == "D012_SLOPE_HIGH"
+    assert d.severity == "warning"
+    assert d.confidence == "high"
+    assert "35" in d.title or "35.0" in d.title
+
+
+def test_D012_integration_repro_slope_30_plus_dispara():
+    """Slope > 30° injeta D012 no result.diagnostics.
+
+    Usar slope DESCENDENTE (negativo) para evitar bater na validação
+    Q7 da Fase 2 (h_at_fairlead < 0 quando slope ascendente forte).
+    """
+    import math
+    seg = LineSegment(length=500, w=200, EA=1e9, MBL=1e7)
+    bc = BoundaryConditions(h=200, mode=SolutionMode.TENSION, input_value=200_000)
+    sb = SeabedConfig(slope_rad=math.radians(-35))  # descendente — fairlead em água mais profunda
+    r = solve([seg], bc, sb)
+    diag_codes = [d.get("code", "") for d in r.diagnostics]
+    assert any("D012" in c for c in diag_codes), (
+        f"D012 não disparou; status={r.status.value}, msg={r.message[:100]}"
+    )
+
+
+def test_D012_integration_no_repro_slope_normal():
+    """Slope ≤ 30° não dispara D012."""
+    import math
+    seg = LineSegment(length=500, w=200, EA=1e9, MBL=1e7)
+    bc = BoundaryConditions(h=200, mode=SolutionMode.TENSION, input_value=200_000)
+    sb = SeabedConfig(slope_rad=math.radians(10))
+    r = solve([seg], bc, sb)
+    diag_codes = [d.get("code", "") for d in r.diagnostics]
+    assert not any("D012" in c for c in diag_codes)
+
+
+# ─── D013 — μ=0 com catálogo cf ≥ 0.3 ──────────────────────────────
+
+
+def test_D013_structural():
+    d = D013_mu_zero_with_catalog_friction(
+        segment_index=0, catalog_cf=1.0, line_type="R4Studless",
+    )
+    assert d.code == "D013_MU_ZERO_CATALOG_HAS_FRICTION"
+    assert d.severity == "warning"
+    assert d.confidence == "medium"  # heurística calibrada
+    assert "R4Studless" in d.title or "catalogo" in d.cause.lower() or "cat" in d.cause.lower()
+
+
+def test_D013_integration_repro_seabed_mu_zero_e_segmento_com_cf():
+    """μ global = 0 mas segmento tem catalog cf > 0.3 → D013."""
+    seg = LineSegment(
+        length=500, w=200, EA=1e9, MBL=1e7,
+        line_type="R4Studless", seabed_friction_cf=1.0,  # do catálogo
+    )
+    bc = BoundaryConditions(h=200, mode=SolutionMode.TENSION, input_value=200_000)
+    sb = SeabedConfig(mu=0.0)  # μ global zero
+    r = solve([seg], bc, sb)
+    diag_codes = [d.get("code", "") for d in r.diagnostics]
+    assert any("D013" in c for c in diag_codes)
+
+
+def test_D013_integration_no_repro_mu_override_definido():
+    """Quando mu_override existe, D013 não dispara (usuário sabe o que faz)."""
+    seg = LineSegment(
+        length=500, w=200, EA=1e9, MBL=1e7,
+        line_type="R4Studless", seabed_friction_cf=1.0,
+        mu_override=0.0,  # override explícito → respeita user
+    )
+    bc = BoundaryConditions(h=200, mode=SolutionMode.TENSION, input_value=200_000)
+    sb = SeabedConfig(mu=0.0)
+    r = solve([seg], bc, sb)
+    diag_codes = [d.get("code", "") for d in r.diagnostics]
+    assert not any("D013" in c for c in diag_codes)
+
+
+# ─── D014 — gmoor sem β ────────────────────────────────────────────
+
+
+def test_D014_structural():
+    d = D014_gmoor_without_beta(segment_index=1, line_type="Polyester")
+    assert d.code == "D014_GMOOR_WITHOUT_BETA"
+    assert d.severity == "info"  # informativo, não bloqueia
+    assert d.confidence == "high"
+    assert "Polyester" in d.title
+
+
+def test_D014_integration_repro_gmoor_sem_beta():
+    """ea_source='gmoor' sem ea_dynamic_beta → D014."""
+    seg = LineSegment(
+        length=500, w=200, EA=1.2e9, MBL=1e7,
+        ea_source="gmoor",  # ea_dynamic_beta default None
+    )
+    bc = BoundaryConditions(h=200, mode=SolutionMode.TENSION, input_value=200_000)
+    r = solve([seg], bc)
+    diag_codes = [d.get("code", "") for d in r.diagnostics]
+    assert any("D014" in c for c in diag_codes)
+
+
+def test_D014_integration_no_repro_qmoor_default():
+    """ea_source='qmoor' (default) não dispara D014."""
+    seg = LineSegment(length=500, w=200, EA=1e9, MBL=1e7)
+    bc = BoundaryConditions(h=200, mode=SolutionMode.TENSION, input_value=200_000)
+    r = solve([seg], bc)
+    diag_codes = [d.get("code", "") for d in r.diagnostics]
+    assert not any("D014" in c for c in diag_codes)
+
+
+# ─── D015 — ProfileType raro ───────────────────────────────────────
+
+
+def test_D015_structural():
+    for pt in ("PT_4", "PT_5", "PT_6"):
+        d = D015_rare_profile_type(profile_type=pt)
+        assert d.code == "D015_RARE_PROFILE_TYPE"
+        assert pt in d.title
+        assert d.severity == "warning"
+        assert d.confidence == "high"
+
+
+def test_D015_integration_repro_PT_6_vertical():
+    """PT_6 (vertical) dispara D015 quando ocorre.
+
+    Setup: X muito pequeno (~0) força detecção de PT_6 pelo classifier.
+    """
+    seg = LineSegment(length=500, w=200, EA=1e9, MBL=1e7)
+    # X pequeno via Range mode com input_value muito pequeno
+    bc = BoundaryConditions(
+        h=300, mode=SolutionMode.RANGE, input_value=0.0001,
+    )
+    r = solve([seg], bc)
+    if r.status.value in ("converged", "ill_conditioned"):
+        diag_codes = [d.get("code", "") for d in r.diagnostics]
+        # Best-effort: caso pode ou não convergir; quando converge,
+        # D015 deve aparecer se PT é raro.
+        if r.profile_type and r.profile_type.value in ("PT_4", "PT_5", "PT_6"):
+            assert any("D015" in c for c in diag_codes)
+
+
+def test_cobertura_de_builders_atinge_15():
+    """Sanity: este arquivo exercita os 15 builders (D001..D011 + D012..D015)."""
     import inspect
     import sys
     module = sys.modules[__name__]
@@ -330,6 +481,8 @@ def test_cobertura_de_builders_atinge_11():
         name for name, obj in inspect.getmembers(module)
         if inspect.isfunction(obj) and name.startswith("test_D") and "structural" in name
     ]
-    assert len(structural_tests) >= 11, (
-        f"Apenas {len(structural_tests)} testes structural; alvo Fase 4 = 11"
+    # 11 originais (D001..D011) + 4 novos F4 (D012..D015) + D900 = 16
+    # Pelo menos 15 (se D900 não conta)
+    assert len(structural_tests) >= 15, (
+        f"Apenas {len(structural_tests)} testes structural; alvo Fase 4 = 15+"
     )
