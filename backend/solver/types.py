@@ -485,6 +485,20 @@ class BoundaryConditions(BaseModel):
         ),
     )
 
+    # ─── Tipo do startpoint (Fase 3 / A2.5+D7) ────────────────────────
+    # Cosmético: define qual ícone aparece sobre o fairlead no plot.
+    # NUNCA usado pelo solver — todas as 4 opções produzem o mesmo
+    # resultado físico. Default "semisub" preserva o ícone que aparecia
+    # antes da Fase 3 (FPSO/semi-sub style).
+    startpoint_type: Literal["semisub", "ahv", "barge", "none"] = Field(
+        default="semisub",
+        description=(
+            "Tipo da plataforma — afeta APENAS o ícone do plot. NÃO "
+            "entra no cálculo. Valores: semisub (FPSO/semi-sub, default), "
+            "ahv (Anchor Handler Vessel), barge (balsa), none (sem ícone)."
+        ),
+    )
+
     @field_validator("h", "input_value")
     @classmethod
     def _must_be_positive(cls, v: float) -> float:

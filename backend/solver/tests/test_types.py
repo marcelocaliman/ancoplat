@@ -163,3 +163,45 @@ def test_boundary_payload_legacy_sem_offset_aceito():
     bc = BoundaryConditions.model_validate(payload)
     assert bc.startpoint_offset_horz == 0.0
     assert bc.startpoint_offset_vert == 0.0
+
+
+# ─── BoundaryConditions — startpoint_type da Fase 3 ────────────────
+
+
+def test_boundary_default_startpoint_type_semisub():
+    """Default Fase 3: 'semisub' (preserva ícone pré-F3)."""
+    from backend.solver.types import BoundaryConditions, SolutionMode
+    bc = BoundaryConditions(h=300.0, mode=SolutionMode.TENSION, input_value=500_000)
+    assert bc.startpoint_type == "semisub"
+
+
+@pytest.mark.parametrize("tipo", ["semisub", "ahv", "barge", "none"])
+def test_boundary_aceita_todos_4_startpoint_types(tipo):
+    """Os 4 valores enumerados são aceitos."""
+    from backend.solver.types import BoundaryConditions, SolutionMode
+    bc = BoundaryConditions(
+        h=300.0, mode=SolutionMode.TENSION, input_value=500_000,
+        startpoint_type=tipo,
+    )
+    assert bc.startpoint_type == tipo
+
+
+def test_boundary_rejeita_startpoint_type_invalido():
+    """Valor fora do enum é rejeitado pelo Pydantic."""
+    from backend.solver.types import BoundaryConditions, SolutionMode
+    with pytest.raises(ValidationError):
+        BoundaryConditions(
+            h=300.0, mode=SolutionMode.TENSION, input_value=500_000,
+            startpoint_type="bogus",  # type: ignore[arg-type]
+        )
+
+
+def test_boundary_payload_legacy_sem_startpoint_type_aceito():
+    """Payload pré-Fase-3 deserializa com default 'semisub'."""
+    from backend.solver.types import BoundaryConditions
+    payload = {
+        "h": 300.0, "mode": "Tension", "input_value": 500_000,
+        "startpoint_depth": 0.0, "endpoint_grounded": True,
+    }
+    bc = BoundaryConditions.model_validate(payload)
+    assert bc.startpoint_type == "semisub"

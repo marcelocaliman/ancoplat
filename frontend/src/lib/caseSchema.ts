@@ -87,6 +87,10 @@ export const boundarySchema = z.object({
   // Offset cosmético do startpoint (Fase 2 / A2.6) — não entra no solver.
   startpoint_offset_horz: z.number().default(0),
   startpoint_offset_vert: z.number().default(0),
+  // Tipo do startpoint (Fase 3 / A2.5+D7) — só afeta o ícone do plot.
+  startpoint_type: z
+    .enum(['semisub', 'ahv', 'barge', 'none'])
+    .default('semisub'),
 })
 
 export const seabedSchema = z.object({
@@ -181,6 +185,7 @@ export const EMPTY_CASE: CaseFormValues = {
     endpoint_grounded: true,
     startpoint_offset_horz: 0,
     startpoint_offset_vert: 0,
+    startpoint_type: 'semisub',
   },
   seabed: { mu: 0.6, slope_rad: 0 },  // default de wire em argila firme
   criteria_profile: 'MVP_Preliminary',

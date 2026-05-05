@@ -596,6 +596,12 @@ export interface components {
              * @default 0
              */
             startpoint_offset_vert?: number;
+            /**
+             * Startpoint Type
+             * @description (Fase 3) Tipo da plataforma — afeta APENAS o ícone do plot. semisub (default), ahv, barge, none.
+             * @default semisub
+             */
+            startpoint_type?: "semisub" | "ahv" | "barge" | "none";
         };
         /**
          * CaseInput
