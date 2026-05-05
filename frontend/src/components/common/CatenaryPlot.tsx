@@ -444,7 +444,12 @@ export function CatenaryPlot({
   const waterDepth = result.water_depth ?? 0
   const startpointDepth = result.startpoint_depth ?? 0
   const fairleadY = -startpointDepth
-  const anchorY = -waterDepth
+  // F7 — anchor pode estar elevado do seabed (suspended endpoint).
+  // Em grounded, endpoint_depth ≈ water_depth (anchor no seabed).
+  // Em uplift, endpoint_depth < water_depth (anchor acima do seabed).
+  // O solver popula `endpoint_depth` no result em ambos os casos.
+  const endpointDepth = result.endpoint_depth ?? waterDepth
+  const anchorY = -endpointDepth
   const td = result.dist_to_first_td ?? 0
 
   // Transforma cada ponto da curva do frame solver para o frame surface-relative.
@@ -474,7 +479,9 @@ export function CatenaryPlot({
       const sx = xs[i]!
       const sy = ys[i]!
       plotX.push(Xtotal - sx)
-      plotY.push(sy - waterDepth)
+      // F7 — anchor pode estar elevado: translada por endpoint_depth
+      // em vez de water_depth. Em grounded, ambos coincidem.
+      plotY.push(sy - endpointDepth)
       tensions.push(ts[i]!)
       // F5.7.1 — `sy ≈ m·sx`: ponto está sobre a rampa (apoiado).
       // Para slope=0, isso é simplesmente `sy ≈ 0`. Substitui o teste
@@ -496,7 +503,7 @@ export function CatenaryPlot({
     tensions.reverse()
     onGround.reverse()
     return { plotX, plotY, tensions, onGround }
-  }, [xs, ys, ts, td, Xtotal, waterDepth, seabedSlopeRad, result.total_grounded_length, result.total_suspended_length])
+  }, [xs, ys, ts, td, Xtotal, waterDepth, endpointDepth, seabedSlopeRad, result.total_grounded_length, result.total_suspended_length])
 
   // Ranges para definir layout/ticks
   const ranges = useMemo(() => {

@@ -1,0 +1,194 @@
+{
+  "generated_at": "2026-05-05T15:53:54.997546+00:00",
+  "moorpy_commit": "1fb29f8eca2618543b2df7056adfdfce0265737b",
+  "phase": "F-prof.7",
+  "test_id": "BC-UP-01..05",
+  "tolerance_target": "rtol=1e-2 (Fase 7 / Q5)",
+  "cases": [
+    {
+      "id": "BC-UP-01",
+      "description": "Moderado \u2014 uplift 50m em h=300m, T_fl 850 kN.",
+      "inputs": {
+        "h": 300.0,
+        "endpoint_depth": 250.0,
+        "L": 500.0,
+        "EA": 34000000.0,
+        "w": 200.0,
+        "T_fl": 850000.0
+      },
+      "anchoplat": {
+        "status": "converged",
+        "T_fl": 850000.0,
+        "T_anchor": 800000.0,
+        "X": 446.66575052564326,
+        "L_stretched": 512.1204399923525,
+        "elongation": 12.120439992352544,
+        "H": 718630.6414931054,
+        "iterations": 6
+      },
+      "moorpy": {
+        "T_fl": 848600.5227682894,
+        "T_anchor": 799783.8843305281,
+        "FxA": 717989.3611299399,
+        "FzA": 352342.92803893244,
+        "FxB": -717989.3611299399,
+        "FzB": -452342.92803893244,
+        "ProfileType": 1,
+        "LBot": 0.0
+      },
+      "relative_errors": {
+        "T_fl": 0.001646443802012432,
+        "T_anchor": 0.00027014458683988777
+      },
+      "status": "ok"
+    },
+    {
+      "id": "BC-UP-02",
+      "description": "Severo \u2014 uplift 100m, anchor longe do seabed.",
+      "inputs": {
+        "h": 300.0,
+        "endpoint_depth": 200.0,
+        "L": 500.0,
+        "EA": 34000000.0,
+        "w": 200.0,
+        "T_fl": 850000.0
+      },
+      "anchoplat": {
+        "status": "converged",
+        "T_fl": 850000.0,
+        "T_anchor": 810000.0,
+        "X": 471.23097560360935,
+        "L_stretched": 512.1927071449965,
+        "elongation": 12.192707144996461,
+        "H": 762651.8684945361,
+        "iterations": 6
+      },
+      "moorpy": {
+        "T_fl": 848633.6793445932,
+        "T_anchor": 809585.8825998923,
+        "FxA": 761899.422774384,
+        "FzA": 273749.10206447635,
+        "FxB": -761899.422774384,
+        "FzB": -373749.10206447635,
+        "ProfileType": 1,
+        "LBot": 0.0
+      },
+      "relative_errors": {
+        "T_fl": 0.001607436065184473,
+        "T_anchor": 0.000511256049515645
+      },
+      "status": "ok"
+    },
+    {
+      "id": "BC-UP-03",
+      "description": "Quase-grounded \u2014 uplift 5m. Continuidade vs grounded.",
+      "inputs": {
+        "h": 300.0,
+        "endpoint_depth": 295.0,
+        "L": 500.0,
+        "EA": 34000000.0,
+        "w": 200.0,
+        "T_fl": 850000.0
+      },
+      "anchoplat": {
+        "status": "converged",
+        "T_fl": 850000.0,
+        "T_anchor": 791000.0,
+        "X": 418.2680624957211,
+        "L_stretched": 512.055668263076,
+        "elongation": 12.055668263075972,
+        "H": 669347.0266050195,
+        "iterations": 6
+      },
+      "moorpy": {
+        "T_fl": 848589.919278409,
+        "T_anchor": 790978.9940206282,
+        "FxA": 668821.9501334255,
+        "FzA": 422285.4105952592,
+        "FxB": -668821.9501334255,
+        "FzB": -522285.4105952592,
+        "ProfileType": 1,
+        "LBot": 0.0
+      },
+      "relative_errors": {
+        "T_fl": 0.001658918495989432,
+        "T_anchor": 2.6556231822805565e-05
+      },
+      "status": "ok"
+    },
+    {
+      "id": "BC-UP-04",
+      "description": "Pr\u00f3ximo surface \u2014 anchor a 50m da superf\u00edcie (h=250m).",
+      "inputs": {
+        "h": 250.0,
+        "endpoint_depth": 50.0,
+        "L": 200.0,
+        "EA": 34000000.0,
+        "w": 200.0,
+        "T_fl": 200000.0
+      },
+      "anchoplat": {
+        "status": "converged",
+        "T_fl": 200000.0,
+        "T_anchor": 190000.0,
+        "X": 194.4821364120458,
+        "L_stretched": 201.14323402468852,
+        "elongation": 1.1432340246885246,
+        "H": 187871.7380778752,
+        "iterations": 6
+      },
+      "moorpy": {
+        "T_fl": 199556.10575952707,
+        "T_anchor": 189613.0108399115,
+        "FxA": 187478.733880561,
+        "FzA": 28369.31832663933,
+        "FxB": -187478.733880561,
+        "FzB": -68369.31832663933,
+        "ProfileType": 1,
+        "LBot": 0.0
+      },
+      "relative_errors": {
+        "T_fl": 0.002219471202364657,
+        "T_anchor": 0.0020367850530973795
+      },
+      "status": "ok"
+    },
+    {
+      "id": "BC-UP-05",
+      "description": "Taut + uplift \u2014 EA grande, T_fl alto.",
+      "inputs": {
+        "h": 300.0,
+        "endpoint_depth": 200.0,
+        "L": 500.0,
+        "EA": 1000000000.0,
+        "w": 200.0,
+        "T_fl": 950000.0
+      },
+      "anchoplat": {
+        "status": "converged",
+        "T_fl": 950000.0,
+        "T_anchor": 910000.0,
+        "X": 458.5426949347304,
+        "L_stretched": 500.4646226780448,
+        "elongation": 0.4646226780448046,
+        "H": 851274.44396878,
+        "iterations": 6
+      },
+      "moorpy": {
+        "T_fl": 949577.7546207159,
+        "T_anchor": 909614.9039400208,
+        "FxA": 850906.2229894697,
+        "FzA": 321493.19300353515,
+        "FxB": -850906.2229894697,
+        "FzB": -421493.19300353515,
+        "ProfileType": 1,
+        "LBot": 0.0
+      },
+      "relative_errors": {
+        "T_fl": 0.0004444688202990954,
+        "T_anchor": 0.00042318248349359605
+      },
+      "status": "ok"
+    }
+  ]
+}

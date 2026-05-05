@@ -30,8 +30,10 @@ describe('Glossary data', () => {
     expect(GLOSSARY.length).toBeGreaterThanOrEqual(30)
   })
 
-  it('inclui verbetes F7 (anchor-uplift) e F8 (ahv + bollard-pull)', () => {
-    expect(getGlossaryEntry('anchor-uplift')?.requirePhase).toBe('F7')
+  it('verbete F7 (anchor-uplift) destravado pós-F7 + F8 ainda preview', () => {
+    // Pós-Fase 7: anchor-uplift implementado → sem requirePhase
+    expect(getGlossaryEntry('anchor-uplift')?.requirePhase).toBeUndefined()
+    // F8 ainda em desenvolvimento
     expect(getGlossaryEntry('ahv')?.requirePhase).toBe('F8')
     expect(getGlossaryEntry('bollard-pull')?.requirePhase).toBe('F8')
   })
@@ -79,9 +81,10 @@ describe('HelpGlossaryPage smoke (Fase 9)', () => {
     expect(screen.getAllByText(/AHV/).length).toBeGreaterThan(0)
   })
 
-  it('verbetes preview têm badge "Preview · FX"', () => {
+  it('verbetes preview F8 têm badge "Preview · F8" (F7 destravado)', () => {
     renderPage()
-    expect(screen.getAllByText(/Preview · F7/).length).toBeGreaterThan(0)
+    // Pós-F7: F7 não é mais preview. F8 (AHV/bollard-pull) ainda é.
+    expect(screen.queryAllByText(/Preview · F7/).length).toBe(0)
     expect(screen.getAllByText(/Preview · F8/).length).toBeGreaterThan(0)
   })
 })

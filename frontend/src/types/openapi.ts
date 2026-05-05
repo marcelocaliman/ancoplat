@@ -737,10 +737,15 @@ export interface components {
             startpoint_depth: number;
             /**
              * Endpoint Grounded
-             * @description Se True, âncora está no seabed. MVP v1 exige True.
+             * @description Se True, âncora está no seabed. Quando False (Fase 7+), o campo `endpoint_depth` é obrigatório e indica a profundidade do anchor abaixo da superfície da água.
              * @default true
              */
             endpoint_grounded: boolean;
+            /**
+             * Endpoint Depth
+             * @description Profundidade do anchor abaixo da superfície (m). REQUIRED quando endpoint_grounded=False. Range: 0 < endpoint_depth ≤ h. Sinônimo de 'anchor uplift' = h − endpoint_depth (uplift positivo significa anchor elevado do seabed).
+             */
+            endpoint_depth?: number | null;
             /**
              * Startpoint Offset Horz
              * @description Offset horizontal do startpoint a partir da âncora (m). COSMÉTICO em v1.0 — afeta apenas a visualização do plot, NÃO entra no cálculo. Reservado para fase futura.

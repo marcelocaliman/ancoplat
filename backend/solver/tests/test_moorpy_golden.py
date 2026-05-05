@@ -45,15 +45,17 @@ CASE_CONFIG: dict[str, dict] = {
     "BC-MOORPY-02": {"rtol": 1e-4},
     "BC-MOORPY-03": {"rtol": 1e-4},
     "BC-MOORPY-04": {
-        "skip": (
-            "Anchor uplift (CB<0 no MoorPy = âncora elevada do seabed). "
-            "Reativar em Fase 7 quando endpoint_grounded=False for "
-            "implementado no solver AncoPlat."
+        "rtol": 1e-2,
+        "note": (
+            "Reativado na Fase 7: anchor uplift via endpoint_grounded=False. "
+            "Tolerância 1e-2 (Q5 da F7) — igual aos BC-UP-01..05."
         ),
     },
     "BC-MOORPY-05": {
-        "skip": (
-            "Anchor uplift (CB<0). Reativar em Fase 7 com endpoint_grounded=False."
+        "rtol": 1e-2,
+        "note": (
+            "Reativado na Fase 7: anchor uplift severo (uplift=372.7m, "
+            "drop=59.2m). Tolerância 1e-2."
         ),
     },
     "BC-MOORPY-06": {
@@ -128,14 +130,33 @@ def test_BC_MOORPY_against_baseline(case_id: str):
         EA=inp["EA"],
         MBL=1e9,  # MBL não afeta catenária; valor alto para evitar broken
     )
-    bc = BoundaryConditions(
-        h=inp["z"],
-        mode=SolutionMode.TENSION,
-        input_value=T_fl_target,
-        startpoint_depth=0.0,
-        endpoint_grounded=True,
-    )
-    sb = SeabedConfig(mu=inp["CB"], slope_rad=0.0)
+
+    # Fase 7: CB negativo no MoorPy = anchor uplift (distância do anchor
+    # ao seabed). z é o drop fairlead → anchor (= endpoint_depth no nosso
+    # modelo). water_depth h = endpoint_depth + |CB|.
+    cb = inp["CB"]
+    if cb < 0:
+        uplift = abs(cb)
+        endpoint_depth = inp["z"]  # drop fairlead → anchor
+        water_depth = endpoint_depth + uplift
+        bc = BoundaryConditions(
+            h=water_depth,
+            mode=SolutionMode.TENSION,
+            input_value=T_fl_target,
+            startpoint_depth=0.0,
+            endpoint_grounded=False,
+            endpoint_depth=endpoint_depth,
+        )
+        sb = SeabedConfig(mu=0.0, slope_rad=0.0)  # mu não-aplicável em uplift
+    else:
+        bc = BoundaryConditions(
+            h=inp["z"],
+            mode=SolutionMode.TENSION,
+            input_value=T_fl_target,
+            startpoint_depth=0.0,
+            endpoint_grounded=True,
+        )
+        sb = SeabedConfig(mu=cb, slope_rad=0.0)
 
     result = solve([seg], bc, sb)
 
@@ -205,17 +226,21 @@ def test_baseline_tem_10_cases():
     assert payload["n_cases"] == 10
 
 
-def test_3_cases_skipados_documentam_fase_de_reativacao():
-    """Cada skip precisa citar a fase específica que reativará o teste
-    (Q5 da Fase 1)."""
+def test_skipados_documentam_fase_de_reativacao():
+    """
+    Cada skip precisa citar a fase específica que reativará o teste
+    (Q5 da Fase 1). Pós-Fase 7: BC-MOORPY-04 e -05 destravados (uplift
+    suportado); resta apenas BC-MOORPY-06 (boia + uplift) que requer
+    Fase 12 (linha boiante / riser-like, fora do escopo v1.0).
+    """
     skipped = [
         (cid, cfg["skip"])
         for cid, cfg in CASE_CONFIG.items()
         if "skip" in cfg
     ]
-    assert len(skipped) == 3
+    # Pós-F7: 1 case skipado (BC-MOORPY-06, Fase 12).
+    assert len(skipped) == 1
     for cid, reason in skipped:
-        # Cada motivo precisa nomear a fase de reativação
         assert (
             "Fase 7" in reason or "Fase 12" in reason
         ), f"{cid}: skip reason não cita fase de reativação: {reason!r}"

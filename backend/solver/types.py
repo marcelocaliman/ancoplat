@@ -518,7 +518,28 @@ class BoundaryConditions(BaseModel):
     )
     endpoint_grounded: bool = Field(
         default=True,
-        description="Se True, âncora está no seabed. MVP v1 exige True.",
+        description=(
+            "Se True, âncora está no seabed. Quando False (Fase 7+), o "
+            "campo `endpoint_depth` é obrigatório e indica a profundidade "
+            "do anchor abaixo da superfície da água."
+        ),
+    )
+
+    # ─── Anchor uplift / suspended endpoint (Fase 7) ──────────────────
+    # Aplicável apenas quando `endpoint_grounded=False`. Profundidade do
+    # anchor abaixo da superfície (m). Anchor é fixo nesse ponto elevado,
+    # não toca o seabed → catenária livre nas duas pontas (PT_1 fully
+    # suspended). Validação: 0 < endpoint_depth ≤ h. Anchor "voando"
+    # acima da água (≤0) ou abaixo do seabed (>h+ε) é INVALID_CASE
+    # (diagnostic D016).
+    endpoint_depth: Optional[float] = Field(
+        default=None,
+        description=(
+            "Profundidade do anchor abaixo da superfície (m). REQUIRED "
+            "quando endpoint_grounded=False. Range: 0 < endpoint_depth ≤ h. "
+            "Sinônimo de 'anchor uplift' = h − endpoint_depth (uplift "
+            "positivo significa anchor elevado do seabed)."
+        ),
     )
 
     # ─── Offset cosmético do startpoint (Fase 2 / A2.6) ───────────────
@@ -564,6 +585,44 @@ class BoundaryConditions(BaseModel):
         if v <= 0:
             raise ValueError("deve ser > 0")
         return v
+
+    @model_validator(mode="after")
+    def _validate_endpoint_uplift(self) -> "BoundaryConditions":
+        """
+        Fase 7 — validação cruzada de endpoint_grounded ↔ endpoint_depth.
+
+        Regras:
+          - endpoint_grounded=False  → endpoint_depth obrigatório.
+          - endpoint_grounded=True   → endpoint_depth deve ser None ou
+                                       igual a h (registro redundante).
+          - endpoint_depth informado → 0 < endpoint_depth ≤ h.
+
+        Domínio violado é INVALID_CASE com diagnostic D016 (Fase 7 / Q8).
+        Aqui a validação é estrutural — solver dispara D016 com mensagem
+        amigável quando user passar valores impossíveis (endpoint_depth ≤ 0
+        ou > h), mas o Pydantic já bloqueia o caso "False sem depth"
+        para falhar rápido antes do solver.
+        """
+        if not self.endpoint_grounded and self.endpoint_depth is None:
+            raise ValueError(
+                "endpoint_depth é obrigatório quando endpoint_grounded=False "
+                "(anchor uplift / suspended endpoint, Fase 7). Informe a "
+                "profundidade do anchor abaixo da superfície (m)."
+            )
+        if self.endpoint_depth is not None:
+            if self.endpoint_depth <= 0:
+                raise ValueError(
+                    f"endpoint_depth deve ser > 0 (anchor não pode estar "
+                    f"acima ou na superfície). Recebido: {self.endpoint_depth}."
+                )
+            if self.endpoint_depth > self.h + 1e-6:
+                raise ValueError(
+                    f"endpoint_depth ({self.endpoint_depth}) não pode "
+                    f"exceder h ({self.h}) — anchor estaria abaixo do seabed. "
+                    f"Para anchor cravado no seabed use endpoint_grounded=True "
+                    f"(omita endpoint_depth)."
+                )
+        return self
 
 
 class SeabedConfig(BaseModel):

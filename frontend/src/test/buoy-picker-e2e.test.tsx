@@ -75,7 +75,11 @@ beforeEach(() => {
 
 function setup(props: {
   selectedId?: number | null
-  onPick?: (b: (typeof MOCK_BUOYS)[number]) => void
+  // Tipo flexível: BuoyOutput tem legacy_id: number|null no schema gerado;
+  // MOCK_BUOYS tem number sem null. `Function` é genérico o bastante para
+  // permitir os dois — testes e2e não precisam de verificação estrita aqui.
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  onPick?: Function
   onClear?: () => void
 }) {
   const qc = new QueryClient({
@@ -88,7 +92,7 @@ function setup(props: {
     <QueryClientProvider client={qc}>
       <BuoyPicker
         selectedId={props.selectedId ?? null}
-        onPick={onPick}
+        onPick={onPick as never}
         onClear={onClear}
       />
     </QueryClientProvider>,

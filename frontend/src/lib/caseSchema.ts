@@ -81,20 +81,43 @@ export const lineSegmentSchema = z.object({
   ea_dynamic_beta: z.number().min(0).nullable().optional(), // reservado v1
 })
 
-export const boundarySchema = z.object({
-  h: z.number().positive("Profundidade do seabed sob a âncora deve ser > 0"),
-  mode: z.enum(['Tension', 'Range']),
-  input_value: z.number().positive('Valor deve ser > 0'),
-  startpoint_depth: z.number().min(0).default(0),
-  endpoint_grounded: z.boolean().default(true),
-  // Offset cosmético do startpoint (Fase 2 / A2.6) — não entra no solver.
-  startpoint_offset_horz: z.number().default(0),
-  startpoint_offset_vert: z.number().default(0),
-  // Tipo do startpoint (Fase 3 / A2.5+D7) — só afeta o ícone do plot.
-  startpoint_type: z
-    .enum(['semisub', 'ahv', 'barge', 'none'])
-    .default('semisub'),
-})
+export const boundarySchema = z
+  .object({
+    h: z.number().positive("Profundidade do seabed sob a âncora deve ser > 0"),
+    mode: z.enum(['Tension', 'Range']),
+    input_value: z.number().positive('Valor deve ser > 0'),
+    startpoint_depth: z.number().min(0).default(0),
+    endpoint_grounded: z.boolean().default(true),
+    // Anchor uplift (Fase 7) — required quando endpoint_grounded=false.
+    // Validações cruzadas (depth obrigatória quando suspended; depth ≤ h)
+    // via .refine() abaixo.
+    endpoint_depth: z.number().positive().nullable().optional(),
+    // Offset cosmético do startpoint (Fase 2 / A2.6) — não entra no solver.
+    startpoint_offset_horz: z.number().default(0),
+    startpoint_offset_vert: z.number().default(0),
+    // Tipo do startpoint (Fase 3 / A2.5+D7) — só afeta o ícone do plot.
+    startpoint_type: z
+      .enum(['semisub', 'ahv', 'barge', 'none'])
+      .default('semisub'),
+  })
+  .refine(
+    (b) =>
+      b.endpoint_grounded ||
+      (b.endpoint_depth != null && b.endpoint_depth > 0),
+    {
+      message:
+        'endpoint_depth é obrigatório quando endpoint_grounded=false (anchor elevado).',
+      path: ['endpoint_depth'],
+    },
+  )
+  .refine(
+    (b) => b.endpoint_depth == null || b.endpoint_depth <= b.h + 1e-6,
+    {
+      message:
+        'endpoint_depth não pode exceder h (anchor abaixo do seabed).',
+      path: ['endpoint_depth'],
+    },
+  )
 
 export const seabedSchema = z.object({
   mu: z.number().min(0, 'Atrito não pode ser negativo').default(0),
@@ -186,6 +209,7 @@ export const EMPTY_CASE: CaseFormValues = {
     input_value: 785_000,
     startpoint_depth: 0,
     endpoint_grounded: true,
+    endpoint_depth: null,
     startpoint_offset_horz: 0,
     startpoint_offset_vert: 0,
     startpoint_type: 'semisub',

@@ -34,15 +34,36 @@ def _seg_padrao() -> LineSegment:
 # ==============================================================================
 
 
-def test_endpoint_grounded_false_retorna_invalid_case() -> None:
-    """Âncora elevada do seabed exige modelagem distinta (pendente)."""
+def test_endpoint_grounded_false_sem_endpoint_depth_rejeitado_no_pydantic() -> None:
+    """
+    Fase 7: schema agora bloqueia endpoint_grounded=False sem endpoint_depth
+    no Pydantic (falha rápido, antes do solver). Mensagem clara orienta
+    o engenheiro a informar a profundidade do anchor.
+    """
+    import pytest
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError, match="endpoint_depth é obrigatório"):
+        BoundaryConditions(
+            h=300, mode=SolutionMode.TENSION, input_value=785_000,
+            endpoint_grounded=False,
+        )
+
+
+def test_endpoint_grounded_false_com_endpoint_depth_converge() -> None:
+    """
+    Fase 7 / pós-Commit-3: dispatcher uplift remove NotImplementedError
+    e delega para suspended_endpoint.solve_suspended_endpoint().
+    """
     bc = BoundaryConditions(
         h=300, mode=SolutionMode.TENSION, input_value=785_000,
-        endpoint_grounded=False,
+        endpoint_grounded=False, endpoint_depth=250.0,  # uplift=50m, BC-UP-01-like
     )
     r = solve([_seg_padrao()], bc)
-    assert r.status == ConvergenceStatus.INVALID_CASE
-    assert "endpoint_grounded" in r.message or "elevada" in r.message.lower()
+    assert r.status == ConvergenceStatus.CONVERGED
+    assert r.endpoint_depth == 250.0
+    assert r.water_depth == 300.0
+    assert r.total_grounded_length == 0.0  # fully suspended
+    assert "uplift" in r.message.lower() or "suspended endpoint" in r.message.lower()
 
 
 # ==============================================================================

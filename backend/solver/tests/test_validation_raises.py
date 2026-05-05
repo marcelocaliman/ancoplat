@@ -116,12 +116,27 @@ def test_no_raise_a4_mu_zero():
     assert r.status == ConvergenceStatus.CONVERGED
 
 
-def test_raise_a5_endpoint_grounded_false():
-    """solver.py L124: endpoint_grounded=False (anchor uplift fora do escopo MVP v1)."""
-    bc = _bc(endpoint_grounded=False)
+def test_raise_a5_endpoint_grounded_false_sem_endpoint_depth_rejeita_no_pydantic():
+    """
+    Fase 7: validação cruzada Pydantic — endpoint_grounded=False sem
+    endpoint_depth é rejeitado no schema, ANTES do solver (falha rápido,
+    mensagem clara).
+    """
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError, match="endpoint_depth é obrigatório"):
+        _bc(endpoint_grounded=False)
+
+
+def test_raise_a5_endpoint_grounded_false_com_endpoint_depth_converge():
+    """
+    Fase 7 / pós-Commit-3: dispatcher uplift remove NotImplementedError
+    para single-segment + sem attachments. Caso BC-UP-01-like converge.
+    """
+    bc = _bc(endpoint_grounded=False, endpoint_depth=150.0)  # h=200, uplift=50m
     r = solve([_seg()], bc)
-    assert r.status == ConvergenceStatus.INVALID_CASE
-    assert "endpoint_grounded" in r.message or "uplift" in r.message.lower() or "âncora" in r.message.lower()
+    assert r.status == ConvergenceStatus.CONVERGED
+    assert r.endpoint_depth == 150.0
+    assert "uplift" in r.message.lower() or "suspended endpoint" in r.message.lower()
 
 
 def test_no_raise_a5_endpoint_grounded_true():
