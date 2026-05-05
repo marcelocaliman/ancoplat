@@ -1395,6 +1395,60 @@ def _memorial_premissas_block(case_input, styles) -> list:
     return elements
 
 
+def _has_ahv(case_input) -> bool:
+    """Detecta se o caso contém ≥1 attachment kind='ahv' (Fase 8)."""
+    attachments = getattr(case_input, "attachments", None) or []
+    return any(getattr(a, "kind", None) == "ahv" for a in attachments)
+
+
+def _memorial_ahv_block(case_input, styles) -> list:
+    """
+    Bloco "AHV — Domínio de aplicação" (Fase 8 / Q9 + Ajuste 3).
+
+    Mitigação obrigatória registrada em CLAUDE.md (decisão fechada Fase
+    8 antecipada): quando há ≥1 AHV no caso, Memorial PDF inclui
+    PARÁGRAFO DEDICADO citando o domínio de aplicação válido. Texto
+    LITERAL conforme aprovado em Q9 — strings-chave verificadas via
+    smoke test ("idealização", "não substitui", "análise dinâmica").
+    """
+    if not _has_ahv(case_input):
+        return []
+    n_ahv = sum(
+        1 for a in case_input.attachments
+        if getattr(a, "kind", None) == "ahv"
+    )
+    elements: list = []
+    elements.append(Paragraph(
+        "AHV — Domínio de aplicação", styles["SectionTitle"],
+    ))
+    p1 = (
+        f"Esta análise modela a força aplicada pelo Anchor Handler "
+        f"Vessel (AHV) — {n_ahv} ativo{'s' if n_ahv > 1 else ''} neste "
+        "caso — como uma <b>carga estática pontual</b> aplicada à linha. "
+        "A operação real envolve dinâmica do rebocador (movimento, "
+        "aceleração, oscilação), comportamento dinâmico do cabo "
+        "(vibração, snap loads) e hidrodinâmica do casco do AHV. Estes "
+        "efeitos <b>não são modelados</b> na análise quasi-estática."
+    )
+    p2 = (
+        "<b>Use esta análise para:</b> verificação de tensão de pico em "
+        "condição idealizada, dimensionamento preliminar de geometria, "
+        "avaliação de equilíbrio estático."
+    )
+    p3 = (
+        "<b>Não substitui:</b> análise dinâmica de instalação, avaliação "
+        "de cargas de impacto (snap loads), estudo de operabilidade em "
+        "condições ambientais reais."
+    )
+    elements.append(Paragraph(p1, styles["Normal"]))
+    elements.append(Spacer(1, 0.2 * cm))
+    elements.append(Paragraph(p2, styles["Normal"]))
+    elements.append(Spacer(1, 0.15 * cm))
+    elements.append(Paragraph(p3, styles["Normal"]))
+    elements.append(Spacer(1, 0.4 * cm))
+    return elements
+
+
 def _memorial_profile_type_block(result, styles) -> list:
     """Bloco descritivo do ProfileType detectado (Fase 4)."""
     elements = []
@@ -1492,6 +1546,11 @@ def build_memorial_pdf(
 
     # --- Premissas ---
     story.extend(_memorial_premissas_block(case_input, styles))
+
+    # --- AHV — domínio de aplicação (Fase 8 / Q9 + Ajuste 3) ---
+    # Mitigação obrigatória quando há ≥1 AHV no caso. Aparece logo
+    # após premissas para dar visibilidade adequada (não é footnote).
+    story.extend(_memorial_ahv_block(case_input, styles))
 
     # --- Sumário executivo (resultado) ---
     result = None
