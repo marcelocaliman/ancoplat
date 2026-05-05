@@ -672,6 +672,31 @@ export function CaseFormPage() {
                       className="h-8 font-mono"
                     />
                   </InlineField>
+                  <InlineField
+                    label="Tipo de plataforma"
+                    tooltip="Cosmético — afeta APENAS o ícone do plot. Não entra no cálculo. Default: Semi-Sub."
+                  >
+                    <Controller
+                      control={control}
+                      name="boundary.startpoint_type"
+                      render={({ field }) => (
+                        <Select
+                          value={(field.value as string | undefined) ?? 'semisub'}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="semisub">Semi-Sub / FPSO</SelectItem>
+                            <SelectItem value="ahv">AHV (Anchor Handler)</SelectItem>
+                            <SelectItem value="barge">Barge</SelectItem>
+                            <SelectItem value="none">Sem ícone</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </InlineField>
                 </div>
 
                 {/* Grupo 3 — Seabed */}
