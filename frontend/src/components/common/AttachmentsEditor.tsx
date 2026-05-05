@@ -1,4 +1,4 @@
-import { Anchor, ChevronDown, ChevronUp, Plus, Trash2, Waves } from 'lucide-react'
+import { Anchor, AlertTriangle, Check, ChevronDown, ChevronUp, Plus, Trash2, Waves } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   Controller,
@@ -9,6 +9,7 @@ import {
   type UseFieldArrayReturn,
   type UseFormSetValue,
 } from 'react-hook-form'
+import { BuoyPicker } from '@/components/common/BuoyPicker'
 import { UnitInput } from '@/components/common/UnitInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,9 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { AttachmentKind } from '@/api/types'
+import type { AttachmentKind, BuoyOutput } from '@/api/types'
 import type { CaseFormValues } from '@/lib/caseSchema'
 import { cn } from '@/lib/utils'
+
+// Campos físicos do `LineAttachment` que, quando alterados manualmente
+// após popular do catálogo, devem zerar `buoy_catalog_id` (Q7 do plano
+// F6 — override → null). A lista canônica vive como referência mental
+// no `clearCatalogLink` chamado no onChange de cada campo abaixo:
+//   submerged_force, buoy_type, buoy_end_type, buoy_outer_diameter,
+//   buoy_length, buoy_weight_in_air.
 
 export interface AttachmentsEditorProps<
   T extends FieldValues = CaseFormValues,
@@ -238,6 +246,44 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
   const isBuoy = kindWatched === 'buoy'
   const p = (suffix: string): Path<T> =>
     `${basePath}.${realIndex}.${suffix}` as Path<T>
+  // F6 / Q4+Q7: id da boia do catálogo (rastreabilidade não-autoritativa).
+  const buoyCatalogId = useWatch({
+    control,
+    name: p('buoy_catalog_id'),
+  }) as number | null | undefined
+
+  /**
+   * F6 / Q7: ao escolher uma boia do catálogo, preenche os 6 campos
+   * físicos + buoy_catalog_id. Modo manual continua funcionando: se o
+   * usuário editar QUALQUER um desses 6 campos depois, `clearCatalogLink`
+   * é chamado e o ID volta a null (override = sem rastreabilidade).
+   */
+  function applyBuoyFromCatalog(buoy: BuoyOutput) {
+    setValue(p('submerged_force'), buoy.submerged_force as never, {
+      shouldValidate: true,
+    })
+    setValue(p('buoy_type'), buoy.buoy_type as never, { shouldValidate: true })
+    setValue(p('buoy_end_type'), buoy.end_type as never, {
+      shouldValidate: true,
+    })
+    setValue(p('buoy_outer_diameter'), buoy.outer_diameter as never, {
+      shouldValidate: true,
+    })
+    setValue(p('buoy_length'), buoy.length as never, { shouldValidate: true })
+    setValue(p('buoy_weight_in_air'), buoy.weight_in_air as never, {
+      shouldValidate: true,
+    })
+    setValue(p('buoy_catalog_id'), buoy.id as never, { shouldValidate: false })
+    // Decisão conservadora: NÃO sobrescreve `name` do attachment — engenheiros
+    // já anotam ("Boia A", "Boia central") e perderiam a marcação ao trocar
+    // de boia no picker.
+  }
+
+  function clearCatalogLink() {
+    if (buoyCatalogId != null) {
+      setValue(p('buoy_catalog_id'), null as never, { shouldValidate: false })
+    }
+  }
   // Modo derivado dos campos atuais: se `position_s_from_anchor` está
   // setado, mostra input de distância; caso contrário, input de junção.
   const positionS = useWatch({ control, name: p('position_s_from_anchor') })
@@ -354,8 +400,16 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
           </div>
         )}
         <div className="flex flex-col gap-0.5">
-          <Label className="text-[10px] font-medium text-muted-foreground">
+          <Label className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground">
             Força submersa
+            {isBuoy && buoyCatalogId == null && (
+              <span
+                title="Modificado do catálogo (override) ou modo manual"
+                className="inline-flex items-center gap-0.5 rounded-sm bg-warning/15 px-1 text-[9px] font-semibold uppercase tracking-wide text-warning"
+              >
+                <AlertTriangle className="h-2.5 w-2.5" /> manual
+              </span>
+            )}
           </Label>
           <Controller
             control={control}
@@ -363,7 +417,10 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
             render={({ field }) => (
               <UnitInput
                 value={field.value as number}
-                onChange={field.onChange}
+                onChange={(v) => {
+                  field.onChange(v)
+                  clearCatalogLink()
+                }}
                 quantity="force"
                 digits={2}
                 className="h-8"
@@ -568,9 +625,37 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
         <div className="space-y-2 rounded-md border border-border/40 bg-muted/20 p-2">
           {isBuoy && (
             <div className="space-y-2">
-              <Label className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Boia — geometria
-              </Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Boia — geometria
+                </Label>
+                {buoyCatalogId != null ? (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-sm bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary"
+                    title={`Linkada ao catálogo (id=${buoyCatalogId})`}
+                  >
+                    <Check className="h-2.5 w-2.5" />
+                    do catálogo
+                  </span>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-sm bg-warning/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-warning"
+                    title="Modificado do catálogo ou criada manualmente"
+                  >
+                    <AlertTriangle className="h-2.5 w-2.5" />
+                    modo manual
+                  </span>
+                )}
+              </div>
+              {/* F6 / Q1+Q7 — Picker do catálogo. Override automático
+                  via clearCatalogLink quando o engenheiro mexer em
+                  qualquer campo físico. */}
+              <BuoyPicker
+                selectedId={buoyCatalogId ?? null}
+                onPick={applyBuoyFromCatalog}
+                onClear={clearCatalogLink}
+                className="h-8"
+              />
               <div className="grid grid-cols-2 gap-2">
                 <div className="flex flex-col gap-0.5">
                   <Label className="text-[10px] font-medium text-muted-foreground">
@@ -582,7 +667,10 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
                     render={({ field }) => (
                       <Select
                         value={(field.value as string | null) ?? ''}
-                        onValueChange={(v) => field.onChange(v || null)}
+                        onValueChange={(v) => {
+                          field.onChange(v || null)
+                          clearCatalogLink()
+                        }}
                       >
                         <SelectTrigger className="h-7 text-xs">
                           <SelectValue placeholder="—" />
@@ -605,7 +693,10 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
                     render={({ field }) => (
                       <Select
                         value={(field.value as string | null) ?? ''}
-                        onValueChange={(v) => field.onChange(v || null)}
+                        onValueChange={(v) => {
+                          field.onChange(v || null)
+                          clearCatalogLink()
+                        }}
                       >
                         <SelectTrigger className="h-7 text-xs">
                           <SelectValue placeholder="—" />
@@ -642,6 +733,7 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
                           field.onChange(
                             Number.isFinite(v) && v > 0 ? v : null,
                           )
+                          clearCatalogLink()
                         }}
                         placeholder="—"
                         className="h-7 font-mono text-xs"
@@ -667,6 +759,7 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
                           field.onChange(
                             Number.isFinite(v) && v > 0 ? v : null,
                           )
+                          clearCatalogLink()
                         }}
                         placeholder="—"
                         className="h-7 font-mono text-xs"
@@ -692,6 +785,7 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
                           field.onChange(
                             Number.isFinite(v) && v >= 0 ? v : null,
                           )
+                          clearCatalogLink()
                         }}
                         placeholder="—"
                         className="h-7 font-mono text-xs"

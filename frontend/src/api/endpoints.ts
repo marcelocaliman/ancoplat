@@ -4,6 +4,9 @@
  */
 import { apiClient } from './client'
 import type {
+  BuoyCreate,
+  BuoyOutput,
+  BuoyUpdate,
   CaseInput,
   CaseOutput,
   CriteriaProfileInfo,
@@ -15,6 +18,7 @@ import type {
   MooringSystemInput,
   MooringSystemOutput,
   MooringSystemResult,
+  PaginatedResponse_BuoyOutput_,
   PaginatedResponse_CaseSummary_,
   PaginatedResponse_LineTypeOutput_,
   PaginatedResponse_MooringSystemSummary_,
@@ -125,6 +129,32 @@ export const updateLineType = (id: number, input: LineTypeUpdate) =>
 
 export const deleteLineType = (id: number) =>
   apiClient.delete(`/line-types/${id}`).then((r) => r.data)
+
+// ─────────────────────────────── buoys (F6) ──────────────────────────────
+export interface ListBuoysParams {
+  page?: number
+  page_size?: number
+  buoy_type?: 'surface' | 'submersible'
+  end_type?: 'flat' | 'hemispherical' | 'elliptical' | 'semi_conical'
+  search?: string
+}
+
+export const listBuoys = (params?: ListBuoysParams) =>
+  apiClient
+    .get<PaginatedResponse_BuoyOutput_>('/buoys', { params })
+    .then((r) => r.data)
+
+export const getBuoy = (id: number) =>
+  apiClient.get<BuoyOutput>(`/buoys/${id}`).then((r) => r.data)
+
+export const createBuoy = (input: BuoyCreate) =>
+  apiClient.post<BuoyOutput>('/buoys', input).then((r) => r.data)
+
+export const updateBuoy = (id: number, input: BuoyUpdate) =>
+  apiClient.put<BuoyOutput>(`/buoys/${id}`, input).then((r) => r.data)
+
+export const deleteBuoy = (id: number) =>
+  apiClient.delete(`/buoys/${id}`).then((r) => r.data)
 
 // ─────────────────────────────── mooring systems (F5.4) ───────────────────
 export interface ListMooringSystemsParams {

@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.api.db import session as db_session_module
 from backend.api.db.migrations import run_migrations
-from backend.api.db.models import LineTypeRecord
+from backend.api.db.models import BuoyRecord, LineTypeRecord
 from backend.api.main import app
 
 
@@ -95,4 +95,20 @@ def seeded_catalog(tmp_db: Path) -> Iterator[list[int]]:
             db.commit()
             db.refresh(rec)
             ids.append(rec.id)
+    yield ids
+
+
+@pytest.fixture()
+def seeded_buoys(tmp_db: Path) -> Iterator[list[int]]:
+    """
+    Popula o banco temporário com o seed completo de boias (F6).
+    Retorna a lista de ids criados.
+    """
+    del tmp_db
+    from backend.api.db import session as ds
+    from backend.data.seed_buoys import seed as seed_buoys_fn
+
+    with ds.SessionLocal() as db:
+        seed_buoys_fn(db)
+        ids = [r.id for r in db.query(BuoyRecord).order_by(BuoyRecord.id).all()]
     yield ids

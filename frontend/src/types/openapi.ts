@@ -236,6 +236,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/buoys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar boias
+         * @description Lista paginada do catálogo de boias. Filtros: `buoy_type`, `end_type`, `search` (ILIKE em name).
+         */
+        get: operations["list_buoys_api_v1_buoys_get"];
+        put?: never;
+        /**
+         * Cadastrar boia user_input
+         * @description Cria uma nova entrada com `data_source='user_input'`. As entradas seed (`excel_buoy_calc_v1`, `generic_offshore`, `manufacturer_*`) não podem ser modificadas; use este endpoint para adicionar boias próprias.
+         */
+        post: operations["create_buoy_api_v1_buoys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/buoys/{buoy_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalhar boia por id */
+        get: operations["get_buoy_api_v1_buoys__buoy_id__get"];
+        /**
+         * Editar boia user_input
+         * @description Só permite edição de entradas com `data_source='user_input'`. Entradas seed são imutáveis (retorna 403).
+         */
+        put: operations["update_buoy_api_v1_buoys__buoy_id__put"];
+        post?: never;
+        /**
+         * Remover boia user_input
+         * @description Apenas entradas `user_input` podem ser removidas.
+         */
+        delete: operations["delete_buoy_api_v1_buoys__buoy_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import/moor": {
         parameters: {
             query?: never;
@@ -332,6 +381,93 @@ export interface paths {
          *     Usa a **última execução** do caso. Se o caso nunca foi resolvido, gera um relatório parcial apenas com as entradas.
          */
         get: operations["export_pdf_api_v1_cases__case_id__export_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/export/memorial-pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exportar memorial técnico em PDF (Fase 5)
+         * @description Gera memorial técnico expandido em PDF A4 — diferente do /export/pdf resumido. Pensado para entrega ao cliente, com:
+         *     1. Capa com hash SHA-256 do caso, solver_version, timestamp
+         *     2. Premissas e escopo da análise
+         *     3. Sumário executivo + ProfileType detectado (Fase 4)
+         *     4. Identificação + boundary + segmentos detalhados (com EA source e μ_eff per segmento — Fase 1)
+         *     5. Plot 2D + distribuição de tensão
+         *     6. Diagnostics estruturados com severity + confidence (Fase 4)
+         *     7. Footer com hash + solver_version + timestamp em cada página
+         *
+         *     Usa a última execução do caso. Sem execução, gera memorial parcial.
+         *
+         *     Reprodutibilidade científica: hash identifica unicamente esta configuração física (independente de nome/descrição).
+         */
+        get: operations["export_memorial_pdf_api_v1_cases__case_id__export_memorial_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/export/csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exportar geometria em CSV (international format)
+         * @description CSV com a geometria do cabo em formato international (decimal ponto, separator vírgula) — para análise externa em Python/MATLAB/Octave/R.
+         *
+         *     Header: `x_m,y_m,tension_x_n,tension_y_n,tension_magnitude_n`
+         *
+         *     Linhas: 1 header + N pontos do solve (≥ 5000 em casos típicos). Inclui comentários iniciados com `#` para rastreabilidade (case name, timestamp, solver_version).
+         *
+         *     **Para abrir no Excel BR**: use Importar Dados → Texto, não duplo-clique (Excel BR espera `;` como separator).
+         */
+        get: operations["export_csv_api_v1_cases__case_id__export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{case_id}/export/xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Exportar caso completo em Excel (.xlsx)
+         * @description Gera arquivo Excel com 3 abas + Diagnostics opcional:
+         *
+         *     **Aba Caso**: metadados + inputs (segments + boundary + seabed)
+         *
+         *     **Aba Resultados**: escalares (T_fl, T_anc, X, L_susp/grnd, ângulos, ProfileType detectado, utilização, alert level)
+         *
+         *     **Aba Geometria**: ≥ 5000 linhas com x, y, T_x, T_y, T_mag
+         *
+         *     **Aba Diagnostics** (condicional): tabela de diagnostics estruturados se houver, com severity colorida e confidence — estrutura consistente com Memorial PDF (Fase 5 / Q6 detail).
+         *
+         *     Sem solve, só aba Caso é gerada.
+         */
+        get: operations["export_xlsx_api_v1_cases__case_id__export_xlsx_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -549,9 +685,25 @@ export interface components {
          * BoundaryConditions
          * @description Condições de contorno físicas do problema.
          *
-         *     h é a distância vertical da âncora até o fairlead (positiva = fairlead
-         *     acima da âncora). No modelo de fundo plano, h coincide com a lâmina
-         *     d'água se a âncora está no seabed.
+         *     `h` é a **profundidade do seabed sob a âncora** medida a partir da
+         *     superfície da água — equivalente a `water_depth_at_anchor` no
+         *     domínio de mooring offshore. Como a âncora sempre está no seabed
+         *     no MVP v1 (`endpoint_grounded=True`), `h` coincide com a lâmina
+         *     d'água naquela coluna.
+         *
+         *     O **drop vertical** efetivo usado pela catenária (distância anchor
+         *     → fairlead) é `h - startpoint_depth`, calculado dentro do facade
+         *     `solve()` e não exposto como input direto. Em seabed inclinado, a
+         *     profundidade do seabed sob o FAIRLEAD difere de `h` — pelo
+         *     `seabed.slope_rad` × distância horizontal — e é exposta no resultado
+         *     em `SolverResult.depth_at_fairlead`.
+         *
+         *     Decisão registrada na Fase 2 do plano de profissionalização (E4):
+         *     a docstring antiga descrevia `h` como "distância vertical anchor →
+         *     fairlead" — semantica errada que confundia engenheiros. Corrigida
+         *     aqui para "profundidade do seabed sob a âncora" (water_depth_at_anchor).
+         *     O frontend agora oferece input por batimetria nos dois pontos com
+         *     slope derivado (`BathymetryInputGroup`).
          *
          *     Campos `startpoint_depth` e `endpoint_grounded` refletem Seção 5.1 do
          *     MVP v2 PDF. O MVP v1 assume:
@@ -559,11 +711,16 @@ export interface components {
          *       - âncora (endpoint) no seabed         → endpoint_grounded = True
          *     Valores diferentes são validados pelo facade solve() e geram INVALID_CASE
          *     com mensagem clara. Suporte para âncora elevada fica para v2+.
+         *
+         *     Campos `startpoint_offset_horz` e `startpoint_offset_vert` (Fase 2 /
+         *     A2.6) são **cosméticos em v1.0** — afetam apenas a visualização
+         *     do plot, NÃO entram no cálculo do solver. Reservados para forward-
+         *     compat com fase futura que tornará o offset físico.
          */
         BoundaryConditions: {
             /**
              * H
-             * @description Distância vertical anchor→fairlead (m)
+             * @description Profundidade do seabed sob a âncora (water_depth_at_anchor, m). Como a âncora sempre está no seabed no MVP v1, h coincide com a lâmina d'água naquela coluna.
              */
             h: number;
             mode: components["schemas"]["SolutionMode"];
@@ -586,22 +743,223 @@ export interface components {
             endpoint_grounded: boolean;
             /**
              * Startpoint Offset Horz
-             * @description (Fase 2) Offset horizontal cosmético do startpoint (m). Não entra no solver em v1.0.
+             * @description Offset horizontal do startpoint a partir da âncora (m). COSMÉTICO em v1.0 — afeta apenas a visualização do plot, NÃO entra no cálculo. Reservado para fase futura.
              * @default 0
              */
-            startpoint_offset_horz?: number;
+            startpoint_offset_horz: number;
             /**
              * Startpoint Offset Vert
-             * @description (Fase 2) Offset vertical cosmético do startpoint (m, positivo acima). Não entra no solver em v1.0.
+             * @description Offset vertical do startpoint relativo à superfície (m, positivo acima). Equivalente ao 'Deck Level above SWL' do QMoor 0.8.5. COSMÉTICO em v1.0 — afeta apenas a visualização do plot. Reservado para fase futura.
              * @default 0
              */
-            startpoint_offset_vert?: number;
+            startpoint_offset_vert: number;
             /**
              * Startpoint Type
-             * @description (Fase 3) Tipo da plataforma — afeta APENAS o ícone do plot. semisub (default), ahv, barge, none.
+             * @description Tipo da plataforma — afeta APENAS o ícone do plot. NÃO entra no cálculo. Valores: semisub (FPSO/semi-sub, default), ahv (Anchor Handler Vessel), barge (balsa), none (sem ícone).
              * @default semisub
+             * @enum {string}
              */
-            startpoint_type?: "semisub" | "ahv" | "barge" | "none";
+            startpoint_type: "semisub" | "ahv" | "barge" | "none";
+        };
+        /**
+         * BuoyCreate
+         * @description Payload para POST /buoys (sempre user_input).
+         * @example {
+         *       "buoy_type": "submersible",
+         *       "end_type": "elliptical",
+         *       "length": 3,
+         *       "manufacturer": "Acme",
+         *       "name": "MyCustomBuoy",
+         *       "outer_diameter": 2,
+         *       "submerged_force": 60000,
+         *       "weight_in_air": 4900
+         *     }
+         */
+        BuoyCreate: {
+            /**
+             * Name
+             * @description Identificador legível (ex.: 'GEN-CYL-2.0x3.0-Hemi').
+             */
+            name: string;
+            /**
+             * Buoy Type
+             * @description 'surface' (boia de superfície / marker) ou 'submersible' (submergível, usada em lazy-S/wave). Apenas metadado.
+             * @default submersible
+             * @enum {string}
+             */
+            buoy_type: "surface" | "submersible";
+            /**
+             * End Type
+             * @description Forma das tampas — usada na fórmula de volume (Excel Formula Guide R4-R7).
+             * @enum {string}
+             */
+            end_type: "flat" | "hemispherical" | "elliptical" | "semi_conical";
+            /**
+             * Base Unit System
+             * @description Sistema de origem. Valores no payload SEMPRE em SI.
+             * @default metric
+             * @enum {string}
+             */
+            base_unit_system: "imperial" | "metric";
+            /**
+             * Outer Diameter
+             * @description Diâmetro D (m)
+             */
+            outer_diameter: number;
+            /**
+             * Length
+             * @description Comprimento total L (m)
+             */
+            length: number;
+            /**
+             * Weight In Air
+             * @description Peso da boia no ar (N)
+             */
+            weight_in_air: number;
+            /**
+             * Submerged Force
+             * @description Empuxo líquido em N (V·ρ·g − weight_in_air). Pode ser negativo se o peso domina (objeto se torna clump). Pré-computado na seed via `compute_submerged_force`.
+             */
+            submerged_force: number;
+            /** Manufacturer */
+            manufacturer?: string | null;
+            /** Serial Number */
+            serial_number?: string | null;
+            /** Comments */
+            comments?: string | null;
+        };
+        /**
+         * BuoyOutput
+         * @description Item retornado pelos endpoints.
+         */
+        BuoyOutput: {
+            /**
+             * Name
+             * @description Identificador legível (ex.: 'GEN-CYL-2.0x3.0-Hemi').
+             */
+            name: string;
+            /**
+             * Buoy Type
+             * @description 'surface' (boia de superfície / marker) ou 'submersible' (submergível, usada em lazy-S/wave). Apenas metadado.
+             * @default submersible
+             * @enum {string}
+             */
+            buoy_type: "surface" | "submersible";
+            /**
+             * End Type
+             * @description Forma das tampas — usada na fórmula de volume (Excel Formula Guide R4-R7).
+             * @enum {string}
+             */
+            end_type: "flat" | "hemispherical" | "elliptical" | "semi_conical";
+            /**
+             * Base Unit System
+             * @description Sistema de origem. Valores no payload SEMPRE em SI.
+             * @default metric
+             * @enum {string}
+             */
+            base_unit_system: "imperial" | "metric";
+            /**
+             * Outer Diameter
+             * @description Diâmetro D (m)
+             */
+            outer_diameter: number;
+            /**
+             * Length
+             * @description Comprimento total L (m)
+             */
+            length: number;
+            /**
+             * Weight In Air
+             * @description Peso da boia no ar (N)
+             */
+            weight_in_air: number;
+            /**
+             * Submerged Force
+             * @description Empuxo líquido em N (V·ρ·g − weight_in_air). Pode ser negativo se o peso domina (objeto se torna clump). Pré-computado na seed via `compute_submerged_force`.
+             */
+            submerged_force: number;
+            /** Manufacturer */
+            manufacturer?: string | null;
+            /** Serial Number */
+            serial_number?: string | null;
+            /** Comments */
+            comments?: string | null;
+            /** Id */
+            id: number;
+            /** Legacy Id */
+            legacy_id: number | null;
+            /**
+             * Data Source
+             * @enum {string}
+             */
+            data_source: "excel_buoy_calc_v1" | "generic_offshore" | "manufacturer" | "user_input";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * BuoyUpdate
+         * @description Payload para PUT /buoys/{id}.
+         */
+        BuoyUpdate: {
+            /**
+             * Name
+             * @description Identificador legível (ex.: 'GEN-CYL-2.0x3.0-Hemi').
+             */
+            name: string;
+            /**
+             * Buoy Type
+             * @description 'surface' (boia de superfície / marker) ou 'submersible' (submergível, usada em lazy-S/wave). Apenas metadado.
+             * @default submersible
+             * @enum {string}
+             */
+            buoy_type: "surface" | "submersible";
+            /**
+             * End Type
+             * @description Forma das tampas — usada na fórmula de volume (Excel Formula Guide R4-R7).
+             * @enum {string}
+             */
+            end_type: "flat" | "hemispherical" | "elliptical" | "semi_conical";
+            /**
+             * Base Unit System
+             * @description Sistema de origem. Valores no payload SEMPRE em SI.
+             * @default metric
+             * @enum {string}
+             */
+            base_unit_system: "imperial" | "metric";
+            /**
+             * Outer Diameter
+             * @description Diâmetro D (m)
+             */
+            outer_diameter: number;
+            /**
+             * Length
+             * @description Comprimento total L (m)
+             */
+            length: number;
+            /**
+             * Weight In Air
+             * @description Peso da boia no ar (N)
+             */
+            weight_in_air: number;
+            /**
+             * Submerged Force
+             * @description Empuxo líquido em N (V·ρ·g − weight_in_air). Pode ser negativo se o peso domina (objeto se torna clump). Pré-computado na seed via `compute_submerged_force`.
+             */
+            submerged_force: number;
+            /** Manufacturer */
+            manufacturer?: string | null;
+            /** Serial Number */
+            serial_number?: string | null;
+            /** Comments */
+            comments?: string | null;
         };
         /**
          * CaseInput
@@ -998,19 +1356,52 @@ export interface components {
              * @description Diâmetro do cabo do pendant (m). Metadado.
              */
             pendant_diameter?: number | null;
+            /**
+             * Buoy Catalog Id
+             * @description ID da boia no catálogo (`buoys.id`). RASTREABILIDADE — NÃO autoritativo em runtime: o solver usa apenas `submerged_force` (e demais campos físicos) para o cálculo. Este campo serve para auditoria ('foi populado a partir do catálogo'). Quando o usuário edita qualquer campo físico após popular do picker, a UI deve setar este campo de volta para None — vide F6 / Q7 (override → null).
+             */
+            buoy_catalog_id?: number | null;
         };
         /**
          * LineSegment
          * @description Segmento homogêneo de linha de ancoragem.
          *
          *     Grandezas em SI: comprimento em m, peso em N/m, EA e MBL em N.
-         *     MVP v2 suporta uma única linha, portanto um único segmento.
-         *     Multi-segmento fica para v2.1 (conforme Seção 9 do Documento A).
          *
          *     Campos opcionais `category` e `line_type` refletem Seção 5.1 do MVP v2
          *     PDF e Seção 4.2 do Documento A; servem para rastreabilidade e para
          *     escolher defaults de atrito na Seção 4.4 quando o solo é conhecido.
-         *     Não afetam o cálculo do solver.
+         *
+         *     ─── Campos físicos por segmento (Fase 1) ────────────────────────────
+         *     Estes três campos foram adicionados na Fase 1 do plano de
+         *     profissionalização para resolver as divergências B3 (atrito global) e
+         *     A1.4+B4 (EA toggle):
+         *
+         *     `mu_override`: coeficiente de atrito axial específico para este
+         *         segmento, sobrescrevendo qualquer outra fonte. Use para casos onde
+         *         o usuário sabe explicitamente o atrito do trecho.
+         *
+         *     `seabed_friction_cf`: coeficiente de atrito derivado do catálogo
+         *         (line_type → seabed_friction_cf). Populado automaticamente pelo
+         *         API service ao traduzir do catálogo. Solver puro (sem DB) recebe
+         *         já resolvido.
+         *
+         *     `ea_source`: qual coluna do catálogo foi usada para popular `EA` —
+         *         "qmoor" (default, EA estático) ou "gmoor" (EA dinâmico, modelo
+         *         NREL/MoorPy). Documentado em CLAUDE.md seção "Modelo físico de
+         *         QMoor vs GMoor".
+         *
+         *     `ea_dynamic_beta`: coeficiente β do modelo dinâmico MoorPy
+         *         (`EA = α + β × T_mean`). RESERVADO — não-implementado em v1.0.
+         *         Quando presente e `ea_source="gmoor"`, ativaria iteração externa
+         *         de tensão. Mantido como campo opcional para futura compatibilidade.
+         *
+         *     ─── Precedência do atrito (resolvida pela facade `solve()`) ─────────
+         *         segment.mu_override → segment.seabed_friction_cf → seabed.mu → 0.0
+         *     Defaults `None` preservam o comportamento legado (cai no `seabed.mu`
+         *     global, equivalente a antes da Fase 1). Esta é uma decisão consciente
+         *     em substituição à feature-flag `use_per_segment_friction` originalmente
+         *     prevista no plano (R1.1) — ver CLAUDE.md.
          */
         LineSegment: {
             /**
@@ -1060,22 +1451,24 @@ export interface components {
             modulus?: number | null;
             /**
              * Mu Override
-             * @description (Fase 1) Coeficiente de atrito específico do segmento, sobrescrevendo seabed.mu global e o do catálogo.
+             * @description Coeficiente de atrito axial específico do segmento, sobrescrevendo seabed.mu global e o do catálogo. None = não sobrescreve.
              */
             mu_override?: number | null;
             /**
              * Seabed Friction Cf
-             * @description (Fase 1) Coeficiente de atrito do catálogo (line_type.seabed_friction_cf). Populado pelo API service ao traduzir do catálogo.
+             * @description Coeficiente de atrito do catálogo (line_type.seabed_friction_cf). Populado pelo API service ao traduzir do catálogo. Solver consome após mu_override e antes de seabed.mu.
              */
             seabed_friction_cf?: number | null;
             /**
              * Ea Source
-             * @description (Fase 1) 'qmoor' (estático, default) ou 'gmoor' (dinâmico, modelo NREL/MoorPy).
+             * @description Origem do EA: 'qmoor' (estático, EA_MBL × MBL) ou 'gmoor' (dinâmico, EAd × MBL — termo α do modelo NREL/MoorPy). Default 'qmoor' preserva comportamento histórico do AncoPlat.
+             * @default qmoor
+             * @enum {string}
              */
-            ea_source?: "qmoor" | "gmoor";
+            ea_source: "qmoor" | "gmoor";
             /**
              * Ea Dynamic Beta
-             * @description (Fase 1) Reservado — coeficiente β do modelo dinâmico α + β·T_mean. NÃO implementado em v1.0.
+             * @description RESERVADO — coeficiente β (EAd_Lm) do modelo dinâmico completo `EA = α + β × T_mean`. NÃO implementado em v1.0; campo existe para compatibilidade com Fase 4+. Quando None ou 0, modelo dinâmico é simplificado a α constante.
              */
             ea_dynamic_beta?: number | null;
         };
@@ -1548,6 +1941,17 @@ export interface components {
              */
             updated_at: string;
         };
+        /** PaginatedResponse[BuoyOutput] */
+        PaginatedResponse_BuoyOutput_: {
+            /** Items */
+            items: components["schemas"]["BuoyOutput"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** PaginatedResponse[CaseSummary] */
         PaginatedResponse_CaseSummary_: {
             /** Items */
@@ -1666,6 +2070,40 @@ export interface components {
              */
             solver_version: string;
         };
+        /**
+         * ProfileType
+         * @description Taxonomia de regimes catenários (Fase 4 / Q1) — espelha
+         *     `MoorPy/Catenary.py:147-163` (NREL, MIT-licensed).
+         *
+         *     Vocabulário FORWARD-COMPAT: enumera os 9 regimes do MoorPy + 1
+         *     extensão para multi-segmento com seabed inclinado (PT_U). Alguns
+         *     valores podem não ser atingíveis no AncoPlat MVP v1 (ex.: PT_4
+         *     requer anchor uplift, suportado apenas em Fase 7+) — ficam
+         *     reservados para forward-compat, mesmo padrão dos outros campos
+         *     reservados (ea_dynamic_beta, startpoint_offset_*).
+         *
+         *     Quando o classificador (`classify_profile_type`) não consegue
+         *     determinar o regime, retorna None (campo SolverResult.profile_type
+         *     é Optional).
+         *
+         *     Decisões caso-a-caso de mapeamento e divergências documentadas
+         *     em `docs/relatorio_F4_diagnostics.md` §3.
+         *
+         *     Casos:
+         *       PT_0 — linha inteira no seabed (laid line, F5.3.x)
+         *       PT_1 — nenhuma porção no seabed (catenária livre, fully suspended)
+         *       PT_2 — porção no seabed, tensão na âncora não-zero (com atrito)
+         *       PT_3 — porção no seabed, tensão na âncora = zero (μ saturado / sem atrito)
+         *       PT_4 — linha negativamente flutuante com seabed (RESERVADO p/ Fase 12)
+         *       PT_5 — linha em U totalmente slack (RESERVADO p/ Fase 7+)
+         *       PT_6 — linha completamente vertical (caso degenerado)
+         *       PT_7 — porção no seabed, seabed inclinado (caso F5.3 do AncoPlat)
+         *       PT_8 — linha apoiada no seabed inclinado (laid em rampa)
+         *       PT_U — extensão AncoPlat: ambos extremos fora do seabed, contato
+         *              intermediário, com slope (F5.3.y multi-segmento misto)
+         * @enum {string}
+         */
+        ProfileType: "PT_0" | "PT_1" | "PT_2" | "PT_3" | "PT_4" | "PT_5" | "PT_6" | "PT_7" | "PT_8" | "PT_U";
         /**
          * SeabedConfig
          * @description Configuração do seabed.
@@ -1858,33 +2296,16 @@ export interface components {
              * @default 0
              */
             depth_at_fairlead: number;
-            /**
-             * Surface Violations
-             * @description Lista de boias cujo corpo ficou ACIMA da superfície da água.
-             *     Cada item: { index: number; name: string; height_above_surface_m: number }.
-             */
-            surface_violations: Array<{
-                index: number
-                name: string
-                height_above_surface_m: number
-            }>;
-            /**
-             * Diagnostics
-             * @description Lista de diagnósticos estruturados (F5.7.4) com sugestões de correção.
-             */
-            diagnostics: Array<{
-                code: string
-                severity: 'critical' | 'error' | 'warning' | 'info'
-                title: string
-                cause: string
-                suggestion: string
-                suggested_changes: Array<{
-                    field: string
-                    value: number
-                    label: string
-                }>
-                affected_fields: string[]
-            }>;
+            /** Surface Violations */
+            surface_violations?: {
+                [key: string]: unknown;
+            }[];
+            /** Diagnostics */
+            diagnostics?: {
+                [key: string]: unknown;
+            }[];
+            /** @description Regime catenário detectado (Fase 4). None se não classificável. */
+            profile_type?: components["schemas"]["ProfileType"] | null;
         };
         /**
          * SystemLineSpec
@@ -2664,6 +3085,218 @@ export interface operations {
             };
         };
     };
+    list_buoys_api_v1_buoys_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                buoy_type?: ("surface" | "submersible") | null;
+                end_type?: ("flat" | "hemispherical" | "elliptical" | "semi_conical") | null;
+                search?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedResponse_BuoyOutput_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_buoy_api_v1_buoys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuoyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuoyOutput"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_buoy_api_v1_buoys__buoy_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                buoy_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuoyOutput"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_buoy_api_v1_buoys__buoy_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                buoy_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuoyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuoyOutput"];
+                };
+            };
+            /** @description Entrada seed protegida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_buoy_api_v1_buoys__buoy_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                buoy_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     import_moor_api_v1_import_moor_post: {
         parameters: {
             query?: never;
@@ -2685,7 +3318,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CaseOutput"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Schema .moor inválido */
@@ -2811,6 +3446,135 @@ export interface operations {
                 };
                 content: {
                     "application/pdf": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_memorial_pdf_api_v1_cases__case_id__export_memorial_pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Memorial PDF gerado com sucesso */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_csv_api_v1_cases__case_id__export_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV gerado com sucesso */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Caso nunca foi resolvido — sem geometria */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_xlsx_api_v1_cases__case_id__export_xlsx_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Excel gerado com sucesso */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Not Found */

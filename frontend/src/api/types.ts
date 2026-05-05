@@ -23,6 +23,14 @@ export type UtilizationLimits = S['UtilizationLimits']
 export type LineAttachment = S['LineAttachment']
 export type AttachmentKind = LineAttachment['kind']
 
+// Catálogo de boias (F6)
+export type BuoyOutput = S['BuoyOutput']
+export type BuoyCreate = S['BuoyCreate']
+export type BuoyUpdate = S['BuoyUpdate']
+export type PaginatedResponse_BuoyOutput_ = S['PaginatedResponse_BuoyOutput_']
+export type BuoyEndType = BuoyOutput['end_type']
+export type BuoyType = BuoyOutput['buoy_type']
+
 export type SolutionMode = S['SolutionMode']
 export type ConvergenceStatus = S['ConvergenceStatus']
 export type AlertLevel = S['AlertLevel']
