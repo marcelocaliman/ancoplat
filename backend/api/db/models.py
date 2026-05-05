@@ -259,8 +259,63 @@ class MooringSystemExecutionRecord(Base):
     )
 
 
+class BuoyRecord(Base):
+    """
+    Catálogo de boias (F6).
+
+    Espelha o padrão de `LineTypeRecord`: legacy_id rastreável, data_source
+    documentado por entrada, base_unit_system reflete unidade DE ORIGEM
+    (armazenamento sempre em SI: m, N, kg). `submerged_force` é a magnitude
+    em N do empuxo líquido (positivo) — pode ser pré-computada na seed
+    pela função `backend.api.services.buoyancy.compute_submerged_force`
+    a partir de dimensões + peso, OU informada manualmente quando a fonte
+    cita o valor diretamente.
+
+    Convenção de imutabilidade idêntica a `line_types`: entradas com
+    `data_source` que comece com prefixo de seed canônico (`excel_buoy_calc_v1`,
+    `generic_offshore`, ou `manufacturer_*`) são imutáveis; apenas
+    `user_input` aceita PUT/DELETE.
+    """
+
+    __tablename__ = "buoys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    legacy_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    buoy_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    end_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    base_unit_system: Mapped[str] = mapped_column(Text, nullable=False)
+    outer_diameter: Mapped[float] = mapped_column(Float, nullable=False)
+    length: Mapped[float] = mapped_column(Float, nullable=False)
+    weight_in_air: Mapped[float] = mapped_column(Float, nullable=False)
+    submerged_force: Mapped[float] = mapped_column(Float, nullable=False)
+    data_source: Mapped[str] = mapped_column(Text, nullable=False)
+    manufacturer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    serial_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    comments: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint("length(name) >= 1", name="ck_buoys_name_nonempty"),
+        CheckConstraint("outer_diameter > 0", name="ck_buoys_diameter_positive"),
+        CheckConstraint("length > 0", name="ck_buoys_length_positive"),
+        CheckConstraint("weight_in_air >= 0", name="ck_buoys_weight_nonneg"),
+        Index("idx_buoys_name", "name"),
+        Index("idx_buoys_type", "buoy_type"),
+    )
+
+
 __all__ = [
     "AppConfigRecord",
+    "BuoyRecord",
     "CaseRecord",
     "ExecutionRecord",
     "LineTypeRecord",
