@@ -364,12 +364,19 @@ function WorkWireSubcard({
     setValue('boundary.ahv_install.work_wire.line_type', lt.line_type, {
       shouldDirty: true,
     })
-    setValue('boundary.ahv_install.work_wire.diameter', lt.diameter, {
-      shouldDirty: true,
-    })
-    setValue('boundary.ahv_install.work_wire.EA', lt.qmoor_ea, {
-      shouldDirty: true,
-    })
+    // diameter e qmoor_ea são `number | null` no openapi — só populam
+    // quando presentes (catálogo completo sempre tem ambos, mas o
+    // narrowing satisfaz o tsc strict do build de produção).
+    if (lt.diameter != null) {
+      setValue('boundary.ahv_install.work_wire.diameter', lt.diameter, {
+        shouldDirty: true,
+      })
+    }
+    if (lt.qmoor_ea != null) {
+      setValue('boundary.ahv_install.work_wire.EA', lt.qmoor_ea, {
+        shouldDirty: true,
+      })
+    }
     setValue('boundary.ahv_install.work_wire.w', lt.wet_weight, {
       shouldDirty: true,
     })
