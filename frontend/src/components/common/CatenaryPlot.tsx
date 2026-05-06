@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Image as ImageIcon, Maximize2, Tag, Type } from 'lucide-react'
+import { BadgeInfo, Image as ImageIcon, Maximize2, Tag, Type } from 'lucide-react'
 import type { LineAttachment, SolverResult } from '@/api/types'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
@@ -268,6 +268,10 @@ const CATEGORY_STYLE: Record<
 export interface SegmentMeta {
   category?: 'Wire' | 'StuddedChain' | 'StudlessChain' | 'Polyester' | null
   line_type?: string | null
+  /** Comprimento não-esticado (m). Usado pelo toggle "Detalhes inline". */
+  length?: number | null
+  /** Diâmetro nominal (m). Usado pelo toggle "Detalhes inline". */
+  diameter?: number | null
 }
 
 export interface CatenaryPlotProps {
@@ -378,6 +382,11 @@ export function CatenaryPlot({
   const [showLabels, setShowLabels] = useState(true)
   const [showLegend, setShowLegend] = useState(true)
   const [showImages, setShowImages] = useState(true)
+  // Sprint 4.1 — toggle "Detalhes inline": quando ON, gera labels
+  // permanentes sobre cada segmento + boia + clump + AHV + Work Wire,
+  // permitindo visualização imediata do sistema sem hover. Default OFF
+  // para preservar plot limpo no estado padrão.
+  const [showInlineLabels, setShowInlineLabels] = useState(false)
   // Quando a prop equalAspect muda externamente (ex.: pai reseta),
   // sincroniza o estado local.
   useEffect(() => {
@@ -1538,6 +1547,156 @@ export function CatenaryPlot({
     [fairleadY, anchorY, Xtotal, palette.text],
   )
 
+  // Sprint 4.1 — inline labels permanentes (toggle "Detalhes inline").
+  // Gera annotations Plotly identificando cada elemento do sistema:
+  //   - Segmentos: meio do trecho, "{line_type} {Ø}mm · {length}m"
+  //   - Boias: ao lado do ícone, "{name} · {force} kN"
+  //   - Clumps: ao lado do ícone, "Clump · {weight}"
+  //   - AHV pontual: junto ao ícone, "AHV · {bollard} kN @ {heading}°"
+  //   - Work Wire (Tier C): meio do trecho ww, "Work Wire · {length}m"
+  // Auto-skip: segmentos com length < max(30m, 8% × X_total) não recebem
+  // label para evitar sobreposição em casos com muitos segmentos curtos.
+  const inlineAnnotations = useMemo(() => {
+    if (!showInlineLabels) return []
+    const xs = result.coords_x ?? []
+    const ys = result.coords_y ?? []
+    if (xs.length === 0) return []
+    const xTotal = Math.max(Xtotal, 1)
+    const minLen = Math.max(30, xTotal * 0.08)
+    const labelStyle = {
+      showarrow: false,
+      xref: 'x' as const,
+      yref: 'y' as const,
+      xanchor: 'center' as const,
+      yanchor: 'middle' as const,
+      bgcolor:
+        theme === 'dark' ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.88)',
+      bordercolor: palette.hoverBorder,
+      borderwidth: 1,
+      borderpad: 3,
+      font: { size: 9, color: palette.text, family: 'Inter' },
+    }
+    const out: Array<Record<string, unknown>> = []
+
+    // ── Segmentos ──
+    const segBounds = result.segment_boundaries ?? []
+    if (segBounds.length >= 2 && segments.length > 0) {
+      // Multi-segmento: cada par (segBounds[i], segBounds[i+1]) marca os
+      // índices de coords_x/y que pertencem ao segmento i.
+      const N = Math.min(segBounds.length - 1, segments.length)
+      for (let i = 0; i < N; i += 1) {
+        const meta = segments[i]
+        if (!meta) continue
+        const length = meta.length ?? 0
+        if (length < minLen) continue  // auto-skip segmento curto
+        const i0 = segBounds[i] ?? 0
+        const i1 = segBounds[i + 1] ?? xs.length - 1
+        const iMid = Math.floor((i0 + i1) / 2)
+        const x = xs[iMid]
+        const y = ys[iMid]
+        if (x == null || y == null) continue
+        const ltLabel = meta.line_type || meta.category || `Seg ${i + 1}`
+        const dStr = meta.diameter
+          ? ` ${(meta.diameter * 1000).toFixed(0)}mm`
+          : ''
+        const text = `${ltLabel}${dStr} · ${length.toFixed(0)}m`
+        out.push({
+          ...labelStyle,
+          x,
+          y,
+          text,
+          yshift: -14, // pino logo abaixo da curva
+        })
+      }
+    } else if (segments.length === 1) {
+      // Single-segmento: posiciona no meio do array de coords.
+      const meta = segments[0]
+      if (meta) {
+        const length = meta.length ?? 0
+        if (length >= minLen) {
+          const iMid = Math.floor(xs.length / 2)
+          const x = xs[iMid]
+          const y = ys[iMid]
+          if (x != null && y != null) {
+            const ltLabel = meta.line_type || meta.category || 'Seg 1'
+            const dStr = meta.diameter
+              ? ` ${(meta.diameter * 1000).toFixed(0)}mm`
+              : ''
+            out.push({
+              ...labelStyle,
+              x,
+              y,
+              text: `${ltLabel}${dStr} · ${length.toFixed(0)}m`,
+              yshift: -14,
+            })
+          }
+        }
+      }
+    }
+
+    // ── Attachments (boias, clumps, AHV pontual) ──
+    if (segBounds.length >= 2 && attachments) {
+      for (let idx = 0; idx < attachments.length; idx += 1) {
+        const att = attachments[idx]
+        if (!att) continue
+        const posIdx = att.position_index
+        if (posIdx == null) continue
+        const coordIdx = segBounds[posIdx + 1]
+        if (coordIdx == null) continue
+        const x = xs[coordIdx]
+        const y = ys[coordIdx]
+        if (x == null || y == null) continue
+        let text = ''
+        if (att.kind === 'buoy') {
+          const force = (att.submerged_force ?? 0) / 1000
+          text = `${att.name || `Boia ${idx + 1}`} · ${force.toFixed(1)} kN`
+        } else if (att.kind === 'clump_weight') {
+          // Clump: força negativa (peso). Mostra magnitude.
+          const force = Math.abs(att.submerged_force ?? 0) / 1000
+          text = `${att.name || 'Clump'} · ${force.toFixed(1)} kN`
+        } else if (att.kind === 'ahv') {
+          const bollard = (att.ahv_bollard_pull ?? 0) / 1000
+          const heading = att.ahv_heading_deg ?? 0
+          text = `AHV · ${bollard.toFixed(0)} kN @ ${heading.toFixed(0)}°`
+        }
+        if (!text) continue
+        out.push({
+          ...labelStyle,
+          x,
+          y,
+          text,
+          yshift: 18, // acima do ícone
+        })
+      }
+    }
+
+    // ── Work Wire (Tier C) ──
+    const wwStart = (
+      result as unknown as { work_wire_start_index?: number | null }
+    ).work_wire_start_index
+    if (wwStart != null && wwStart > 0 && xs.length > wwStart + 1) {
+      const wwMid = Math.floor((wwStart + xs.length - 1) / 2)
+      const x = xs[wwMid]
+      const y = ys[wwMid]
+      if (x != null && y != null) {
+        out.push({
+          ...labelStyle,
+          x,
+          y,
+          text: 'Work Wire (Tier C)',
+          font: { ...labelStyle.font, color: '#F97316' },
+          bordercolor: '#F97316',
+          yshift: -14,
+        })
+      }
+    }
+
+    return out
+  }, [
+    showInlineLabels, result, segments, attachments, Xtotal,
+    palette.text, palette.hoverBorder, theme,
+  ])
+
   const layout = useMemo(() => {
     const yAxis: Record<string, unknown> = {
       title: { text: 'Elevação (m) — superfície em y=0' },
@@ -1593,11 +1752,14 @@ export function CatenaryPlot({
       // Fase 3 / D9: toggles condicionais. images/annotations vazias
       // quando o usuário desabilita os respectivos overlays.
       images: showImages ? images : [],
-      annotations: showLabels ? annotations : [],
+      annotations: [
+        ...(showLabels ? annotations : []),
+        ...inlineAnnotations,
+      ],
     }
   }, [
     palette, ranges, equalAspectLocal, height, images, annotations, theme,
-    showImages, showLabels,
+    showImages, showLabels, inlineAnnotations,
   ])
 
   const config = useMemo<Partial<Plotly.Config>>(
@@ -1777,6 +1939,12 @@ export function CatenaryPlot({
           active={showImages}
           onToggle={() => setShowImages((v) => !v)}
           tooltip="Mostrar ícones (plataforma, âncora, boias)"
+        />
+        <PlotToggleButton
+          icon={<BadgeInfo className="h-3 w-3" />}
+          active={showInlineLabels}
+          onToggle={() => setShowInlineLabels((v) => !v)}
+          tooltip="Detalhes inline (labels permanentes em segmentos, boias, AHV)"
         />
       </div>
       {/* Legenda HTML flutuante no topo do plot, com SVGs inline para
