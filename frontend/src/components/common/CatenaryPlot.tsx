@@ -1285,6 +1285,36 @@ export function CatenaryPlot({
       })
     }
 
+    // ── Sprint 4 / Commit 40 — Work Wire em cor distinta ──
+    // Quando solver Tier C resolve sem fallback, retorna
+    // `work_wire_start_index` apontando para o início do segmento ww
+    // dentro de coords_x/y. Extraímos a fatia e desenhamos uma trace
+    // dedicada com cor laranja (#F97316) e dash diferente — fica por
+    // cima das traces da linha principal sem reorganizar a lógica.
+    const wwStart = (
+      result as unknown as { work_wire_start_index?: number | null }
+    ).work_wire_start_index
+    if (
+      wwStart != null && wwStart > 0
+      && xs.length > wwStart && ys.length > wwStart
+    ) {
+      const wwX = xs.slice(wwStart)
+      const wwY = ys.slice(wwStart)
+      const wwT = ts.slice(wwStart)
+      pushTrace({
+        type: 'scatter',
+        mode: 'lines',
+        x: wwX,
+        y: wwY,
+        line: { color: '#F97316', width: 3, dash: 'dashdot' },
+        name: 'Work Wire (Tier C)',
+        text: wwT.map((t) => `|T| = ${(t / 1000).toFixed(1)} kN`),
+        hovertemplate:
+          '<b>Work Wire</b><br>x = %{x:.2f} m<br>y = %{y:.2f} m<br>%{text}<extra></extra>',
+        showlegend: true,
+      })
+    }
+
     // Persiste o map traceIdx → userIdx pro handler onHover do Plotly.
     // O ref é lido do callback onHover (estável), enquanto o data fica
     // no rendering do Plot (passado por value). Mantemos os dois em sync

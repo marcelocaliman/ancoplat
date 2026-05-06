@@ -487,6 +487,85 @@ durante instalação"**.
   [`Documento_A_Especificacao_Tecnica_v2_2.docx`](Documento_A_Especificacao_Tecnica_v2_2.docx)
   — domínio offshore canônico.
 
+### 7.8. Tier C — Work Wire elástico físico (Sprint 4 / v1.2-rc)
+
+A partir da Sprint 4 o AncoPlat oferece o **Tier C físico** para
+cenários AHV de instalação: o cabo de trabalho do AHV (Work Wire)
+é modelado como **linha elástica real** entre o convés do AHV e
+o ponto de pega na linha de ancoragem, em vez de aplicar o bollard
+pull diretamente como T_fl (Sprint 2).
+
+#### Como ativar
+
+1. Abra o caso e vá para a aba **AHV Install**.
+2. Configure os campos básicos (bollard pull, deck level, target X).
+3. Expanda o subcard **"Work Wire físico (Tier C)"** (colapsado por
+   default — campo opcional).
+4. Clique em **"Ativar Tier C (Work Wire)"**.
+5. Use o **picker de catálogo** para escolher o tipo de cabo
+   (popula automaticamente EA, peso submerso, MBL, diâmetro).
+6. Ajuste comprimento manualmente (default 200m) e número de
+   sub-segmentos (default 1).
+
+#### Como funciona internamente
+
+O solver Tier C resolve duas catenárias acopladas via continuidade
+horizontal no ponto de pega:
+
+```
+[AHV deck]  → Work Wire elástico → [pega] → Mooring → [Anchor]
+```
+
+A variável livre é a **profundidade da pega** `Z_p`. O solver
+encontra `Z_p` tal que `H_moor(Z_p) = H_ww(Z_p)` via brentq com
+bracket adaptativo.
+
+#### Fallback automático Sprint 2
+
+Em **operação real de instalação** (águas até 300m, bollard pull
+moderado de 20-100 kN, linha frouxa típica), o mooring fica
+fisicamente 100% apoiado no fundo. Nesse regime, Tier C é
+**matematicamente equivalente** ao modelo Sprint 2 (bollard direto
+como T_fl) e o solver detecta isso automaticamente, caindo no
+caminho Sprint 2 com **D024 (info)** explicando ao engenheiro:
+
+> "Tier C reduzido a Sprint 2 (mooring totalmente apoiado).
+> Resultado é matematicamente equivalente — Tier C não acrescenta
+> informação neste regime."
+
+Você verá Tier C "fazer diferença real" apenas em **águas profundas
++ bollard alto + linha taut** (cenário típico de plataforma
+flutuante em deepwater holding station).
+
+#### Diagnostics dedicados ao Tier C
+
+| Code | Severity | Quando |
+|---|---|---|
+| **D018** (atualizado) | warning | Sempre que Tier C ativo. Cita explicitamente snap loads + hidrodinâmica como fora do escopo. |
+| **D022** | warning | Bollard pull ≥ 90% MBL do Work Wire (DNV-OS-E301: 67% recomendado). |
+| **D024** | info | Tier C reduziu para Sprint 2 (transparência). |
+
+#### Limitações conhecidas (pendências v1.2+)
+
+1. **Multi-segmento + Tier C bloqueado**: validador atual exige
+   single-seg mooring. Multi-seg + Tier C virá em F-prof.X.
+2. **AHV + uplift + touchdown imediato** (anchor suspenso mas
+   linha logo abaixo toca o fundo): cenário fora do escopo F7
+   atual. Solver detecta e levanta INVALID_CASE com mensagem.
+3. **Calibração deepwater taut**: divergência ~20% em H entre
+   AncoPlat (Coulomb friction discreto) e MoorPy (mass distribuída
+   contínua) em regime suspenso real. Pendência F-prof.X para
+   refatorar `elastic.py`.
+4. **Snap loads dinâmicos**: pós-v1.2 conforme demanda. D018 alerta
+   sempre que Tier C ativo (modelo continua estático).
+
+#### Validação
+
+10 BC-AHV-MOORPY validados contra MoorPy Subsystem
+(`tools/moorpy_env/regenerate_ahv_baseline.py`). Detalhes em
+[`relatorio_sprint4_ahv_tier_c.md`](relatorio_sprint4_ahv_tier_c.md)
+e [decisões fechadas §18](decisoes_fechadas.md#decisão-18).
+
 ---
 
 ## 8. Diagnostics — quando aparecem e como agir

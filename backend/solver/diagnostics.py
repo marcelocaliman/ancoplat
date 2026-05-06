@@ -23,7 +23,7 @@ sugere ações qualitativas.
 """
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -917,9 +917,10 @@ def D017_anchor_uplift_negligible(
 def D018_ahv_static_idealization(
     *,
     n_ahv: int,
+    tier_c_active: bool = False,
 ) -> SolverDiagnostic:
     """
-    AHV (Anchor Handler Vessel) modelado como força estática — idealização.
+    AHV (Anchor Handler Vessel) modelado como análise estática — idealização.
 
     **DECISÃO TÉCNICA ANTECIPADA registrada em CLAUDE.md** (seção
     "Decisão fechada — Fase 8 antecipada"):
@@ -928,29 +929,47 @@ def D018_ahv_static_idealization(
       dinâmica de instalação.
 
     A operação real do AHV é dinâmica: rebocador se move, cabo oscila,
-    hidrodinâmica entra. Modelar como força lateral estática num ponto
-    da linha **é simplificação modelada explicitamente**.
+    hidrodinâmica entra.
 
     DISPARA SEMPRE quando há ≥1 AHV no caso (decisão Q6 da Fase 8). Sem
-    opção de esconder — engenheiro precisa ser sempre lembrado da
-    idealização. Case salvo, reaberto meses depois, deve continuar
-    avisando.
+    opção de esconder.
 
-    Confidence: medium — heurística (a análise estática É util, mas
-    com domínio limitado documentado).
-    Severity: warning — aviso, não erro; análise prossegue normalmente.
+    Sprint 4 / Commit 37: parâmetro `tier_c_active` customiza mensagem.
+    Quando Tier C (Work Wire elástico) está ativo, mensagem cita
+    explicitamente os limites: Work Wire é modelado como cabo estático
+    elástico (não dinâmico), sem snap loads, sem hidrodinâmica do AHV.
+
+    Confidence: medium.
+    Severity: warning.
     """
-    return SolverDiagnostic(
-        code="D018_AHV_STATIC_IDEALIZATION",
-        severity="warning",
-        title=f"AHV — análise estática é idealização ({n_ahv} AHV{'s' if n_ahv > 1 else ''})",
-        cause=(
+    if tier_c_active:
+        title = "AHV Tier C — análise estática com Work Wire elástico"
+        cause = (
+            "Análise estática de AHV (Sprint 4 / Tier C) — não substitui "
+            "análise dinâmica de instalação. Modelagem inclui: linha de "
+            "ancoragem com catenária elástica + Work Wire elástico real "
+            "+ ponto de pega com continuidade horizontal. NÃO inclui: "
+            "movimento dinâmico do AHV (heave, pitch, roll), snap loads "
+            "no Work Wire, hidrodinâmica do casco do AHV, fadiga "
+            "acumulada por ciclos."
+        )
+    else:
+        title = (
+            f"AHV — análise estática é idealização "
+            f"({n_ahv} AHV{'s' if n_ahv > 1 else ''})"
+        )
+        cause = (
             "Análise estática de AHV é idealização — não substitui "
             "análise dinâmica de instalação. A operação real do AHV é "
             "dinâmica (rebocador se move, cabo oscila, hidrodinâmica). "
             "Esta análise modela a força aplicada pelo AHV como uma "
             "carga estática pontual aplicada à linha."
-        ),
+        )
+    return SolverDiagnostic(
+        code="D018_AHV_STATIC_IDEALIZATION",
+        severity="warning",
+        title=title,
+        cause=cause,
         suggestion=(
             "USE para: verificação de tensão de pico em condição "
             "idealizada, dimensionamento preliminar de geometria, "
@@ -1018,6 +1037,102 @@ def D019_ahv_force_mostly_out_of_plane(
 
 
 # =============================================================================
+# Diagnostics novos da Sprint 4 — D022, D024 (AHV Tier C / Work Wire)
+# =============================================================================
+
+
+def D022_work_wire_near_mbl(
+    *,
+    bollard_pull: float,
+    work_wire_mbl: float,
+    threshold: float = 0.90,
+) -> SolverDiagnostic:
+    """
+    Sprint 4 / Commit 37: Work Wire próximo da ruptura.
+
+    Dispara quando bollard_pull >= 0.9 × MBL do Work Wire. Em operação
+    real de instalação, AHV não deve operar acima de 67% do MBL como
+    margem de segurança DNV-OS-E301. Atingir 90% é zona de atenção
+    crítica — risco real de ruptura do cabo de trabalho.
+
+    Confidence: high — fato determinístico (compara magnitudes).
+    Severity: warning — análise prossegue mas exige revisão pelo
+    engenheiro responsável.
+    """
+    pct = (bollard_pull / work_wire_mbl) * 100.0 if work_wire_mbl > 0 else 0.0
+    return SolverDiagnostic(
+        code="D022_WORK_WIRE_NEAR_MBL",
+        severity="warning",
+        title=(
+            f"Work Wire próximo da ruptura — {pct:.0f}% do MBL "
+            f"(threshold {threshold:.0%})"
+        ),
+        cause=(
+            f"Bollard pull aplicado ({bollard_pull / 1e3:.1f} kN) "
+            f"está em {pct:.0f}% do MBL do Work Wire "
+            f"({work_wire_mbl / 1e3:.1f} kN). DNV-OS-E301 recomenda "
+            "fator de utilização ≤ 67% para operações de instalação; "
+            "valores acima de 90% indicam risco de ruptura."
+        ),
+        suggestion=(
+            "1. Reduza o bollard_pull aplicado (use AHV de menor "
+            "capacidade ou diminua a tensão do guincho).\n"
+            "2. Substitua o Work Wire por cabo de maior MBL (catálogo "
+            "tem opções de 89mm e 96mm).\n"
+            "3. Reavalie a operação — talvez precise de 2 AHVs em "
+            "tandem para distribuir carga (não modelado no Tier C)."
+        ),
+        confidence="high",
+        affected_fields=["boundary.ahv_install.bollard_pull",
+                         "boundary.ahv_install.work_wire.MBL"],
+    )
+
+
+def D024_tier_c_fallback_sprint2(
+    *,
+    fallback_reason: str,
+    lay_pct: Optional[float] = None,
+) -> SolverDiagnostic:
+    """
+    Sprint 4 / Commit 37: Tier C reduziu para Sprint 2 efetivamente.
+
+    Dispara quando o solver Tier C detecta regime degenerado (mooring
+    totalmente apoiado, ww sem suspensão viável, etc.) e cai no path
+    Sprint 2 (bollard_pull aplicado direto como T_fl).
+
+    O resultado retornado é numericamente equivalente ao Sprint 2 puro
+    — Tier C não acrescenta informação no regime físico atual. Este
+    diagnóstico apenas informa o engenheiro para que ele compreenda
+    a equivalência (não é alarme — é transparência).
+
+    Confidence: high — fato determinístico (solver explicitamente
+    decidiu cair em fallback).
+    Severity: info — apenas informativo, não ação requerida.
+    """
+    lay_str = f" (lay = {lay_pct:.0%} do mooring)" if lay_pct is not None else ""
+    return SolverDiagnostic(
+        code="D024_TIER_C_FALLBACK_SPRINT2",
+        severity="info",
+        title=f"Tier C reduzido a Sprint 2 (modelo equivalente){lay_str}",
+        cause=(
+            f"Solver Tier C detectou {fallback_reason} e usou modelo "
+            "Sprint 2 efetivo (bollard pull aplicado diretamente como "
+            "T_fl, Work Wire não modelado fisicamente). Resultado é "
+            "matematicamente equivalente ao Sprint 2 — Tier C não "
+            "acrescenta informação neste regime."
+        ),
+        suggestion=(
+            "Para validar Tier C físico completo (Work Wire elástico "
+            "com catenária real), use cenário com mooring parcialmente "
+            "suspenso: águas profundas (h ≥ 1500m) + bollard pull alto "
+            "(≥ 100 kN) + linha relativamente taut (folga ≤ 15%)."
+        ),
+        confidence="high",
+        affected_fields=[],
+    )
+
+
+# =============================================================================
 # Helper para classes de exceção que carregam diagnóstico
 # =============================================================================
 
@@ -1062,6 +1177,8 @@ __all__ = [
     "D017_anchor_uplift_negligible",
     "D018_ahv_static_idealization",
     "D019_ahv_force_mostly_out_of_plane",
+    "D022_work_wire_near_mbl",
+    "D024_tier_c_fallback_sprint2",
     "D900_generic_nonconvergence",
     "SolverDiagnostic",
     "SolverDiagnosticError",

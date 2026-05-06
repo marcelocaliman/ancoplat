@@ -15,8 +15,51 @@ e o projeto adere a [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
-Pendências v1.1 não-bloqueantes (vide
-[`docs/release_notes_v1.0.md`](docs/release_notes_v1.0.md) §Roadmap):
+### Sprint 4 (2026-05-06) — AHV Tier C físico com MoorPy Subsystem
+
+- **feat(solver):** Tier C físico AHV implementado em
+  `backend/solver/ahv_work_wire.py` (~520 LoC). Resolve catenárias
+  acopladas (mooring + Work Wire elástico) via brentq sobre Z_p com
+  continuidade horizontal no ponto de pega. Validado contra MoorPy
+  Subsystem em 10 BC-AHV-MOORPY (6 ativos + 4 xfail informativos).
+- **feat(schema):** `WorkWireSpec` opcional em `AHVInstall.work_wire`
+  com 4 campos físicos autoritativos (length, EA, w, MBL) +
+  metadados. Default `None` preserva comportamento Sprint 2
+  (retro-compat absoluto).
+- **feat(solver):** Fallback automático Sprint 2 transparente quando
+  mooring fica 100% apoiado (regime degenerado de instalação real).
+  Acionado via D024 (info, high confidence).
+- **feat(solver):** AHV + uplift single-segmento destravado
+  (`endpoint_grounded=False + work_wire`). 2 BCs xfail informativos
+  para uplift+touchdown misto (pendência F7.x).
+- **feat(diagnostics):** D022 (warning, high) — bollard pull ≥ 90%
+  MBL Work Wire (DNV-OS-E301). D024 (info, high) — fallback Sprint 2.
+  D018 atualizado: parâmetro `tier_c_active` customiza mensagem
+  citando snap loads + hidrodinâmica como fora do escopo.
+- **feat(parser):** QMoor 0.8.0 importer detecta opcionalmente
+  `boundary.workWire` no JSON e popula `AHVInstall.work_wire`.
+- **feat(frontend):** `WorkWireSubcard` colapsado no
+  `AHVInstallEditor` com toggle de habilitação + LineTypePicker +
+  6 campos físicos editáveis.
+- **feat(plot):** `CatenaryPlot` desenha Work Wire em laranja
+  (`#F97316`, dashdot) quando `SolverResult.work_wire_start_index`
+  está populado.
+- **fix(buoy-pendant):** Hotfix `LineTypePicker` no campo
+  "Modelo do cabo" do pendant das boias (substitui text input livre
+  por picker do catálogo, resolvendo UX inconsistente F5.7).
+- **docs:** Decisão fechada **#18** substitui #17 — Tier C validado
+  contra MoorPy Subsystem em vez de exigir QMoor reference data.
+
+⚠ **Sem mudanças numéricas em cases salvos:** Sprint 4 introduz
+Tier C como **opt-in** (`work_wire=None` é default). Cases legacy
+sem work_wire produzem mesmo resultado bit-a-bit. Verificado por
+gates `cases_baseline_regression` 3/3, BC-MOORPY 7/7, KAR006 16/16.
+
+Suite: 921 backend (+52 testes Sprint 4) + 207 frontend (+3 WorkWire).
+
+### Pendências v1.1 não-bloqueantes (mantidas)
+
+Vide [`docs/release_notes_v1.0.md`](docs/release_notes_v1.0.md) §Roadmap:
 
 - Watchcircle shallow chain 4× — heurística pré-fsolve.
 - Cobertura ≥98% módulos críticos.
@@ -24,6 +67,11 @@ Pendências v1.1 não-bloqueantes (vide
 - VV-07/08 via MoorPy Subsystem (atual: cross-check interno).
 - BC-UP-06..10 + BC-AHV-05..10 (lista detalhada em
   [`docs/relatorio_F10_vv_completo.md`](docs/relatorio_F10_vv_completo.md)).
+- **F7.x — uplift + touchdown imediato** (Sprint 4 / BC-AHV-MOORPY-07/08).
+- **F-prof.X — calibração catenária deepwater** (Sprint 4 /
+  BC-AHV-MOORPY-09/10, divergência ~20% em H vs MoorPy em regime taut).
+- **Multi-segmento + Tier C** (validador atual rejeita; pendência v1.2+).
+- **Regen `openapi.ts`** com `work_wire_start_index`.
 
 ---
 

@@ -308,12 +308,33 @@ def solve(
         slope = seabed.slope_rad
         slope_is_significant = abs(slope) > 1e-6
 
+        # ─── Sprint 4 — Dispatcher Tier C (AHV + Work Wire físico) ────
+        # Quando boundary.ahv_install.work_wire está populado, delega
+        # para `solve_with_work_wire` (catenárias acopladas via fsolve).
+        # Comportamento Sprint 2 (sem work_wire) é preservado: cai pra
+        # baixo no caminho normal (mode=Tension com bollard_pull como
+        # T_fl). Validação de pré-condições acontece dentro do helper.
+        ahv_install_obj = boundary.ahv_install
+        if (
+            ahv_install_obj is not None
+            and ahv_install_obj.work_wire is not None
+        ):
+            from .ahv_work_wire import solve_with_work_wire
+            result = solve_with_work_wire(
+                line_segments=resolved_segments,
+                boundary=boundary,
+                seabed=seabed,
+                config=config,
+                criteria_profile=criteria_profile,
+                user_limits=user_limits,
+                attachments=resolved_attachments,
+            )
         # ─── Fase 7 — Dispatcher de anchor uplift ─────────────────────
         # Single-segment SEM attachments + endpoint_grounded=False:
         # delega para suspended_endpoint.solve_suspended_endpoint().
         # Multi-seg + uplift já barrado por _validate_inputs (raise).
         # Attachments + uplift barrado aqui com mensagem clara.
-        if not boundary.endpoint_grounded:
+        elif not boundary.endpoint_grounded:
             if resolved_attachments:
                 # Fase 8: mensagem cobre AHV explicitamente (Q5: AHV +
                 # uplift bloqueado em v1.0).
@@ -559,7 +580,13 @@ def solve(
 
     # Fase 8 — D018 (sempre que há AHV) + D019 (componente fora do plano)
     ahv_attachments = [a for a in resolved_attachments if a.kind == "ahv"]
-    if ahv_attachments and result.status == ConvergenceStatus.CONVERGED:
+    # Sprint 4 — D018 dispara também quando há AHVInstall com Work Wire
+    # (Tier C ativo). Mensagem customizada cita Work Wire elástico.
+    tier_c_active = (
+        boundary.ahv_install is not None
+        and boundary.ahv_install.work_wire is not None
+    )
+    if (ahv_attachments or tier_c_active) and result.status == ConvergenceStatus.CONVERGED:
         from .diagnostics import (
             D018_ahv_static_idealization,
             D019_ahv_force_mostly_out_of_plane,
@@ -567,7 +594,10 @@ def solve(
         from .multi_segment import ahv_in_plane_fraction
         # D018 — sempre dispara (decisão Q6 não-negociável)
         diagnostics_list.append(
-            D018_ahv_static_idealization(n_ahv=len(ahv_attachments)).model_dump()
+            D018_ahv_static_idealization(
+                n_ahv=len(ahv_attachments),
+                tier_c_active=tier_c_active,
+            ).model_dump()
         )
         # D019 — para cada AHV cuja projeção no plano da linha < 30%
         for att in ahv_attachments:
