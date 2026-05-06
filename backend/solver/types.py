@@ -311,6 +311,73 @@ class LineSegment(BaseModel):
 AttachmentKind = Literal["clump_weight", "buoy", "ahv"]
 
 
+class PendantSegment(BaseModel):
+    """
+    Segmento individual de um pendant multi-segmento (Sprint 1 / v1.1.0).
+
+    Pendants reais em modelos QMoor 0.8.0 podem ter múltiplos trechos
+    (ex.: chain pendant + wire pendant + chain pendant). Este modelo
+    descreve UM trecho desse pendant — comprimento + identificadores
+    do material — exclusivamente para fins de DOCUMENTAÇÃO no Memorial
+    PDF e na UI.
+
+    **NÃO afeta o cálculo do solver**: o solver continua tratando o
+    attachment como força pontual líquida em `LineAttachment.submerged_force`.
+    Pendant é apenas a representação visual/documental do hardware
+    que produz aquela força.
+
+    Campos opcionais (exceto `length`) acomodam imports parciais — o
+    QMoor JSON nem sempre carrega EA/MBL/diameter para pendants.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    length: float = Field(
+        ..., gt=0,
+        description="Comprimento não-esticado do trecho do pendant (m).",
+    )
+    line_type: Optional[str] = Field(
+        default=None, max_length=80,
+        description=(
+            "Identificador no catálogo (ex.: 'R4Studless'). Quando "
+            "presente, recomenda-se que case com uma entrada do "
+            "catálogo de tipos de linha — mas não é validado em runtime."
+        ),
+    )
+    category: Optional[LineCategory] = Field(
+        default=None,
+        description="Wire, StuddedChain, StudlessChain ou Polyester.",
+    )
+    diameter: Optional[float] = Field(
+        default=None, gt=0,
+        description="Diâmetro nominal (m) — metadado.",
+    )
+    w: Optional[float] = Field(
+        default=None, gt=0,
+        description="Peso submerso por unidade de comprimento (N/m). Metadado.",
+    )
+    dry_weight: Optional[float] = Field(
+        default=None, gt=0,
+        description="Peso seco por unidade (N/m) — metadado.",
+    )
+    EA: Optional[float] = Field(
+        default=None, gt=0,
+        description="Rigidez axial (N) — metadado.",
+    )
+    MBL: Optional[float] = Field(
+        default=None, gt=0,
+        description="Minimum Breaking Load (N) — metadado.",
+    )
+    material_label: Optional[str] = Field(
+        default=None, max_length=120,
+        description=(
+            "Rótulo livre do material (ex.: 'R4 Studless 76 mm'). "
+            "Útil quando o import de QMoor traz o nome do produto "
+            "mas não bate com nenhuma entrada do catálogo."
+        ),
+    )
+
+
 class LineAttachment(BaseModel):
     """
     Elemento pontual ao longo da linha — boia (empuxo líquido) ou clump
@@ -438,6 +505,19 @@ class LineAttachment(BaseModel):
     pendant_diameter: Optional[float] = Field(
         default=None, gt=0,
         description="Diâmetro do cabo do pendant (m). Metadado.",
+    )
+    pendant_segments: Optional[list[PendantSegment]] = Field(
+        default=None,
+        max_length=5,
+        description=(
+            "Pendant multi-segmento (Sprint 1 / v1.1.0). Lista ordenada "
+            "do trecho mais próximo da linha principal ao mais distante "
+            "(boia/clump). Quando presente e não-vazia, é a representação "
+            "AUTORITATIVA do pendant — `pendant_line_type` e "
+            "`pendant_diameter` ficam como cache cosmético do primeiro "
+            "trecho. **NÃO afeta o cálculo do solver** — apenas Memorial "
+            "PDF e UI. Limite de 5 trechos para preservar sanidade da UI."
+        ),
     )
 
     # ─── Rastreabilidade ao catálogo de boias (F6 / Q4) ──────
@@ -1156,6 +1236,7 @@ __all__ = [
     "MooringLineResult",
     "MooringSystemResult",
     "PROFILE_LIMITS",
+    "PendantSegment",
     "PlatformEquilibriumResult",
     "ProfileType",
     "SeabedConfig",
