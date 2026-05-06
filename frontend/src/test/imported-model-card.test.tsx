@@ -21,6 +21,7 @@ describe('ImportedModelCard', () => {
   it('renderiza vessel com nome e LOA', () => {
     render(
       <ImportedModelCard
+        defaultExpanded
         vessel={{
           name: 'P-77',
           vessel_type: 'Semisubmersible',
@@ -39,6 +40,7 @@ describe('ImportedModelCard', () => {
   it('renderiza current profile com N layers + Cd/ρ', () => {
     render(
       <ImportedModelCard
+        defaultExpanded
         currentProfile={{
           layers: [
             { depth: 0, speed: 1.5 },
@@ -60,6 +62,7 @@ describe('ImportedModelCard', () => {
   it('renderiza metadata operacional', () => {
     render(
       <ImportedModelCard
+        defaultExpanded
         metadata={{
           rig: 'P-77',
           location: 'Bacia de Santos',
@@ -84,8 +87,28 @@ describe('ImportedModelCard', () => {
   })
 
   it('lida com vessel só com nome (sem outros campos)', () => {
-    render(<ImportedModelCard vessel={{ name: 'Anonymous Hull' }} />)
+    render(
+      <ImportedModelCard defaultExpanded vessel={{ name: 'Anonymous Hull' }} />,
+    )
     expect(screen.getByText(/Anonymous Hull/)).toBeTruthy()
     expect(screen.getByText(/Apenas o nome registrado/)).toBeTruthy()
+  })
+
+  it('default colapsado: mostra summary inline mas oculta blocos', () => {
+    render(
+      <ImportedModelCard
+        metadata={{ rig: 'P-77', source_format: 'qmoor_0_8' }}
+        vessel={{ name: 'Test', loa: 100 }}
+      />,
+    )
+    // Header sempre visível com badges + summary
+    expect(screen.getByText('Modelo importado')).toBeTruthy()
+    expect(screen.getByText('QMoor 0.8.0')).toBeTruthy()
+    expect(screen.getByText(/clique para expandir/)).toBeTruthy()
+    // Summary inline mostra rig + vessel (truncado a 3 itens)
+    expect(screen.getByText(/Rig P-77/)).toBeTruthy()
+    // Mas blocos detalhados NÃO devem estar renderizados
+    expect(screen.queryByText('120.0 m')).toBeNull()
+    expect(screen.queryByText(/Apenas o nome registrado/)).toBeNull()
   })
 })

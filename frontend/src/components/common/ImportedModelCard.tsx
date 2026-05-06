@@ -1,4 +1,5 @@
-import { Anchor, Info, Waves } from 'lucide-react'
+import { Anchor, ChevronDown, ChevronRight, Info, Waves } from 'lucide-react'
+import { useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -43,6 +44,9 @@ export interface ImportedModelCardProps {
   currentProfile?: CurrentProfileDisplay | null
   metadata?: Record<string, string> | null
   ahvInstall?: AHVInstallDisplay | null
+  /** Default colapsado (mostra apenas linha de header com badges).
+   * Setar `true` para abrir já expandido. */
+  defaultExpanded?: boolean
   className?: string
 }
 
@@ -62,8 +66,10 @@ export function ImportedModelCard({
   currentProfile,
   metadata,
   ahvInstall,
+  defaultExpanded = false,
   className,
 }: ImportedModelCardProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const hasMetadata =
     metadata &&
     Object.keys(metadata).filter((k) => !k.startsWith('source_')).length > 0
@@ -75,37 +81,75 @@ export function ImportedModelCard({
   if (!hasVessel && !hasCurrent && !hasMetadata && !isImported && !hasAHVInstall)
     return null
 
+  // Sumário compacto exibido inline ao lado dos badges (read-only).
+  // Mostra os 1-3 campos mais úteis pra contexto rápido sem expandir.
+  const summary: string[] = []
+  if (metadata?.['rig']) summary.push(`Rig ${metadata['rig']}`)
+  if (metadata?.['profile_name']) summary.push(metadata['profile_name'])
+  if (vessel?.name) summary.push(`Vessel ${vessel.name}`)
+  if (ahvInstall?.bollard_pull) {
+    summary.push(`${(ahvInstall.bollard_pull / 9806.65).toFixed(0)} te bollard`)
+  }
+  const summaryText = summary.slice(0, 3).join(' · ')
+
   return (
-    <Card className={cn('mb-4', className)}>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Info className="h-4 w-4 text-primary" />
-          Modelo importado
-          {isImported && (
-            <Badge variant="secondary" className="text-[10px]">
-              QMoor 0.8.0
-            </Badge>
+    <Card className={cn('mb-2', className)}>
+      <CardHeader
+        className={cn(
+          'cursor-pointer py-2 pr-3 transition-colors hover:bg-muted/30',
+          expanded && 'pb-2',
+        )}
+        onClick={() => setExpanded((v) => !v)}
+        role="button"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center gap-2">
+          {expanded ? (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-          {hasAHVInstall && (
-            <Badge
-              variant="outline"
-              className="border-warning/40 bg-warning/10 text-[10px] text-warning"
-            >
-              AHV Install
-            </Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-3 lg:grid-cols-3">
-          {hasVessel && <VesselBlock vessel={vessel!} />}
-          {hasAHVInstall && <AHVInstallBlock ahv={ahvInstall!} />}
-          {hasCurrent && <CurrentBlock profile={currentProfile!} />}
-          {(hasMetadata || isImported) && (
-            <MetadataBlock metadata={metadata ?? {}} />
+          <Info className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <CardTitle className="flex flex-1 flex-wrap items-center gap-1.5 text-[12px] font-semibold">
+            Modelo importado
+            {isImported && (
+              <Badge variant="secondary" className="h-4 px-1.5 text-[9px]">
+                QMoor 0.8.0
+              </Badge>
+            )}
+            {hasAHVInstall && (
+              <Badge
+                variant="outline"
+                className="h-4 border-warning/40 bg-warning/10 px-1.5 text-[9px] text-warning"
+              >
+                AHV Install
+              </Badge>
+            )}
+            {!expanded && summaryText && (
+              <span className="ml-1 truncate text-[11px] font-normal text-muted-foreground">
+                · {summaryText}
+              </span>
+            )}
+          </CardTitle>
+          {!expanded && (
+            <span className="shrink-0 text-[10px] text-muted-foreground">
+              clique para expandir
+            </span>
           )}
         </div>
-      </CardContent>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="pb-3 pt-1">
+          <div className="grid gap-3 lg:grid-cols-3">
+            {hasVessel && <VesselBlock vessel={vessel!} />}
+            {hasAHVInstall && <AHVInstallBlock ahv={ahvInstall!} />}
+            {hasCurrent && <CurrentBlock profile={currentProfile!} />}
+            {(hasMetadata || isImported) && (
+              <MetadataBlock metadata={metadata ?? {}} />
+            )}
+          </div>
+        </CardContent>
+      )}
     </Card>
   )
 }
