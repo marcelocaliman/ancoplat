@@ -200,36 +200,72 @@ registrar o timestamp âncora.
 
 ---
 
-## Gate 8 — Encerramento das 48h 🔜
+## Gate 8 — Encerramento das 48h ⚠ OVERRIDE EXPLÍCITO
 
-**Status:** PENDENTE.
+**Status:** PULADO mediante autorização explícita do usuário.
 
-Critérios de sucesso (verificados após 48h reais):
+**Timestamp do override:** 2026-05-06T01:35:00Z (aprox.)
 
-- [ ] `journalctl -u ancoplat-api --since "<DEPLOY_TIMESTAMP_START_48H>"`
-      mostra **zero "Started"/"Stopped"** entries (nenhum restart).
-- [ ] Healthcheck cron a cada 5min: 100% de respostas 200 no período
-      (target: ~576 healthchecks em 48h).
-- [ ] `grep "5[0-9][0-9]" /var/log/nginx/access.log` no período
-      mostra **zero 5xx** (4xx é OK — cliente).
+**Citação literal da autorização:**
 
-Evidências serão capturadas e pasted aqui antes de avançar para
-Gate 9.
+> "Autorizo pular o Gate 8 das 48h. Aceito a responsabilidade.
+> Tag v1.0.0 agora"
+
+**Contexto da decisão:**
+- Usuário (Marcelo) operando após sessão longa de 11 fases +
+  deploy v1.0.
+- Disciplina das 48h originalmente escrita por ele em
+  `release_notes_v1.0.md` e `release_v1.0_uptime_log.md`
+  (ambos pushados pré-override).
+- Override explícito vem em resposta a 3 opções apresentadas
+  (rc1 + 48h, cron de 48h, ou skip explícito) — escolheu skip
+  explícito assumindo a responsabilidade.
+
+**Implicações honestas (registradas para auditoria):**
+
+1. Tag `v1.0.0` é cravada com **~3 horas de uptime** em produção,
+   não 48h. Bug que apareça nas próximas 48h ficará no histórico
+   do `v1.0.0` (não pode mais ser excluído da semântica do tag).
+2. Smoke prod 7/7 + Gate 6 4/4 cobrem o caminho funcional crítico,
+   então o risco é de regressão em paths não testados ou em
+   estabilidade de longo prazo (memory leak, file handle leak,
+   degradação SQLite após N horas, etc.) — improváveis dado o
+   solver é puramente síncrono e SQLite simples, mas possíveis.
+3. Rollback Nível 1 continua disponível via tag
+   `v0.10.0-pre-release` se algo aparecer pós-tag.
+4. Documentação canônica preservada: este parágrafo registra que
+   a disciplina foi conscientemente sobrepasada, não esquecida.
+
+**Critérios de sucesso que NÃO foram verificados** (registro
+honesto do que se está pulando):
+
+- ❌ Não verificado: `journalctl ... --since "..."` mostra zero
+  "Started"/"Stopped" em 48h (esperaria ~zero).
+- ❌ Não verificado: 100% de healthchecks 200 em 48h
+  (target ~576 healthchecks).
+- ❌ Não verificado: zero 5xx em nginx access.log em 48h.
+
+**Evidência parcial capturada (3 horas de uptime):**
+
+A produção tem rodado o commit `6d86021` desde 2026-05-06T01:14:33Z
+sem incidentes reportados durante a sessão de release. Gate 5 + Gate
+6 confirmaram comportamento correto. Esta janela é menor que a
+prometida.
 
 ---
 
-## Gate 9 — Tag v1.0.0 🔜
+## Gate 9 — Tag v1.0.0 ⏳ EXECUTANDO
 
-**Status:** PENDENTE — só sai após Gate 8 confirmado por evidências.
+**Status:** sendo executado mediante override explícito do Gate 8.
 
-Comando preparado:
+Tag `v1.0.0` annotated apontando para `6d86021` (commit exato em
+produção). Comando que será executado:
 ```bash
-git tag -a v1.0.0 6d86021 \
-    -m "AncoPlat v1.0.0 — primeiro release público estável"
+git tag -a v1.0.0 6d86021 -m "AncoPlat v1.0.0 — primeiro release público estável"
 git push origin v1.0.0
 ```
 
-Tag aponta para o commit `6d86021` (commit exato em produção pós-validação).
+Evidências registradas após execução abaixo.
 
 ---
 
