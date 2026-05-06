@@ -46,7 +46,10 @@ export const lineAttachmentSchema = z
         z.object({
           length: z.number().positive(),
           line_type: z.string().trim().max(80).nullable().optional(),
-          category: z.string().nullable().optional(),
+          category: z
+            .enum(['Wire', 'StuddedChain', 'StudlessChain', 'Polyester'])
+            .nullable()
+            .optional(),
           diameter: z.number().positive().nullable().optional(),
           w: z.number().positive().nullable().optional(),
           dry_weight: z.number().positive().nullable().optional(),

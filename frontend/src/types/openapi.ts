@@ -361,6 +361,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/import/qmoor-0_8/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview QMoor 0.8.0 (lista profiles, não persiste nada)
+         * @description Recebe JSON top-level QMoor 0.8.0. Retorna preview com lista de mooringLines × profiles disponíveis e log de parse. UI usa esse preview para mostrar selector ao usuário antes de chamar /commit. Sprint 1 / Commit 7.
+         */
+        post: operations["import_qmoor_v0_8_preview_api_v1_import_qmoor_0_8_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/qmoor-0_8/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Importa cases QMoor 0.8.0 selecionados (cria casos no DB)
+         * @description Recebe `{payload: <QMoor JSON>, selected_indices: [int, ...]}`. Re-roda o parser e persiste apenas os cases nos índices selecionados (índices baseiam-se na ordem retornada pelo /preview). Usuário sempre tem a opção de re-importar com outros índices. Sprint 1 / Commit 7.
+         */
+        post: operations["import_qmoor_v0_8_commit_api_v1_import_qmoor_0_8_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{case_id}/export/pdf": {
         parameters: {
             query?: never;
@@ -671,6 +711,70 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AHVInstall
+         * @description Cenário AHV (Anchor Handler Vessel) de instalação — Sprint 2 / Commit 23.
+         *
+         *     Modela operações TEMPORÁRIAS onde um navio AHV está na superfície
+         *     segurando a linha durante uma fase de:
+         *
+         *       • **Backing Down** — AHV recua liberando comprimento da linha.
+         *       • **Hookup** — primeira conexão da linha ao sistema antes de
+         *         transferir para o rig.
+         *       • **Load Transfer** — passagem de tensão do rig para o AHV (ou
+         *         vice-versa) durante manutenção.
+         *
+         *     Diferença vs `LineAttachment.kind="ahv"` (Fase 8):
+         *       - Aquele modela um AHV **ao longo da linha** (carga pontual num
+         *         ponto da linha já instalada).
+         *       - Este (`AHVInstall`) modela o AHV **como o startpoint da
+         *         linha** durante operação de instalação. O "fairlead" virtual
+         *         é o convés do AHV na superfície.
+         *
+         *     Convenção física no AncoPlat (modelo 2D plano vertical):
+         *
+         *         [AHV] ◀ surface (y = +deck_level_above_swl)
+         *          |
+         *          | Work Wire (último segmento da linha)
+         *          |
+         *          o--- connection point (intermediário)
+         *           \
+         *            \  Mooring line restante
+         *             \
+         *              v Anchor (X = horzDistance, y = -h)
+         *
+         *     Solver: quando `BoundaryConditions.ahv_install` está populado, o
+         *     parser força `mode=Tension` com `input_value = bollard_pull` (a
+         *     força aplicada pelo AHV via cabo de trabalho). O `target_horz_distance`
+         *     é informativo — o X resultante depende do bollard_pull aplicado.
+         *
+         *     Para atingir um X específico, use o painel de Sensitivity Panel
+         *     para iterar bollard_pull até X resultar próximo do target.
+         */
+        AHVInstall: {
+            /**
+             * Bollard Pull
+             * @description Bollard pull do AHV (N) — força aplicada pelo cabo de trabalho. Equivalente ao T_fl em modo Tension. Tipico: 10-200 te (98 kN - 1.96 MN). Heurística para QMoor sem fairleadTension definido: 30 te = 294 kN.
+             */
+            bollard_pull: number;
+            /**
+             * Deck Level Above Swl
+             * @description Altura do convés do AHV acima do nível médio do mar (m). 0 = convés ao nível da água (simplificação 2D). Reservado para refinamento futuro do modelo elevado.
+             * @default 0
+             */
+            deck_level_above_swl: number;
+            /**
+             * Stern Angle Deg
+             * @description Ângulo da popa do AHV no plano horizontal (graus). Cosmético em v1.1.0 — não afeta o cálculo. Aparece em relatórios profissionais para documentar orientação.
+             * @default 0
+             */
+            stern_angle_deg: number;
+            /**
+             * Target Horz Distance
+             * @description X informativo (m) — distância horizontal anchor → AHV que o usuário/QMoor reporta como target operacional. Quando importado de QMoor 0.8.0 com `inputParam='Range'`, este campo recebe o `horzDistance` original. SOLVER NÃO USA — apenas exibido na UI. Para iterar bollard_pull até X resultar ≈ target, use o Sensitivity Panel.
+             */
+            target_horz_distance?: number | null;
+        };
+        /**
          * AlertLevel
          * @description Classificação da utilização T_fl/MBL (Seção 5 do Documento A v2.2).
          *
@@ -765,6 +869,8 @@ export interface components {
              * @enum {string}
              */
             startpoint_type: "semisub" | "ahv" | "barge" | "none";
+            /** @description Cenário AHV de instalação. Quando presente, define bollard_pull (força do AHV) que substitui o input_value do mode Tension. target_horz_distance é informativo — X resultante depende do bollard_pull aplicado. */
+            ahv_install?: components["schemas"]["AHVInstall"] | null;
         };
         /**
          * BuoyCreate
@@ -1022,6 +1128,17 @@ export interface components {
              * @description Boias ou clump weights pontuais nas junções entre segmentos (F5.2). Cada attachment fica em `position_index` (0 = entre seg 0 e seg 1). Lista vazia para linha sem elementos pontuais.
              */
             attachments?: components["schemas"]["LineAttachment"][];
+            /**
+             * Metadata
+             * @description Metadata operacional do projeto (Sprint 1 / v1.1.0). Pares chave-valor livres para preservar info de modelos importados (QMoor: rig, location, region, engineer, number, source_version). Não afeta o cálculo do solver — é exibido no Memorial PDF e na UI de detalhes do caso. Limite de 20 chaves para evitar abuso.
+             */
+            metadata?: {
+                [key: string]: string;
+            } | null;
+            /** @description Vessel/plataforma do caso (Sprint 1 / v1.1.0). Metadado puro: solver não consome — preserva info do hull (nome, tipo, dimensões, calado, heading) para Memorial PDF e UI. Quando ausente, o caso é interpretado como ancoragem genérica sem plataforma identificada. */
+            vessel?: components["schemas"]["Vessel"] | null;
+            /** @description Perfil de corrente marinha V(z) — Sprint 1 / v1.1.0. **METADADO em v1.0**: solver não consome diretamente. Importado do campo `horzForces` do QMoor 0.8.0 e exibido no Memorial PDF / UI. Discretização em AHVs pontuais é opt-in via helper dedicado em Commit 5. */
+            current_profile?: components["schemas"]["CurrentProfile"] | null;
         };
         /**
          * CaseOutput
@@ -1147,6 +1264,67 @@ export interface components {
              * @description Explicação curta do perfil.
              */
             description: string;
+        };
+        /**
+         * CurrentLayer
+         * @description Ponto único da curva de corrente V(z) — velocidade do fluxo numa
+         *     profundidade específica (Sprint 1 / v1.1.0).
+         *
+         *     Convenção de heading: 0° = direção +X global do caso, anti-horário
+         *     positivo (mesmo referencial dos demais campos de heading).
+         */
+        CurrentLayer: {
+            /**
+             * Depth
+             * @description Profundidade (m). 0 = superfície da água; cresce para baixo.
+             */
+            depth: number;
+            /**
+             * Speed
+             * @description Velocidade horizontal do fluxo (m/s).
+             */
+            speed: number;
+            /**
+             * Heading Deg
+             * @description Direção do fluxo (graus, 0° = +X global, anti-horário positivo). Default 0°.
+             * @default 0
+             */
+            heading_deg: number;
+        };
+        /**
+         * CurrentProfile
+         * @description Perfil vertical de corrente marinha — V(z) (Sprint 1 / v1.1.0).
+         *
+         *     Permite representar qualquer perfil que o QMoor 0.8.0 carrega no
+         *     campo `horzForces`:
+         *       - **Uniforme**: 1 layer (mesmo speed em qualquer depth).
+         *       - **Linear**: 2 layers (superfície + fundo, interpolação linear).
+         *       - **Tabulado**: N layers (curva arbitrária, ≤20 pontos).
+         *
+         *     **METADADO em v1.0.0**: solver não consome o perfil. Sprint 1 /
+         *     Commit 5 introduzirá um helper opt-in para discretizar `layers` em
+         *     `LineAttachment(kind='ahv')` pontuais — preservando o solver atual
+         *     sem mudança no core. Esta separação garante:
+         *       1. Round-trip do JSON QMoor preserva o perfil EXATO.
+         *       2. Cálculo continua reprodutível bit-a-bit em casos sem discretização.
+         *       3. Discretização é função pura, testável independentemente.
+         */
+        CurrentProfile: {
+            /**
+             * Layers
+             * @description Pontos de V(z). Recomendado ordenar por depth ascendente; `_validate_layers_sorted` garante isso após validação.
+             */
+            layers: components["schemas"]["CurrentLayer"][];
+            /**
+             * Drag Coefficient
+             * @description Coeficiente de arrasto Cd (adimensional). RESERVADO — consumido em Commit 5 quando o usuário ativa a discretização opt-in. Default empírico ≈ 1.2 para correntes/wires.
+             */
+            drag_coefficient?: number | null;
+            /**
+             * Water Density
+             * @description Densidade da água do mar (kg/m³). Default 1025 quando consumido. METADADO em v1.0.
+             */
+            water_density?: number | null;
         };
         /**
          * EnvironmentalLoad
@@ -1369,6 +1547,11 @@ export interface components {
              * @description Diâmetro do cabo do pendant (m). Metadado.
              */
             pendant_diameter?: number | null;
+            /**
+             * Pendant Segments
+             * @description Pendant multi-segmento (Sprint 1 / v1.1.0). Lista ordenada do trecho mais próximo da linha principal ao mais distante (boia/clump). Quando presente e não-vazia, é a representação AUTORITATIVA do pendant — `pendant_line_type` e `pendant_diameter` ficam como cache cosmético do primeiro trecho. **NÃO afeta o cálculo do solver** — apenas Memorial PDF e UI. Limite de 5 trechos para preservar sanidade da UI.
+             */
+            pendant_segments?: components["schemas"]["PendantSegment"][] | null;
             /**
              * Buoy Catalog Id
              * @description ID da boia no catálogo (`buoys.id`). RASTREABILIDADE — NÃO autoritativo em runtime: o solver usa apenas `submerged_force` (e demais campos físicos) para o cálculo. Este campo serve para auditoria ('foi populado a partir do catálogo'). Quando o usuário edita qualquer campo físico após popular do picker, a UI deve setar este campo de volta para None — vide F6 / Q7 (override → null).
@@ -2026,6 +2209,71 @@ export interface components {
             page_size: number;
         };
         /**
+         * PendantSegment
+         * @description Segmento individual de um pendant multi-segmento (Sprint 1 / v1.1.0).
+         *
+         *     Pendants reais em modelos QMoor 0.8.0 podem ter múltiplos trechos
+         *     (ex.: chain pendant + wire pendant + chain pendant). Este modelo
+         *     descreve UM trecho desse pendant — comprimento + identificadores
+         *     do material — exclusivamente para fins de DOCUMENTAÇÃO no Memorial
+         *     PDF e na UI.
+         *
+         *     **NÃO afeta o cálculo do solver**: o solver continua tratando o
+         *     attachment como força pontual líquida em `LineAttachment.submerged_force`.
+         *     Pendant é apenas a representação visual/documental do hardware
+         *     que produz aquela força.
+         *
+         *     Campos opcionais (exceto `length`) acomodam imports parciais — o
+         *     QMoor JSON nem sempre carrega EA/MBL/diameter para pendants.
+         */
+        PendantSegment: {
+            /**
+             * Length
+             * @description Comprimento não-esticado do trecho do pendant (m).
+             */
+            length: number;
+            /**
+             * Line Type
+             * @description Identificador no catálogo (ex.: 'R4Studless'). Quando presente, recomenda-se que case com uma entrada do catálogo de tipos de linha — mas não é validado em runtime.
+             */
+            line_type?: string | null;
+            /**
+             * Category
+             * @description Wire, StuddedChain, StudlessChain ou Polyester.
+             */
+            category?: ("Wire" | "StuddedChain" | "StudlessChain" | "Polyester") | null;
+            /**
+             * Diameter
+             * @description Diâmetro nominal (m) — metadado.
+             */
+            diameter?: number | null;
+            /**
+             * W
+             * @description Peso submerso por unidade de comprimento (N/m). Metadado.
+             */
+            w?: number | null;
+            /**
+             * Dry Weight
+             * @description Peso seco por unidade (N/m) — metadado.
+             */
+            dry_weight?: number | null;
+            /**
+             * Ea
+             * @description Rigidez axial (N) — metadado.
+             */
+            EA?: number | null;
+            /**
+             * Mbl
+             * @description Minimum Breaking Load (N) — metadado.
+             */
+            MBL?: number | null;
+            /**
+             * Material Label
+             * @description Rótulo livre do material (ex.: 'R4 Studless 76 mm'). Útil quando o import de QMoor traz o nome do produto mas não bate com nenhuma entrada do catálogo.
+             */
+            material_label?: string | null;
+        };
+        /**
          * PlatformEquilibriumResult
          * @description Resultado do solver de equilíbrio de plataforma (F5.5).
          *
@@ -2446,6 +2694,69 @@ export interface components {
              * @example 1.0.0
              */
             solver: string;
+        };
+        /**
+         * Vessel
+         * @description Vessel/plataforma associada ao caso (Sprint 1 / v1.1.0).
+         *
+         *     Representa o corpo flutuante ao qual a linha de ancoragem está
+         *     conectada via fairlead — FPSO, semisubmersível, FSO, AHV, etc.
+         *
+         *     **METADADO PURO**: solver NÃO consome este modelo. O ponto onde
+         *     a linha está fixada no fairlead continua sendo `boundary.startpoint_*`
+         *     (depth, type, mode, input_value); o ícone do plot vem de
+         *     `boundary.startpoint_type`. `Vessel` enriquece o caso com info do
+         *     hull (nome do navio/plataforma, dimensões, calado, heading) para
+         *     rastreabilidade do modelo QMoor importado e Memorial PDF.
+         *
+         *     Quando o usuário não informa `Vessel`, o caso continua válido — é
+         *     o equivalente a "ancoragem genérica sem plataforma identificada".
+         *
+         *     Convenção de heading: 0° = direção +X global do caso, anti-horário
+         *     positivo (mesmo referencial de `EnvironmentalLoad` e `LineAttachment.
+         *     ahv_heading_deg`). Range [0°, 360°).
+         */
+        Vessel: {
+            /**
+             * Name
+             * @description Nome do vessel/plataforma (ex.: 'P-77', 'FPSO Cidade XYZ').
+             */
+            name: string;
+            /**
+             * Vessel Type
+             * @description Categoria do hull: 'FPSO', 'Semisubmersible', 'FSO', 'Spar', 'TLP', 'AHV', 'Drillship', 'MODU', etc. Texto livre.
+             */
+            vessel_type?: string | null;
+            /**
+             * Displacement
+             * @description Deslocamento (kg) — metadado.
+             */
+            displacement?: number | null;
+            /**
+             * Loa
+             * @description Length Overall (m) — metadado.
+             */
+            loa?: number | null;
+            /**
+             * Breadth
+             * @description Boca/largura (m) — metadado.
+             */
+            breadth?: number | null;
+            /**
+             * Draft
+             * @description Calado de operação (m) — metadado.
+             */
+            draft?: number | null;
+            /**
+             * Heading Deg
+             * @description Heading do vessel no plano horizontal (graus). 0° = +X global, anti-horário positivo. Mesmo referencial de `EnvironmentalLoad` e `ahv_heading_deg`.
+             */
+            heading_deg?: number | null;
+            /**
+             * Operator
+             * @description Empresa operadora do vessel — metadado.
+             */
+            operator?: string | null;
         };
         /**
          * WatchcirclePoint
@@ -3450,6 +3761,98 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_qmoor_v0_8_preview_api_v1_import_qmoor_0_8_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Payload QMoor 0.8.0 inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_qmoor_v0_8_commit_api_v1_import_qmoor_0_8_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Payload QMoor 0.8.0 inválido */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };

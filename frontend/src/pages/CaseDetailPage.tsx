@@ -36,11 +36,7 @@ import {
 } from '@/api/endpoints'
 import type { CaseInput, ExecutionOutput, SolverResult } from '@/api/types'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
-import {
-  ImportedModelCard,
-  type CurrentProfileDisplay,
-  type VesselDisplay,
-} from '@/components/common/ImportedModelCard'
+import { ImportedModelCard } from '@/components/common/ImportedModelCard'
 import { SurfaceViolationsCard } from '@/components/common/SurfaceViolationsCard'
 import { SolverDiagnosticsCard } from '@/components/common/SolverDiagnosticsCard'
 import { EmptyState } from '@/components/common/EmptyState'
@@ -529,24 +525,14 @@ export function CaseDetailPage() {
                     aparecem aqui. Para aplicar sugestões, o usuário vai
                     pra página de edição. */}
                 <SolverDiagnosticsCard result={result} />
+                {/* Sprint 3 / Commit 31 — openapi.ts regen permite acesso
+                    direto a vessel/current_profile/metadata/ahv_install
+                    sem casts inline `as unknown as`. */}
                 <ImportedModelCard
-                  vessel={(caseInput as unknown as {
-                    vessel?: VesselDisplay | null
-                  }).vessel ?? null}
-                  currentProfile={(caseInput as unknown as {
-                    current_profile?: CurrentProfileDisplay | null
-                  }).current_profile ?? null}
-                  metadata={(caseInput as unknown as {
-                    metadata?: Record<string, string> | null
-                  }).metadata ?? null}
-                  ahvInstall={(caseInput.boundary as unknown as {
-                    ahv_install?: {
-                      bollard_pull: number
-                      deck_level_above_swl?: number | null
-                      stern_angle_deg?: number | null
-                      target_horz_distance?: number | null
-                    } | null
-                  }).ahv_install ?? null}
+                  vessel={caseInput.vessel ?? null}
+                  currentProfile={caseInput.current_profile ?? null}
+                  metadata={caseInput.metadata ?? null}
+                  ahvInstall={caseInput.boundary.ahv_install ?? null}
                 />
                 <Card className="mb-4">
                   <CardContent className="h-[480px] p-2">
@@ -574,19 +560,9 @@ export function CaseDetailPage() {
                           | 'semisub' | 'ahv' | 'barge' | 'none' | undefined)
                           ?? 'semisub'
                       }
-                      vessel={
-                        ((liveInput ?? caseInput) as unknown as {
-                          vessel?: VesselDisplay | null
-                        }).vessel ?? null
-                      }
+                      vessel={(liveInput ?? caseInput).vessel ?? null}
                       ahvInstall={
-                        ((liveInput ?? caseInput).boundary as unknown as {
-                          ahv_install?: {
-                            bollard_pull: number
-                            target_horz_distance?: number | null
-                            deck_level_above_swl?: number | null
-                          } | null
-                        }).ahv_install ?? null
+                        (liveInput ?? caseInput).boundary.ahv_install ?? null
                       }
                     />
                   </CardContent>
