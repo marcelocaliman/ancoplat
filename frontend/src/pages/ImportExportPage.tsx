@@ -122,11 +122,20 @@ function ImportPanel() {
     },
   })
 
-  // QMoor 0.8.0 (Sprint 1) — formato multi-line × multi-profile
+  // QMoor 0.8.0 (Sprint 1, fix Sprint 2 / Commit 20).
+  // Aceita campo `version` (fixtures sintéticos) ou `QMoorVersion`
+  // (JSON real do QMoor 0.8.0, ex.: KAR006).
+  const detectedVersion =
+    parse.status === 'parsed'
+      ? (typeof parse.payload['version'] === 'string'
+          ? (parse.payload['version'] as string)
+          : typeof parse.payload['QMoorVersion'] === 'string'
+            ? (parse.payload['QMoorVersion'] as string)
+            : '')
+      : ''
   const isQMoor08 =
     parse.status === 'parsed' &&
-    typeof parse.payload['version'] === 'string' &&
-    (parse.payload['version'] as string).startsWith('0.8') &&
+    detectedVersion.startsWith('0.8') &&
     Array.isArray(parse.payload['mooringLines'])
 
   const previewQuery = useQuery({

@@ -48,6 +48,168 @@ def synthetic_qmoor_v0_8_minimal() -> dict[str, Any]:
     }
 
 
+def synthetic_qmoor_v0_8_kar006_real() -> dict[str, Any]:
+    """
+    Espelha a ESTRUTURA REAL do JSON KAR006 (QMoor 0.8.0) reportada
+    pelo usuário em Sprint 2 / Commit 20:
+
+      • `QMoorVersion` (não `version`) no top-level.
+      • `mooringLines[]` é um GRUPO de profiles (Operational / Preset);
+        seu `segments` é VAZIO. Os segments reais estão em
+        `mooringLines[i].profiles[j].segments[]`.
+      • Cada `segment` tem `length` no top + props físicas em
+        `lineProps.{wetWeight, qmoorEA, breakStrength, ...}` como
+        STRINGS COM UNIDADE (ex.: "475.0 m", "150.66 kgf / m",
+        "81018.96 te").
+      • Boias em `profile.buoys[]` (não `attachments[]`) com
+        `pennantLine.segments[]` para o pendant multi-trecho e
+        `distFromEnd` (m) para a posição.
+
+    Versão simplificada (1 grupo × 1 profile × 3 segments + 1 boia)
+    para testes; o caso real KAR006 tem 2 grupos × 4 profiles cada.
+    """
+    return {
+        "filename": "test-kar006.moor",
+        "QMoorVersion": "0.8.0",
+        "unitSystem": "metric",
+        "name": "Karoon Energy Equipment Study (test)",
+        "rig": "Maersk Developer",
+        "location": "7-PRA-2-SPS, Bauna Field",
+        "region": "BR-Sul",
+        "engineer": "D. Ralha",
+        "number": "KAR006",
+        "vessels": [],
+        "mooringLines": [
+            {
+                "name": "Operational Profiles",
+                "segments": [],  # VAZIO no top — segments reais nos profiles
+                "boundary": {
+                    "startpointDepth": None,
+                    "horzDistance": None,
+                    "endpointGrounded": True,
+                    "startpointType": "Semi-Sub Fairlead",
+                },
+                "profiles": [
+                    {
+                        "name": "ML3",
+                        "displayName": "Operational Profiles - ML3",
+                        "segments": [
+                            {
+                                "category": "StuddedChain",
+                                "length": "475.0 m",
+                                "name": "Rig Chain",
+                                "lineProps": {
+                                    "wetWeight": "150.66171764698163 kgf / m",
+                                    "qmoorEA": "81018.96002399089 te",
+                                    "category": "StuddedChain",
+                                    "dryWeight": "173.177638113189 kgf / m",
+                                    "diameter": "88.89999999999998 mm",
+                                    "breakStrength": "815.1553840507001 te",
+                                    "modulus": "128001.16914767069 MPa",
+                                    "seabedFrictionCF": 1.0,
+                                    "lineType": "R4Chain",
+                                },
+                            },
+                            {
+                                "category": "Wire",
+                                "length": "609.0 m",
+                                "name": "Insert Wire",
+                                "lineProps": {
+                                    "wetWeight": "33.97113378709231 kgf / m",
+                                    "qmoorEA": "51992.85222853726 te",
+                                    "category": "Wire",
+                                    "dryWeight": "40.929280349982584 kgf / m",
+                                    "diameter": "97.99999999999997 mm",
+                                    "breakStrength": "732.5808007477774 te",
+                                    "modulus": "67596.20050222265 MPa",
+                                    "seabedFrictionCF": 0.6,
+                                    "lineType": "EIPS20",
+                                },
+                            },
+                            {
+                                "category": "StuddedChain",
+                                "length": "488.0 m",
+                                "name": "Anchor Chain",
+                                "lineProps": {
+                                    "wetWeight": "134.51347927617243 kgf / m",
+                                    "qmoorEA": "72333.87217716347 te",
+                                    "category": "StuddedChain",
+                                    "dryWeight": "154.61398693229873 kgf / m",
+                                    "diameter": "83.99999999999999 mm",
+                                    "breakStrength": "735.561012739019 te",
+                                    "modulus": "128001.1691476707 MPa",
+                                    "seabedFrictionCF": 1.0,
+                                    "lineType": "R4Chain",
+                                },
+                            },
+                        ],
+                        "boundary": {
+                            "startpointDepth": "284.0 m",
+                            "horzDistance": "1829.0 m",
+                            "endpointGrounded": True,
+                            "endpointDepth": "311.0 m",
+                            "fairleadOffset": {
+                                "x": "0.0 m",
+                                "y": "2.438399999999999 m",
+                            },
+                            "startpointType": "Semi-Sub Fairlead",
+                        },
+                        "solution": {
+                            "inputParam": "tension",
+                            "fairleadTension": "150.0 te",
+                            "rangeToAnchor": None,
+                        },
+                        "vessels": [],
+                        "horzForces": [],
+                        "buoys": [
+                            {
+                                "weightInAir": "6.847884009890001 te",
+                                "endType": "Elliptical",
+                                "buoyType": "Submersible",
+                                "length": "3.6308226898410076 m",
+                                "distFromEnd": "1088.0 m",
+                                "diameter": "3.047999999999999 m",
+                                "name_id": "B1018",
+                                "pennantLine": {
+                                    "segments": [
+                                        {
+                                            "category": "StuddedChain",
+                                            "length": "6.0 m",
+                                            "name": "Buoy Chain",
+                                            "lineProps": {
+                                                "wetWeight": "129.91 kgf / m",
+                                                "qmoorEA": "69858.18 te",
+                                                "category": "StuddedChain",
+                                                "diameter": "82.55 mm",
+                                                "breakStrength": "712.54 te",
+                                                "lineType": "R4Chain",
+                                            },
+                                        },
+                                        {
+                                            "category": "Wire",
+                                            "length": "92.0 m",
+                                            "name": "Pendant Wire",
+                                            "lineProps": {
+                                                "wetWeight": "11.51 kgf / m",
+                                                "qmoorEA": "17589.0 te",
+                                                "category": "Wire",
+                                                "diameter": "57.0 mm",
+                                                "breakStrength": "268.29 te",
+                                                "lineType": "EIPS20",
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
+                        "clumps": [],
+                    },
+                ],
+            },
+        ],
+    }
+
+
 def synthetic_qmoor_v0_8_kar006_like() -> dict[str, Any]:
     """
     Estrutura mais rica espelhando KAR006:
