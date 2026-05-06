@@ -152,6 +152,7 @@ export function CaseFormPage() {
     handleSubmit,
     watch,
     setValue,
+    getValues,
     reset,
     formState: { errors, isValid, isSubmitting },
   } = form
@@ -907,6 +908,7 @@ export function CaseFormPage() {
                   <AHVInstallEditor
                     control={control}
                     setValue={setValue}
+                    getValues={getValues}
                     ahvInstall={values.boundary?.ahv_install ?? null}
                   />
                 </div>

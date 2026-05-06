@@ -1,26 +1,35 @@
-import { Anchor, Plus, Sparkles, Trash2 } from 'lucide-react'
+import { Anchor, CheckCircle2, Loader2, Plus, Sparkles, Trash2, XCircle } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import {
   Controller,
   type Control,
   type Path,
   type UseFormSetValue,
+  type UseFormGetValues,
 } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { UnitInput } from '@/components/common/UnitInput'
+import {
+  iterateBollardPullForTargetX,
+  type IterationStep,
+  type IterationResult,
+} from '@/lib/ahvIteration'
 import type { CaseFormValues } from '@/lib/caseSchema'
+import type { CaseInput } from '@/api/types'
 
 type T = CaseFormValues
 
 export interface AHVInstallEditorProps {
   control: Control<T>
   setValue: UseFormSetValue<T>
+  /** Necessário para ler o caseInput completo durante iteração. */
+  getValues?: UseFormGetValues<T>
   /** Valor atual do ahv_install (vindo do useWatch ou form). */
   ahvInstall: CaseFormValues['boundary']['ahv_install']
-  /** Callback opcional quando user clica "Aplicar via Sensitivity". */
-  onApplyViaSensitivity?: () => void
 }
 
 const EMPTY_AHV: NonNullable<CaseFormValues['boundary']['ahv_install']> = {
@@ -50,13 +59,66 @@ const EMPTY_AHV: NonNullable<CaseFormValues['boundary']['ahv_install']> = {
 export function AHVInstallEditor({
   control,
   setValue,
+  getValues,
   ahvInstall,
-  onApplyViaSensitivity,
 }: AHVInstallEditorProps) {
   const has = ahvInstall != null
 
   const p = (suffix: keyof NonNullable<CaseFormValues['boundary']['ahv_install']>) =>
     `boundary.ahv_install.${suffix}` as Path<T>
+
+  // Sprint 3 / Commit 30 — estado da iteração automática.
+  const [iterRunning, setIterRunning] = useState(false)
+  const [iterSteps, setIterSteps] = useState<IterationStep[]>([])
+  const [iterResult, setIterResult] = useState<IterationResult | null>(null)
+
+  const handleApplyViaSensitivity = async () => {
+    if (!getValues || !ahvInstall?.target_horz_distance) return
+    const formValues = getValues()
+    // Constrói CaseInput-like a partir do form. Preserve ahv_install
+    // pra que o solver use bollard_pull em mode Tension.
+    const caseInput = formValues as unknown as CaseInput
+    const targetX = ahvInstall.target_horz_distance
+
+    setIterRunning(true)
+    setIterSteps([])
+    setIterResult(null)
+
+    try {
+      const result = await iterateBollardPullForTargetX(
+        caseInput,
+        targetX,
+        {
+          tolerance: 0.5,
+          maxIters: 12,
+          onStep: (step) => setIterSteps((prev) => [...prev, step]),
+        },
+      )
+      setIterResult(result)
+      if (result.converged) {
+        // Aplica o bollard_pull encontrado ao form
+        setValue('boundary.ahv_install.bollard_pull', result.bollardPullFinal, {
+          shouldDirty: true,
+        })
+        toast.success(
+          `Convergiu: bollard pull = ${(result.bollardPullFinal / 9806.65).toFixed(1)} te ` +
+            `(X = ${result.xResultFinal?.toFixed(1)} m, erro ${result.errorFinal?.toFixed(2)} m)`,
+        )
+      } else {
+        toast.warning(
+          `Não convergiu (${result.stopReason}). Melhor encontrado: ` +
+            `bollard ${(result.bollardPullFinal / 9806.65).toFixed(1)} te, ` +
+            `erro ${result.errorFinal?.toFixed(1) ?? '—'} m. Aplique manualmente se quiser.`,
+        )
+      }
+    } catch (err) {
+      toast.error(
+        'Iteração falhou: ' + (err instanceof Error ? err.message : String(err)),
+      )
+    } finally {
+      setIterRunning(false)
+    }
+  }
 
   return (
     <Card className="border-warning/30 bg-warning/[0.04]">
@@ -153,8 +215,8 @@ export function AHVInstallEditor({
                 />
               </Field>
             </div>
-            {ahvInstall?.target_horz_distance != null
-              && onApplyViaSensitivity && (
+            {ahvInstall?.target_horz_distance != null && getValues && (
+              <div className="space-y-2">
                 <div className="flex items-center justify-between rounded-md border border-primary/20 bg-primary/[0.04] p-2">
                   <span className="text-[11px] text-muted-foreground">
                     Atingir X ={' '}
@@ -168,12 +230,27 @@ export function AHVInstallEditor({
                     variant="outline"
                     size="sm"
                     className="h-6 gap-1 text-[10px]"
-                    onClick={onApplyViaSensitivity}
+                    onClick={handleApplyViaSensitivity}
+                    disabled={iterRunning}
                   >
-                    <Sparkles className="h-3 w-3" /> Aplicar via Sensitivity
+                    {iterRunning ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3 w-3" />
+                    )}
+                    {iterRunning ? 'Iterando…' : 'Aplicar via Sensitivity'}
                   </Button>
                 </div>
-              )}
+                {(iterRunning || iterSteps.length > 0) && (
+                  <IterationProgress
+                    steps={iterSteps}
+                    result={iterResult}
+                    targetX={ahvInstall.target_horz_distance}
+                    running={iterRunning}
+                  />
+                )}
+              </div>
+            )}
           </div>
         )}
       </CardContent>
@@ -208,6 +285,110 @@ function Field({
     </div>
   )
 }
+
+function IterationProgress({
+  steps,
+  result,
+  targetX,
+  running,
+}: {
+  steps: IterationStep[]
+  result: IterationResult | null
+  targetX: number
+  running: boolean
+}) {
+  const bestErr = steps
+    .filter((s) => s.error != null)
+    .reduce<number>((min, s) => Math.min(min, s.error!), Infinity)
+  return (
+    <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[10px]">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <span className="font-medium text-foreground">
+          Iteração de bollard pull
+          {running && (
+            <Loader2 className="ml-2 inline h-3 w-3 animate-spin" />
+          )}
+          {!running && result?.converged && (
+            <CheckCircle2 className="ml-2 inline h-3 w-3 text-success" />
+          )}
+          {!running && result && !result.converged && (
+            <XCircle className="ml-2 inline h-3 w-3 text-warning" />
+          )}
+        </span>
+        <span className="font-mono text-muted-foreground">
+          target = {targetX.toFixed(1)} m
+        </span>
+      </div>
+      <div className="max-h-40 overflow-y-auto rounded border border-border/40 bg-background/40">
+        <table className="w-full text-[10px] tabular-nums">
+          <thead>
+            <tr className="border-b border-border/40 text-left text-muted-foreground">
+              <th className="px-1.5 py-0.5">#</th>
+              <th className="px-1.5 py-0.5">bollard (te)</th>
+              <th className="px-1.5 py-0.5">X (m)</th>
+              <th className="px-1.5 py-0.5">erro (m)</th>
+              <th className="px-1.5 py-0.5">status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map((s) => {
+              const isBest = s.error != null && s.error === bestErr
+              return (
+                <tr
+                  key={s.iter}
+                  className={
+                    isBest
+                      ? 'bg-success/10 font-medium'
+                      : s.status !== 'converged'
+                      ? 'text-muted-foreground'
+                      : ''
+                  }
+                >
+                  <td className="px-1.5 py-0.5">{s.iter}</td>
+                  <td className="px-1.5 py-0.5 font-mono">
+                    {(s.bollardPull / 9806.65).toFixed(1)}
+                  </td>
+                  <td className="px-1.5 py-0.5 font-mono">
+                    {s.xResult != null ? s.xResult.toFixed(1) : '—'}
+                  </td>
+                  <td className="px-1.5 py-0.5 font-mono">
+                    {s.error != null ? s.error.toFixed(2) : '—'}
+                  </td>
+                  <td className="px-1.5 py-0.5 text-[9px]">
+                    {s.status === 'converged'
+                      ? '✓'
+                      : s.status === 'pending'
+                      ? '…'
+                      : s.status}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {result && !running && (
+        <p className="mt-1.5 text-[10px] text-muted-foreground">
+          {result.converged ? (
+            <>
+              ✓ Convergiu em {steps.length} avaliações.{' '}
+              <strong>Bollard final = {(result.bollardPullFinal / 9806.65).toFixed(1)} te</strong>
+              {' '}(aplicado ao form). X = {result.xResultFinal?.toFixed(1)} m,
+              erro = {result.errorFinal?.toFixed(2)} m.
+            </>
+          ) : (
+            <>
+              Não convergiu ({result.stopReason}). Melhor:{' '}
+              {(result.bollardPullFinal / 9806.65).toFixed(1)} te com erro{' '}
+              {result.errorFinal?.toFixed(2) ?? '—'} m.
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  )
+}
+
 
 function NumberCtrl({
   control,
