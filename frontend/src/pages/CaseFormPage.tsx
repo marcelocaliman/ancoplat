@@ -640,13 +640,13 @@ export function CaseFormPage() {
                 value="ambiente"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
+              {/* 4 cards bordados lado a lado (xl:grid-cols-4). Cada card tem
+                  conteúdo alinhado à direita (label flex-1 + input à direita
+                  + unit grudada) — visual compacto e profissional. */}
+              <div className="flex flex-wrap justify-end gap-2">
 
                 {/* Grupo 1 — Geometria (batimetria 2-pontos primária) */}
-                <div className="space-y-1.5">
-                  <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Geometria
-                  </h4>
+                <EnvCard title="Geometria">
                   <Controller
                     control={control}
                     name="boundary.h"
@@ -668,90 +668,67 @@ export function CaseFormPage() {
                       />
                     )}
                   />
-                </div>
+                </EnvCard>
 
-                {/* Grupo 2 — Fairlead (4 campos empilhados na coluna estreita) */}
-                <div className="space-y-1.5">
-                  <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Fairlead
-                  </h4>
-                  <div className="space-y-1.5">
-                    <InlineField
-                      label="Prof. abaixo da água"
-                      unit="m"
-                      tooltip="Profundidade do PONTO de fairlead abaixo da superfície. 0 = na superfície (default). Para FPSO típico, 20-40 m."
-                    >
-                      <Input
-                        type="number"
-                        step="1"
-                        min="0"
-                        {...register('boundary.startpoint_depth', {
-                          valueAsNumber: true,
-                        })}
-                        className="h-7 max-w-[120px] font-mono text-[11px]"
-                      />
-                    </InlineField>
-                    <InlineField
-                      label="Tipo de plataforma"
-                      tooltip="Cosmético — afeta APENAS o ícone do plot. Não entra no cálculo. Default: Semi-Sub."
-                    >
-                      <Controller
-                        control={control}
-                        name="boundary.startpoint_type"
-                        render={({ field }) => (
-                          <Select
-                            value={(field.value as string | undefined) ?? 'semisub'}
-                            onValueChange={field.onChange}
-                          >
-                            <SelectTrigger className="h-7 max-w-[180px] text-[11px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="semisub">Semi-Sub / FPSO</SelectItem>
-                              <SelectItem value="ahv">AHV (Anchor Handler)</SelectItem>
-                              <SelectItem value="barge">Barge</SelectItem>
-                              <SelectItem value="none">Sem ícone</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                    </InlineField>
-                    <InlineField
-                      label="Offset horizontal (cosmético)"
-                      unit="m"
-                      tooltip="Afeta APENAS a visualização do plot — não entra no cálculo do solver. Reservado para fase futura."
-                    >
-                      <Input
-                        type="number"
-                        step="1"
-                        {...register('boundary.startpoint_offset_horz', {
-                          valueAsNumber: true,
-                        })}
-                        className="h-7 max-w-[120px] font-mono text-[11px]"
-                      />
-                    </InlineField>
-                    <InlineField
-                      label="Offset vertical (cosmético)"
-                      unit="m"
-                      tooltip="Equivalente ao 'Deck Level above SWL' do QMoor. Afeta APENAS a visualização do plot — não entra no cálculo."
-                    >
-                      <Input
-                        type="number"
-                        step="0.5"
-                        {...register('boundary.startpoint_offset_vert', {
-                          valueAsNumber: true,
-                        })}
-                        className="h-7 max-w-[120px] font-mono text-[11px]"
-                      />
-                    </InlineField>
-                  </div>
-                </div>
+                {/* Grupo 2 — Fairlead */}
+                <EnvCard title="Fairlead">
+                  <EnvField label="Prof. abaixo da água" unit="m">
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      {...register('boundary.startpoint_depth', {
+                        valueAsNumber: true,
+                      })}
+                      className="h-7 w-[80px] font-mono text-[11px]"
+                    />
+                  </EnvField>
+                  <EnvField label="Tipo de plataforma">
+                    <Controller
+                      control={control}
+                      name="boundary.startpoint_type"
+                      render={({ field }) => (
+                        <Select
+                          value={(field.value as string | undefined) ?? 'semisub'}
+                          onValueChange={field.onChange}
+                        >
+                          <SelectTrigger className="h-7 w-[140px] text-[11px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="semisub">Semi-Sub / FPSO</SelectItem>
+                            <SelectItem value="ahv">AHV (Anchor Handler)</SelectItem>
+                            <SelectItem value="barge">Barge</SelectItem>
+                            <SelectItem value="none">Sem ícone</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </EnvField>
+                  <EnvField label="Offset horizontal" unit="m">
+                    <Input
+                      type="number"
+                      step="1"
+                      {...register('boundary.startpoint_offset_horz', {
+                        valueAsNumber: true,
+                      })}
+                      className="h-7 w-[80px] font-mono text-[11px]"
+                    />
+                  </EnvField>
+                  <EnvField label="Offset vertical" unit="m">
+                    <Input
+                      type="number"
+                      step="0.5"
+                      {...register('boundary.startpoint_offset_vert', {
+                        valueAsNumber: true,
+                      })}
+                      className="h-7 w-[80px] font-mono text-[11px]"
+                    />
+                  </EnvField>
+                </EnvCard>
 
                 {/* Grupo 3 — Anchor (Fase 7 — uplift) */}
-                <div className="space-y-1.5">
-                  <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Âncora
-                  </h4>
+                <EnvCard title="Âncora">
                   <Controller
                     control={control}
                     name="boundary.endpoint_grounded"
@@ -760,9 +737,9 @@ export function CaseFormPage() {
                         control={control}
                         name="boundary.endpoint_depth"
                         render={({ field: depthField }) => (
-                          <div className="space-y-1.5">
+                          <>
                             <fieldset className="space-y-0.5">
-                              <legend className="text-[10px] font-medium text-muted-foreground mb-1">
+                              <legend className="mb-0.5 text-[10px] font-medium text-muted-foreground">
                                 Tipo de fixação
                               </legend>
                               <label className="flex cursor-pointer items-center gap-1.5 text-[11px]">
@@ -797,21 +774,7 @@ export function CaseFormPage() {
                               </label>
                             </fieldset>
                             {groundedField.value === false && (
-                              <InlineField
-                                label="Prof. do anchor"
-                                unit="m"
-                                tooltip="Profundidade do anchor abaixo da superfície (m). Uplift = h − endpoint_depth. Range válido: 0 < endpoint_depth ≤ h."
-                                error={
-                                  errors.boundary &&
-                                  'endpoint_depth' in errors.boundary
-                                    ? (
-                                        errors.boundary.endpoint_depth as
-                                          | { message?: string }
-                                          | undefined
-                                      )?.message
-                                    : undefined
-                                }
-                              >
+                              <EnvField label="Prof. do anchor" unit="m">
                                 <Input
                                   type="number"
                                   step="1"
@@ -823,78 +786,67 @@ export function CaseFormPage() {
                                       Number.isFinite(v) && v > 0 ? v : null,
                                     )
                                   }}
-                                  className="h-7 max-w-[120px] font-mono text-[11px]"
+                                  className="h-7 w-[80px] font-mono text-[11px]"
                                 />
-                              </InlineField>
+                              </EnvField>
                             )}
-                          </div>
+                          </>
                         )}
                       />
                     )}
                   />
-                </div>
+                </EnvCard>
 
-                {/* Grupo 4 — Seabed (μ + details slope direto empilhados) */}
-                <div className="space-y-1.5">
-                  <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                    Seabed
-                  </h4>
-                  <div className="space-y-1.5">
-                    <InlineField
-                      label="μ (atrito) global"
-                      tooltip="Atrito global do seabed. Pode ser sobrescrito por segmento na aba Linha (μ override). Wire ~0,3 · Corrente ~1,0 · Poliéster ~0,25"
-                    >
-                      <Input
-                        type="number"
-                        step="0.05"
-                        min="0"
-                        {...register('seabed.mu', { valueAsNumber: true })}
-                        className="h-7 max-w-[100px] font-mono text-[11px]"
+                {/* Grupo 4 — Seabed (μ + details slope direto) */}
+                <EnvCard title="Seabed">
+                  <EnvField label="μ (atrito) global">
+                    <Input
+                      type="number"
+                      step="0.05"
+                      min="0"
+                      {...register('seabed.mu', { valueAsNumber: true })}
+                      className="h-7 w-[80px] font-mono text-[11px]"
+                    />
+                  </EnvField>
+                  <details className="text-[10px]">
+                    <summary className="cursor-pointer select-none py-0.5 text-muted-foreground hover:text-foreground">
+                      Avançado — slope direto
+                    </summary>
+                    <div className="mt-1.5 rounded-md border border-border/40 bg-muted/20 p-2 space-y-1.5">
+                      <p className="text-[9px] leading-tight text-muted-foreground">
+                        Sobrescreve o slope derivado da Geometria.
+                      </p>
+                      <Controller
+                        control={control}
+                        name="seabed.slope_rad"
+                        render={({ field }) => (
+                          <EnvField label="Slope direto" unit="°">
+                            <Input
+                              type="number"
+                              step={0.5}
+                              min={-45}
+                              max={45}
+                              value={
+                                field.value != null
+                                  ? ((field.value * 180) / Math.PI).toFixed(2)
+                                  : '0'
+                              }
+                              onChange={(e) => {
+                                const deg = parseFloat(e.target.value)
+                                field.onChange(
+                                  Number.isFinite(deg)
+                                    ? (deg * Math.PI) / 180
+                                    : 0,
+                                )
+                              }}
+                              className="h-7 w-[80px] font-mono text-[11px]"
+                            />
+                          </EnvField>
+                        )}
                       />
-                    </InlineField>
-                    {/* Modo avançado — slope direto */}
-                    <details className="text-[10px]">
-                      <summary className="cursor-pointer select-none py-0.5 text-muted-foreground hover:text-foreground">
-                        Avançado — slope direto
-                      </summary>
-                      <div className="mt-1.5 space-y-1.5 rounded-md border border-border/40 bg-muted/20 p-2">
-                        <p className="text-[9px] text-muted-foreground">
-                          Para uso quando você tem o ângulo medido (inclinômetro,
-                          sonar) sem batimetria nos dois pontos. Esta entrada
-                          sobrescreve o slope derivado da Geometria acima.
-                        </p>
-                        <InlineField label="Slope direto" unit="°">
-                          <Controller
-                            control={control}
-                            name="seabed.slope_rad"
-                            render={({ field }) => (
-                              <input
-                                type="number"
-                                step={0.5}
-                                min={-45}
-                                max={45}
-                                value={
-                                  field.value != null
-                                    ? ((field.value * 180) / Math.PI).toFixed(2)
-                                    : '0'
-                                }
-                                onChange={(e) => {
-                                  const deg = parseFloat(e.target.value)
-                                  field.onChange(
-                                    Number.isFinite(deg)
-                                      ? (deg * Math.PI) / 180
-                                      : 0,
-                                  )
-                                }}
-                                className="h-7 w-[100px] rounded-md border border-input bg-background px-2 font-mono text-[11px] tabular-nums"
-                              />
-                            )}
-                          />
-                        </InlineField>
-                      </div>
-                    </details>
-                  </div>
-                </div>
+                    </div>
+                  </details>
+                </EnvCard>
               </div>
             </TabsContent>
 
@@ -1078,6 +1030,63 @@ export function CaseFormPage() {
 }
 
 /* ───────────────────────── Helpers visuais ─────────────────────────── */
+
+/**
+ * EnvCard — card bordado para um grupo da aba Ambiente
+ * (Geometria, Fairlead, Âncora, Seabed). Largura fixa em viewports
+ * >= md para garantir alinhamento estável entre os 4 cards.
+ */
+function EnvCard({
+  title,
+  children,
+}: {
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <Card className="w-[260px] shrink-0">
+      <CardContent className="space-y-1.5 p-2.5">
+        <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {title}
+        </h4>
+        {children}
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * EnvField — linha horizontal de input dentro de um EnvCard:
+ *   [label flex-1] [input w-fixa] [unit]
+ * Resolve o "unit solto à direita" do v1.0.7 — agora unit fica grudado
+ * no input, alinhamento estável entre cards.
+ */
+function EnvField({
+  label,
+  unit,
+  children,
+}: {
+  label: string
+  unit?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Label className="flex-1 truncate text-[10px] font-medium text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+      <span
+        className={cn(
+          'w-3 shrink-0 font-mono text-[9px] text-muted-foreground',
+          !unit && 'invisible',
+        )}
+      >
+        {unit ?? '—'}
+      </span>
+    </div>
+  )
+}
 
 function InlineField({
   label,

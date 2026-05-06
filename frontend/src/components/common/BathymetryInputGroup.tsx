@@ -157,11 +157,16 @@ export function BathymetryInputGroup({
             : 'Estimativa para derivar slope; não substitui o X do solver'
         }
       />
-      <div className="max-w-[180px] rounded-md border border-border/60 bg-muted/30 p-1.5">
-        <div className="flex items-baseline justify-between gap-2 text-[10px]">
-          <span className="text-muted-foreground">Inclinação</span>
-          <span className="font-mono font-semibold tabular-nums">
-            {fmtNumber(slopeDeg, 2)}°
+      <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1">
+        <div className="flex items-center gap-2">
+          <span className="flex-1 text-[10px] text-muted-foreground">
+            Inclinação
+          </span>
+          <span className="w-[80px] text-right font-mono text-[11px] font-semibold tabular-nums">
+            {fmtNumber(slopeDeg, 2)}
+          </span>
+          <span className="w-3 shrink-0 font-mono text-[9px] text-muted-foreground">
+            °
           </span>
         </div>
         {Math.abs(slopeDeg) > 45 && (
@@ -191,21 +196,29 @@ function FieldRow({
   step?: number
   hint?: string
 }) {
+  // Layout inline: label flex-1 à esquerda, input + unit grudados à
+  // direita. Mais profissional que stacked vertical com unit solta.
   return (
     <div className="flex flex-col gap-0.5">
-      <Label className="flex items-center justify-between gap-1 text-[10px] font-medium text-muted-foreground">
-        <span className="truncate">{label}</span>
-        <span className="shrink-0 font-mono text-[9px] font-normal">{unit}</span>
-      </Label>
-      <Input
-        type="number"
-        step={step ?? 'any'}
-        min={min}
-        value={Number.isFinite(value) ? value : 0}
-        onChange={(e) => onChange(parseFloat(e.target.value || '0'))}
-        className="h-7 max-w-[120px] font-mono text-[11px]"
-      />
-      {hint && <p className="text-[9px] leading-tight text-muted-foreground">{hint}</p>}
+      <div className="flex items-center gap-2">
+        <Label className="flex-1 truncate text-[10px] font-medium text-muted-foreground">
+          {label}
+        </Label>
+        <Input
+          type="number"
+          step={step ?? 'any'}
+          min={min}
+          value={Number.isFinite(value) ? value : 0}
+          onChange={(e) => onChange(parseFloat(e.target.value || '0'))}
+          className="h-7 w-[80px] font-mono text-[11px]"
+        />
+        <span className="w-3 shrink-0 font-mono text-[9px] text-muted-foreground">
+          {unit}
+        </span>
+      </div>
+      {hint && (
+        <p className="text-[9px] leading-tight text-muted-foreground">{hint}</p>
+      )}
     </div>
   )
 }
