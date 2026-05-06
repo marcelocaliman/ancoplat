@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Generic, Optional, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.solver.types import (
     BoundaryConditions,
@@ -100,6 +100,39 @@ class CaseInput(BaseModel):
             "seg 0 e seg 1). Lista vazia para linha sem elementos pontuais."
         ),
     )
+    metadata: Optional[dict[str, str]] = Field(
+        default=None,
+        description=(
+            "Metadata operacional do projeto (Sprint 1 / v1.1.0). "
+            "Pares chave-valor livres para preservar info de modelos "
+            "importados (QMoor: rig, location, region, engineer, "
+            "number, source_version). Não afeta o cálculo do solver — "
+            "é exibido no Memorial PDF e na UI de detalhes do caso. "
+            "Limite de 20 chaves para evitar abuso."
+        ),
+    )
+
+    @field_validator("metadata")
+    @classmethod
+    def _validate_metadata_size(
+        cls, v: Optional[dict[str, str]]
+    ) -> Optional[dict[str, str]]:
+        if v is None:
+            return v
+        if len(v) > 20:
+            raise ValueError(
+                f"metadata: máximo 20 chaves, recebido {len(v)}"
+            )
+        for key, val in v.items():
+            if not isinstance(key, str) or not isinstance(val, str):
+                raise ValueError(
+                    "metadata: todas as chaves e valores devem ser str"
+                )
+            if len(key) > 80 or len(val) > 500:
+                raise ValueError(
+                    f"metadata['{key}']: chave > 80 chars OU valor > 500 chars"
+                )
+        return v
 
 
 class ExecutionOutput(BaseModel):

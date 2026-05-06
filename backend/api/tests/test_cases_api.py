@@ -188,3 +188,60 @@ def test_list_cases_search(client: TestClient) -> None:
 def test_list_cases_pagesize_invalido_422(client: TestClient) -> None:
     resp = client.get("/api/v1/cases?page_size=999")
     assert resp.status_code == 422
+
+
+# ==============================================================================
+# metadata operacional (Sprint 1 / v1.1.0) — preserva info QMoor (rig, region…)
+# ==============================================================================
+
+
+def test_criar_caso_sem_metadata_default_none(client: TestClient) -> None:
+    resp = client.post("/api/v1/cases", json=BC01_LIKE_INPUT)
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["input"]["metadata"] is None
+
+
+def test_criar_caso_com_metadata_round_trip(client: TestClient) -> None:
+    payload = deepcopy(BC01_LIKE_INPUT)
+    payload["metadata"] = {
+        "rig": "P-XX",
+        "location": "Bacia de Santos",
+        "engineer": "F. Silva",
+        "source_version": "QMoor 0.8.0",
+    }
+    resp = client.post("/api/v1/cases", json=payload)
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["input"]["metadata"] == payload["metadata"]
+
+
+def test_criar_caso_metadata_excede_20_chaves_422(client: TestClient) -> None:
+    payload = deepcopy(BC01_LIKE_INPUT)
+    payload["metadata"] = {f"k{i}": f"v{i}" for i in range(21)}
+    resp = client.post("/api/v1/cases", json=payload)
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error"]["code"] == "validation_error"
+
+
+def test_criar_caso_metadata_chave_muito_longa_422(client: TestClient) -> None:
+    payload = deepcopy(BC01_LIKE_INPUT)
+    payload["metadata"] = {"k" * 81: "valor"}
+    resp = client.post("/api/v1/cases", json=payload)
+    assert resp.status_code == 422
+
+
+def test_criar_caso_metadata_valor_muito_longo_422(client: TestClient) -> None:
+    payload = deepcopy(BC01_LIKE_INPUT)
+    payload["metadata"] = {"rig": "x" * 501}
+    resp = client.post("/api/v1/cases", json=payload)
+    assert resp.status_code == 422
+
+
+def test_criar_caso_metadata_valor_nao_string_422(client: TestClient) -> None:
+    """metadata deve ser dict[str, str] — int não passa."""
+    payload = deepcopy(BC01_LIKE_INPUT)
+    payload["metadata"] = {"line_count": 8}  # int em vez de "8"
+    resp = client.post("/api/v1/cases", json=payload)
+    assert resp.status_code == 422
