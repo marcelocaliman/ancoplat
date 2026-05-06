@@ -809,44 +809,38 @@ export function CaseFormPage() {
                       className="h-7 w-[80px] font-mono text-[11px]"
                     />
                   </EnvField>
-                  <details className="text-[10px]">
-                    <summary className="cursor-pointer select-none py-0.5 text-muted-foreground hover:text-foreground">
-                      Avançado — slope direto
-                    </summary>
-                    <div className="mt-1.5 rounded-md border border-border/40 bg-muted/20 p-2 space-y-1.5">
-                      <p className="text-[9px] leading-tight text-muted-foreground">
-                        Sobrescreve o slope derivado da Geometria.
-                      </p>
-                      <Controller
-                        control={control}
-                        name="seabed.slope_rad"
-                        render={({ field }) => (
-                          <EnvField label="Slope direto" unit="°">
-                            <Input
-                              type="number"
-                              step={0.5}
-                              min={-45}
-                              max={45}
-                              value={
-                                field.value != null
-                                  ? ((field.value * 180) / Math.PI).toFixed(2)
-                                  : '0'
-                              }
-                              onChange={(e) => {
-                                const deg = parseFloat(e.target.value)
-                                field.onChange(
-                                  Number.isFinite(deg)
-                                    ? (deg * Math.PI) / 180
-                                    : 0,
-                                )
-                              }}
-                              className="h-7 w-[80px] font-mono text-[11px]"
-                            />
-                          </EnvField>
-                        )}
-                      />
-                    </div>
-                  </details>
+                  {/* Slope direto: sempre visível em vez de collapsible —
+                      espaço sobra no card e edição direta é mais
+                      profissional. Sobrescreve o slope da Geometria. */}
+                  <Controller
+                    control={control}
+                    name="seabed.slope_rad"
+                    render={({ field }) => (
+                      <EnvField label="Slope direto" unit="°">
+                        <Input
+                          type="number"
+                          step={0.5}
+                          min={-45}
+                          max={45}
+                          value={
+                            field.value != null
+                              ? ((field.value * 180) / Math.PI).toFixed(2)
+                              : '0'
+                          }
+                          onChange={(e) => {
+                            const deg = parseFloat(e.target.value)
+                            field.onChange(
+                              Number.isFinite(deg) ? (deg * Math.PI) / 180 : 0,
+                            )
+                          }}
+                          className="h-7 w-[80px] font-mono text-[11px]"
+                        />
+                      </EnvField>
+                    )}
+                  />
+                  <p className="text-[9px] leading-tight text-muted-foreground">
+                    Sobrescreve o slope derivado da Geometria.
+                  </p>
                 </EnvCard>
               </div>
             </TabsContent>
