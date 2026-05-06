@@ -148,8 +148,8 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
   return (
     <div
       className={cn(
-        'rounded-md border border-border/60 bg-muted/10 p-2.5',
-        'space-y-2',
+        'rounded-md border border-border/60 bg-muted/10 p-2',
+        'space-y-1.5',
       )}
     >
       <div className="flex items-center gap-2">

@@ -493,16 +493,19 @@ export function CaseFormPage() {
         </Card>
 
         {/* ═════════════════════════════════════════════════════════════
-            Layout 3-pane profissional (padrão CAD/FEA/OrcaFlex):
-              Coluna 1 (esquerda) — Tabs + forms (largura fixa, scroll interno)
-              Coluna 2 (centro)   — Plot dominante (flex-1, ocupa todo espaço)
-              Coluna 3 (direita)  — KPIs/metrics (largura fixa)
-            Em viewport < 1280px, KPIs colapsam horizontalmente abaixo do plot.
+            Layout horizontal-on-top:
+              Top    — Tabs + conteúdo da aba ativa em row horizontal
+                       scroll. Cada aba tem altura compacta (~280px) com
+                       cards em flex-row para muitos segmentos/boias/clumps.
+              Bottom — Plot dominante (flex-1) + Metrics (240px) lado a lado,
+                       ocupando todo o espaço vertical restante.
+            Decisão de design: forms HORIZONTAIS no topo (não em coluna
+            estreita à esquerda) para múltiplos segmentos serem visíveis
+            simultaneamente; metrics fica DIRETAMENTE ao lado do plot.
         ═════════════════════════════════════════════════════════════ */}
-        <div className="flex min-h-0 flex-1 gap-2">
-        {/* ───── Coluna 1: Tabs com inputs físicos (scroll interno) ───── */}
-        <Card className="flex w-[420px] shrink-0 flex-col overflow-hidden xl:w-[480px]">
-          <Tabs defaultValue="linha" className="flex min-h-0 flex-1 flex-col">
+        {/* ───── Top: Tabs com inputs físicos (altura compacta) ───── */}
+        <Card className="w-full shrink-0 overflow-hidden">
+          <Tabs defaultValue="linha" className="flex flex-col">
             <TabsList className="mx-2 mt-1.5 h-auto w-fit p-0.5">
               <TabsTrigger value="linha" className="h-6 gap-1 px-2 text-[11px]">
                 <Wrench className="h-3.5 w-3.5" />
@@ -557,11 +560,11 @@ export function CaseFormPage() {
             {/*
              * Stack das abas: todos os <TabsContent> são forceMount + grid
              * stacked (col/row-start-1) para preservar estado do form ao
-             * trocar de aba. Wrapper agora tem scroll interno (min-h-0 +
-             * overflow-y-auto) — altura é controlada pelo Card pai
-             * (3-pane shell), não pelo conteúdo, evitando esmagar o plot.
+             * trocar de aba. Altura máxima limitada (max-h-[300px]) com
+             * scroll interno se conteúdo exceder — garante que plot
+             * abaixo SEMPRE tem ≥ 60% da altura da viewport.
              */}
-            <div className="grid min-h-0 flex-1 overflow-y-auto">
+            <div className="grid max-h-[340px] overflow-y-auto">
               {/* ───────── Aba Linha: agregados + segmentos ───────── */}
               <TabsContent
                 forceMount
@@ -572,11 +575,20 @@ export function CaseFormPage() {
               <div className="mb-2">
                 <LineSummaryPanel segments={values.segments ?? []} />
               </div>
-              <div className="flex flex-wrap gap-2">
+              {/*
+               * Layout horizontal: cards em row scroll horizontal.
+               * Decisão UX (2026-05-05 / D7): ordem visual de
+               * fairlead → âncora (esquerda → direita), espelhando
+               * a leitura natural do plot que tem fairlead à esquerda.
+               * Implementado via flex-row-reverse — DOM mantém ordem
+               * natural [seg0=anchor, ..., segN=fairlead, addBtn] mas
+               * visual fica [addBtn, segN=fairlead, ..., seg0=anchor].
+               */}
+              <div className="flex flex-row-reverse flex-nowrap gap-2 overflow-x-auto pb-1">
                 {segmentsArray.fields.map((field, idx) => (
                   <div
                     key={field.id}
-                    className="min-w-[280px] max-w-[360px] flex-1"
+                    className="w-[280px] shrink-0"
                   >
                     <SegmentEditor
                       index={idx}
@@ -608,7 +620,7 @@ export function CaseFormPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-auto min-h-[44px] min-w-[280px] max-w-[360px] flex-1 gap-1.5 border-dashed text-[11px]"
+                    className="h-auto w-[200px] shrink-0 gap-1.5 border-dashed text-[11px]"
                     onClick={() => {
                       const last = segmentsArray.fields[
                         segmentsArray.fields.length - 1
@@ -616,7 +628,7 @@ export function CaseFormPage() {
                       segmentsArray.append({ ...last, length: 100 })
                     }}
                   >
-                    + Adicionar segmento (próximo do fairlead)
+                    + Adicionar (próximo do fairlead)
                   </Button>
                 )}
               </div>
@@ -668,7 +680,7 @@ export function CaseFormPage() {
                 value="ambiente"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-              <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
 
                 {/* Grupo 1 — Geometria (batimetria 2-pontos primária) */}
                 <div className="space-y-1.5">
@@ -698,12 +710,12 @@ export function CaseFormPage() {
                   />
                 </div>
 
-                {/* Grupo 2 — Fairlead em grid 2-cols (4 campos: 2x2) */}
+                {/* Grupo 2 — Fairlead (4 campos empilhados na coluna estreita) */}
                 <div className="space-y-1.5">
                   <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Fairlead
                   </h4>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
                     <InlineField
                       label="Prof. abaixo da água"
                       unit="m"
@@ -788,7 +800,7 @@ export function CaseFormPage() {
                         control={control}
                         name="boundary.endpoint_depth"
                         render={({ field: depthField }) => (
-                          <div className="grid grid-cols-2 gap-2 items-start">
+                          <div className="space-y-1.5">
                             <fieldset className="space-y-0.5">
                               <legend className="text-[10px] font-medium text-muted-foreground mb-1">
                                 Tipo de fixação
@@ -862,12 +874,12 @@ export function CaseFormPage() {
                   />
                 </div>
 
-                {/* Grupo 4 — Seabed (μ inline com details slope direto) */}
+                {/* Grupo 4 — Seabed (μ + details slope direto empilhados) */}
                 <div className="space-y-1.5">
                   <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Seabed
                   </h4>
-                  <div className="grid grid-cols-2 gap-2 items-start">
+                  <div className="space-y-1.5">
                     <InlineField
                       label="μ (atrito) global"
                       tooltip="Atrito global do seabed. Pode ser sobrescrito por segmento na aba Linha (μ override). Wire ~0,3 · Corrente ~1,0 · Poliéster ~0,25"
@@ -932,9 +944,9 @@ export function CaseFormPage() {
                 value="analise"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
+              {/* Aba Análise: 3 campos numa linha + UserDefined limits abaixo */}
               <div className="flex flex-col gap-3">
-                {/* Modo + valor lado a lado (grid 2 cols) */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <InlineField label="Modo de cálculo">
                     <Controller
                       control={control}
@@ -990,8 +1002,7 @@ export function CaseFormPage() {
                       />
                     )}
                   </InlineField>
-                </div>
-                {/* Critério em linha separada (Select largo precisa de espaço) */}
+                {/* Critério na mesma linha (3a coluna) */}
                 <InlineField label="Critério de utilização">
                   <Controller
                     control={control}
@@ -1019,6 +1030,7 @@ export function CaseFormPage() {
                     )}
                   />
                 </InlineField>
+                </div>
                 {criteriaProfile === 'UserDefined' && (
                   <div className="grid grid-cols-3 gap-2">
                     {(
@@ -1058,7 +1070,8 @@ export function CaseFormPage() {
           </Tabs>
         </Card>
 
-        {/* ───── Coluna 2: Plot dominante (centro, ocupa todo espaço livre) ───── */}
+        {/* ───── Bottom: Plot dominante (centro) + Metrics (direita) ───── */}
+        <div className="flex min-h-0 flex-1 gap-2">
           <Card className="min-h-0 flex-1 overflow-hidden">
             <CardContent className="h-full p-1">
               <PlotArea
@@ -1091,7 +1104,7 @@ export function CaseFormPage() {
               />
             </CardContent>
           </Card>
-        {/* ───── Coluna 3: KPIs/metrics (largura fixa, scroll interno) ───── */}
+          {/* KPIs/metrics colados ao lado direito do plot */}
           <MetricsColumn
             result={previewQuery.data}
             previewReady={previewReady}
