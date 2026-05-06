@@ -12,6 +12,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import {
+  commitQmoorV08,
   exportJsonUrl,
   exportMoorUrl,
   exportCsvUrl,
@@ -20,6 +21,8 @@ import {
   exportXlsxUrl,
   importMoor,
   listCases,
+  previewQmoorV08,
+  type QMoor08PreviewItem,
 } from '@/api/endpoints'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Topbar } from '@/components/layout/Topbar'
@@ -119,6 +122,41 @@ function ImportPanel() {
     },
   })
 
+  // QMoor 0.8.0 (Sprint 1) — formato multi-line × multi-profile
+  const isQMoor08 =
+    parse.status === 'parsed' &&
+    typeof parse.payload['version'] === 'string' &&
+    (parse.payload['version'] as string).startsWith('0.8') &&
+    Array.isArray(parse.payload['mooringLines'])
+
+  const previewQuery = useQuery({
+    queryKey: ['qmoor08-preview', parse.status === 'parsed' ? parse.filename : null],
+    queryFn: () => previewQmoorV08(parse.status === 'parsed' ? parse.payload : {}),
+    enabled: isQMoor08,
+  })
+
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set())
+
+  const commitMutation = useMutation({
+    mutationFn: () => {
+      if (parse.status !== 'parsed') throw new Error('parse não está pronto')
+      return commitQmoorV08(parse.payload, Array.from(selectedIndices))
+    },
+    onSuccess: (out) => {
+      toast.success(`${out.n_created} caso(s) criado(s).`)
+      if (out.created.length === 1) {
+        navigate(`/cases/${out.created[0].id}`)
+      } else {
+        navigate('/cases')
+      }
+    },
+    onError: (err) => {
+      toast.error('Falha ao importar QMoor 0.8.0', {
+        description: err instanceof ApiError ? err.message : String(err),
+      })
+    },
+  })
+
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <Card>
@@ -174,8 +212,164 @@ function ImportPanel() {
         </CardContent>
       </Card>
 
-      {/* Preview */}
-      {parse.status === 'parsed' && (
+      {/* Preview QMoor 0.8.0 — selector de profiles (Sprint 1) */}
+      {parse.status === 'parsed' && isQMoor08 && (
+        <Card>
+          <CardHeader className="flex-row items-start justify-between space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CheckCircle2 className="h-4 w-4 text-success" />
+                QMoor 0.8.0 · {parse.filename}
+              </CardTitle>
+              <CardDescription>
+                Arquivo multi-linha QMoor 0.8.0 detectado. Selecione quais
+                cases (mooringLine × profile) você quer importar.
+              </CardDescription>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setParse({ status: 'idle' })
+                setSelectedIndices(new Set())
+              }}
+              aria-label="Limpar preview"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {previewQuery.isLoading && <Skeleton className="h-32 w-full" />}
+            {previewQuery.error && (
+              <p className="text-sm text-danger">
+                Falha ao parsear:{' '}
+                {previewQuery.error instanceof ApiError
+                  ? previewQuery.error.message
+                  : String(previewQuery.error)}
+              </p>
+            )}
+            {previewQuery.data && (
+              <>
+                <div className="mb-3 flex items-center gap-3 text-[12px]">
+                  <span className="text-muted-foreground">
+                    {previewQuery.data.total} caso(s) detectado(s)
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const all = previewQuery.data!.items.map((it) => it.index)
+                      setSelectedIndices(new Set(all))
+                    }}
+                  >
+                    Selecionar todos
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedIndices(new Set())}
+                  >
+                    Limpar seleção
+                  </Button>
+                </div>
+                <div className="max-h-96 overflow-auto custom-scroll rounded-md border border-border">
+                  <table className="w-full text-[12px]">
+                    <thead className="sticky top-0 bg-muted/40">
+                      <tr className="text-left text-muted-foreground">
+                        <th className="w-10 p-2"></th>
+                        <th className="p-2">Caso</th>
+                        <th className="p-2">Segmentos</th>
+                        <th className="p-2">Attachments</th>
+                        <th className="p-2">Vessel</th>
+                        <th className="p-2">Corrente</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewQuery.data.items.map((it: QMoor08PreviewItem) => (
+                        <tr
+                          key={it.index}
+                          className="border-t border-border hover:bg-muted/30"
+                        >
+                          <td className="p-2">
+                            <Checkbox
+                              checked={selectedIndices.has(it.index)}
+                              onCheckedChange={(v) => {
+                                setSelectedIndices((prev) => {
+                                  const next = new Set(prev)
+                                  if (v) next.add(it.index)
+                                  else next.delete(it.index)
+                                  return next
+                                })
+                              }}
+                              aria-label={`Selecionar ${it.name}`}
+                            />
+                          </td>
+                          <td className="p-2 font-medium">{it.name}</td>
+                          <td className="p-2 text-muted-foreground">
+                            {it.n_segments}
+                          </td>
+                          <td className="p-2 text-muted-foreground">
+                            {it.n_attachments}
+                          </td>
+                          <td className="p-2 text-muted-foreground">
+                            {it.has_vessel ? 'sim' : '—'}
+                          </td>
+                          <td className="p-2 text-muted-foreground">
+                            {it.has_current_profile ? 'sim' : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {previewQuery.data.migration_log.length > 0 && (
+                  <details className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-2">
+                    <summary className="cursor-pointer text-[12px] font-medium text-warning">
+                      {previewQuery.data.migration_log.length} entrada(s) no
+                      log de migração
+                    </summary>
+                    <ul className="mt-2 space-y-1 text-[11px]">
+                      {previewQuery.data.migration_log.map((e, i) => (
+                        <li key={i} className="flex gap-2">
+                          <code className="font-mono text-muted-foreground">
+                            {e.field}
+                          </code>
+                          <span className="text-foreground">{e.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setParse({ status: 'idle' })
+                      setSelectedIndices(new Set())
+                    }}
+                  >
+                    Descartar
+                  </Button>
+                  <Button
+                    onClick={() => commitMutation.mutate()}
+                    disabled={
+                      commitMutation.isPending || selectedIndices.size === 0
+                    }
+                  >
+                    <Upload className="h-4 w-4" />
+                    Importar {selectedIndices.size} caso(s)
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Preview .moor v2 (formato AncoPlat) — single case */}
+      {parse.status === 'parsed' && !isQMoor08 && (
         <Card>
           <CardHeader className="flex-row items-start justify-between space-y-0">
             <div>

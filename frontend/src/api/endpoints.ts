@@ -247,6 +247,51 @@ export const computeWatchcircle = (
 export const importMoor = (payload: Record<string, unknown>) =>
   apiClient.post<CaseOutput>('/import/moor', payload).then((r) => r.data)
 
+// QMoor 0.8.0 (Sprint 1 / v1.1.0) — multi-line × multi-profile
+export interface QMoor08PreviewItem {
+  index: number
+  name: string
+  description: string | null
+  n_segments: number
+  n_attachments: number
+  has_vessel: boolean
+  has_current_profile: boolean
+  metadata_keys: string[]
+}
+
+export interface QMoor08PreviewResponse {
+  items: QMoor08PreviewItem[]
+  total: number
+  migration_log: Array<{
+    field: string
+    old: unknown
+    new: unknown
+    reason: string
+  }>
+}
+
+export const previewQmoorV08 = (payload: Record<string, unknown>) =>
+  apiClient
+    .post<QMoor08PreviewResponse>('/import/qmoor-0_8/preview', payload)
+    .then((r) => r.data)
+
+export interface QMoor08CommitResponse {
+  created: CaseOutput[]
+  n_created: number
+  migration_log: QMoor08PreviewResponse['migration_log']
+}
+
+export const commitQmoorV08 = (
+  payload: Record<string, unknown>,
+  selected_indices: number[],
+) =>
+  apiClient
+    .post<QMoor08CommitResponse>('/import/qmoor-0_8/commit', {
+      payload,
+      selected_indices,
+    })
+    .then((r) => r.data)
+
 export const exportMoorUrl = (caseId: number, unitSystem: 'imperial' | 'metric') =>
   `/api/v1/cases/${caseId}/export/moor?unit_system=${unitSystem}`
 

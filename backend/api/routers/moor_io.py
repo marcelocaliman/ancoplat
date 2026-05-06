@@ -22,6 +22,10 @@ from backend.api.schemas.cases import CaseOutput
 from backend.api.schemas.errors import ErrorResponse
 from backend.api.services import case_service, moor_service
 from backend.api.services.case_service import CaseNotFound
+from backend.api.services.moor_qmoor_v0_8 import (
+    QMoorV08ParseError,
+    parse_qmoor_v0_8,
+)
 from backend.api.services.moor_service import MoorFormatError
 
 router = APIRouter(tags=["import-export"])
@@ -138,6 +142,111 @@ def export_json(
             },
         )
     return case_service.case_record_to_output(rec)
+
+
+@router.post(
+    "/import/qmoor-0_8/preview",
+    summary="Preview QMoor 0.8.0 (lista profiles, não persiste nada)",
+    description=(
+        "Recebe JSON top-level QMoor 0.8.0. Retorna preview com lista "
+        "de mooringLines × profiles disponíveis e log de parse. UI usa "
+        "esse preview para mostrar selector ao usuário antes de chamar "
+        "/commit. Sprint 1 / Commit 7."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Payload QMoor 0.8.0 inválido"},
+    },
+)
+def import_qmoor_v0_8_preview(
+    payload: dict[str, Any] = Body(..., description="JSON QMoor 0.8.0"),
+) -> dict[str, Any]:
+    try:
+        cases, log = parse_qmoor_v0_8(payload)
+    except QMoorV08ParseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "qmoor_v0_8_parse_error", "message": str(exc)},
+        )
+    items = [
+        {
+            "index": i,
+            "name": ci.name,
+            "description": ci.description,
+            "n_segments": len(ci.segments),
+            "n_attachments": len(ci.attachments),
+            "has_vessel": ci.vessel is not None,
+            "has_current_profile": ci.current_profile is not None,
+            "metadata_keys": list((ci.metadata or {}).keys()),
+        }
+        for i, ci in enumerate(cases)
+    ]
+    return {
+        "items": items,
+        "migration_log": log,
+        "total": len(items),
+    }
+
+
+@router.post(
+    "/import/qmoor-0_8/commit",
+    status_code=status.HTTP_201_CREATED,
+    summary="Importa cases QMoor 0.8.0 selecionados (cria casos no DB)",
+    description=(
+        "Recebe `{payload: <QMoor JSON>, selected_indices: [int, ...]}`. "
+        "Re-roda o parser e persiste apenas os cases nos índices "
+        "selecionados (índices baseiam-se na ordem retornada pelo "
+        "/preview). Usuário sempre tem a opção de re-importar com outros "
+        "índices. Sprint 1 / Commit 7."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Payload QMoor 0.8.0 inválido"},
+    },
+)
+def import_qmoor_v0_8_commit(
+    body: dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    payload = body.get("payload")
+    indices = body.get("selected_indices")
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "missing_payload", "message": "body.payload obrigatório."},
+        )
+    if not isinstance(indices, list) or not all(isinstance(i, int) for i in indices):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "invalid_indices",
+                "message": "body.selected_indices deve ser list[int].",
+            },
+        )
+    try:
+        cases, log = parse_qmoor_v0_8(payload)
+    except QMoorV08ParseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "qmoor_v0_8_parse_error", "message": str(exc)},
+        )
+
+    created: list[dict[str, Any]] = []
+    for idx in indices:
+        if idx < 0 or idx >= len(cases):
+            log.append({
+                "field": f"selected_indices[{idx}]",
+                "old": idx, "new": "skipped",
+                "reason": f"índice fora do range [0, {len(cases) - 1}].",
+            })
+            continue
+        rec = case_service.create_case(db, cases[idx])
+        out = case_service.case_record_to_output(rec)
+        created.append(out.model_dump(mode="json"))
+
+    return {
+        "created": created,
+        "n_created": len(created),
+        "migration_log": log,
+    }
 
 
 __all__ = ["router"]
