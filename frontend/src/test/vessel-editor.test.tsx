@@ -13,13 +13,13 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
 import { VesselEditor } from '@/components/common/VesselEditor'
-import { caseInputSchema, EMPTY_CASE, type CaseFormValues } from '@/lib/caseSchema'
+import { EMPTY_CASE, type CaseFormValues } from '@/lib/caseSchema'
 
 function Harness({ initial }: { initial?: CaseFormValues['vessel'] }) {
+  // Smoke test não exercita validação Zod (resolver omitido para evitar
+  // mismatch entre inferência ZodInput/ZodOutput em `default()`).
   const form = useForm<CaseFormValues>({
-    resolver: zodResolver(caseInputSchema),
     defaultValues: { ...EMPTY_CASE, vessel: initial ?? null },
   })
   const vessel = form.watch('vessel')

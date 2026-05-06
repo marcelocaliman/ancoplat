@@ -9,6 +9,7 @@ import {
   FileText,
   Gauge,
   History,
+  Info,
   LineChart as LineChartIcon,
   ListChecks,
   MoreHorizontal,
@@ -72,6 +73,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -350,19 +356,23 @@ export function CaseDetailPage() {
           topbar + footer escondidos). Botões interativos individuais
           marcados com `print-hide`. */}
       <div className="print-area flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/* ─────────── Cabeçalho do caso ─────────── */}
-        <header className="shrink-0 border-b border-border bg-background/60 px-6 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h1 className="truncate text-2xl font-semibold tracking-tight">
-                {data.name}
-              </h1>
+        {/* ─────────── Cabeçalho compacto do caso ───────────
+            Removidos: h1 (nome já está no breadcrumb editável da Topbar)
+                       e bloco de datas em coluna direita (agora popover).
+            Layout: 1 linha com descrição + pills inline + popover-info à direita.
+            Ganho ~80px de altura vertical para o plot. */}
+        <header className="shrink-0 border-b border-border bg-background/60 px-6 py-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               {data.description && (
-                <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+                <p
+                  className="truncate text-[11px] text-muted-foreground"
+                  title={data.description}
+                >
                   {data.description}
                 </p>
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex shrink-0 items-center gap-1.5">
                 <CategoryBadge category={caseInput.segments[0]?.category} />
                 {caseInput.segments[0]?.line_type && (
                   <Badge variant="outline" className="font-mono text-[10px]">
@@ -382,27 +392,49 @@ export function CaseDetailPage() {
                 )}
               </div>
             </div>
-            <div className="text-right text-xs text-muted-foreground">
-              <p>
-                Criado em{' '}
-                {format(new Date(data.created_at), "dd 'de' MMM, yyyy", {
-                  locale: ptBR,
-                })}
-              </p>
-              <p>
-                Atualizado{' '}
-                {format(new Date(data.updated_at), "dd 'de' MMM 'às' HH:mm", {
-                  locale: ptBR,
-                })}
-              </p>
-              {executions.length > 0 && (
-                <p className="mt-0.5">
-                  {executions.length}{' '}
-                  {executions.length === 1 ? 'execução' : 'execuções'} ·
-                  {' '}última: Run #{latest!.id}
-                </p>
-              )}
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                  title="Datas e execuções"
+                  aria-label="Datas e execuções"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 text-xs">
+                <div className="space-y-1.5">
+                  <div>
+                    <span className="text-muted-foreground">Criado em: </span>
+                    {format(new Date(data.created_at), "dd 'de' MMM, yyyy", {
+                      locale: ptBR,
+                    })}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Atualizado: </span>
+                    {format(
+                      new Date(data.updated_at),
+                      "dd 'de' MMM 'às' HH:mm",
+                      { locale: ptBR },
+                    )}
+                  </div>
+                  {executions.length > 0 && (
+                    <div className="border-t border-border/40 pt-1.5">
+                      <span className="text-muted-foreground">
+                        {executions.length}{' '}
+                        {executions.length === 1 ? 'execução' : 'execuções'}
+                      </span>
+                      <span className="ml-1">
+                        · última: Run #{latest!.id}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </header>
 
