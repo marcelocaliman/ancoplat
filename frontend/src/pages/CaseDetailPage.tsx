@@ -34,7 +34,7 @@ import {
   getCase,
   solveCase,
 } from '@/api/endpoints'
-import type { ExecutionOutput, SolverResult } from '@/api/types'
+import type { CaseInput, ExecutionOutput, SolverResult } from '@/api/types'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
 import {
   ImportedModelCard,
@@ -113,6 +113,19 @@ export function CaseDetailPage() {
   // visualmente o resultado salvo nos cards/gráfico/tabelas. As entradas
   // de Histórico continuam refletindo as runs persistidas.
   const [liveResult, setLiveResult] = useState<SolverResult | null>(null)
+  // Sprint 2 / Commit 17 — quando preview está ativo, precisamos
+  // também do input modificado (segments + attachments com lengths/
+  // posições NOVAS) para o plot mapear attachments aos junctions
+  // corretos via buildPostSplitStructure. Sem isso, clump fica
+  // visualmente fora do lugar quando o usuário mexe nos sliders.
+  const [liveInput, setLiveInput] = useState<CaseInput | null>(null)
+  const handlePreview = (
+    res: SolverResult | null,
+    input: CaseInput | null,
+  ) => {
+    setLiveResult(res)
+    setLiveInput(input)
+  }
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['case', String(caseId)],
@@ -529,18 +542,32 @@ export function CaseDetailPage() {
                 />
                 <Card className="mb-4">
                   <CardContent className="h-[480px] p-2">
+                    {/* Sprint 2 / Commit 17 — quando preview está ativo
+                        (liveInput != null), passamos os segments e
+                        attachments do INPUT MODIFICADO para o plot. Sem
+                        isso, buildPostSplitStructure usa os segs antigos
+                        e mapeia attachments na junção errada (clump
+                        ficava fora de lugar quando seg lengths mudavam). */}
                     <CatenaryPlot
                       result={result}
-                      attachments={caseInput.attachments ?? []}
-                      seabedSlopeRad={caseInput.seabed?.slope_rad ?? 0}
-                      segments={caseInput.segments ?? []}
+                      attachments={
+                        liveInput?.attachments ?? caseInput.attachments ?? []
+                      }
+                      seabedSlopeRad={
+                        liveInput?.seabed?.slope_rad
+                        ?? caseInput.seabed?.slope_rad
+                        ?? 0
+                      }
+                      segments={
+                        liveInput?.segments ?? caseInput.segments ?? []
+                      }
                       startpointType={
-                        (caseInput.boundary?.startpoint_type as
+                        ((liveInput ?? caseInput).boundary?.startpoint_type as
                           | 'semisub' | 'ahv' | 'barge' | 'none' | undefined)
                           ?? 'semisub'
                       }
                       vessel={
-                        (caseInput as unknown as {
+                        ((liveInput ?? caseInput) as unknown as {
                           vessel?: VesselDisplay | null
                         }).vessel ?? null
                       }
@@ -551,7 +578,7 @@ export function CaseDetailPage() {
                   <SensitivityPanel
                     caseId={caseId}
                     baseInput={caseInput}
-                    onPreview={setLiveResult}
+                    onPreview={handlePreview}
                     onApplied={() => {
                       queryClient.invalidateQueries({
                         queryKey: ['case', String(caseId)],

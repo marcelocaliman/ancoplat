@@ -18,8 +18,15 @@ export interface SensitivityPanelProps {
   caseId: number
   /** Input baseline do caso (valores originalmente salvos). */
   baseInput: CaseInput
-  /** Notificado a cada nova predição ao vivo (ou `null` quando sliders no zero). */
-  onPreview: (result: SolverResult | null) => void
+  /**
+   * Notificado a cada nova predição ao vivo (ou `(null, null)` quando
+   * sliders no zero). O segundo argumento entrega o `CaseInput` modificado
+   * usado no preview — necessário para que o plot exiba o estado novo
+   * de segments/attachments coerentemente com `result` (sem isso o
+   * `buildPostSplitStructure` usa segs antigos e mapeia attachments na
+   * junção errada).
+   */
+  onPreview: (result: SolverResult | null, input: CaseInput | null) => void
   /** Callback após aplicar mudanças com sucesso (recarregar dados do caso). */
   onApplied?: () => void
 }
@@ -195,13 +202,13 @@ export function SensitivityPanel({
   // para que o pai volte a mostrar o resultado salvo.
   useEffect(() => {
     if (!hasChange) {
-      onPreview(null)
+      onPreview(null, null)
       return
     }
-    if (previewQuery.data) onPreview(previewQuery.data)
+    if (previewQuery.data) onPreview(previewQuery.data, previewInput)
     // Em erro/loading mantém o último válido para evitar flicker.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasChange, previewQuery.data])
+  }, [hasChange, previewQuery.data, previewInput])
 
   const applyMutation = useMutation({
     mutationFn: async () => {
@@ -229,7 +236,7 @@ export function SensitivityPanel({
       mu: baseMu,
       attachmentS: baseAttachmentS,
     })
-    onPreview(null)
+    onPreview(null, null)
   }
 
   const isFetching = previewQuery.isFetching && hasChange
