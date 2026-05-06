@@ -7,6 +7,13 @@ import { useUnitsStore } from '@/store/units'
 interface BreadcrumbItem {
   label: string
   to?: string
+  /**
+   * Custom React node para renderizar no lugar do label.
+   * Útil para breadcrumb editável (input inline) ou badges.
+   * Se definido, ignora `label` e `to` na renderização — mas
+   * `label` ainda é usado como key/aria fallback.
+   */
+  node?: ReactNode
 }
 
 /**
@@ -75,7 +82,10 @@ export function Topbar({ breadcrumbs, actions }: TopbarProps) {
                 <ChevronRight className="h-3.5 w-3.5" />
               </li>
               <li>
-                {item.to && idx < items.length - 1 ? (
+                {item.node ? (
+                  // Slot custom (e.g. nome editável inline)
+                  item.node
+                ) : item.to && idx < items.length - 1 ? (
                   <Link
                     to={item.to}
                     className="rounded-sm px-1 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

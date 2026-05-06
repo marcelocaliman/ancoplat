@@ -5,8 +5,6 @@ import {
   AlertTriangle,
   Anchor,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   FileText,
   Info,
   Loader2,
@@ -40,6 +38,8 @@ import {
 } from '@/api/endpoints'
 import type { SolverResult } from '@/api/types'
 import { AttachmentsTable } from '@/components/common/AttachmentsTable'
+import { CaseNotesDialog } from '@/components/common/CaseNotesDialog'
+import { EditableCaseName } from '@/components/common/EditableCaseName'
 import { EnvCard, EnvField } from '@/components/common/EnvCard'
 import { BathymetryInputGroup } from '@/components/common/BathymetryInputGroup'
 import { LineSummaryPanel } from '@/components/common/LineSummaryPanel'
@@ -87,7 +87,6 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
   TooltipContent,
@@ -363,9 +362,27 @@ export function CaseFormPage() {
     )
   }
 
+  // Breadcrumbs com nome do caso editável inline (substitui "#18 Editar").
+  // Espaço liberado pelo Card "Nome + Notas" que foi removido vai para
+  // o gráfico e cards das abas. v1.0.12.
+  const nameValue = (values.name as string | undefined) ?? ''
+  const nameError = errors.name?.message
   const breadcrumbs = [
     { label: 'Casos', to: '/cases' },
-    { label: isEdit ? `#${id} Editar` : 'Novo' },
+    {
+      label: nameValue || (isEdit ? `#${id}` : 'Novo'),
+      node: (
+        <EditableCaseName
+          value={nameValue}
+          onChange={(next) =>
+            setValue('name', next, { shouldValidate: true, shouldDirty: true })
+          }
+          caseId={isEdit ? id : undefined}
+          invalid={!!nameError}
+          errorMessage={nameError}
+        />
+      ),
+    },
   ]
 
   const actions = (
@@ -384,6 +401,28 @@ export function CaseFormPage() {
           }}
         />
       )}
+      {/* Botão Notas — abre modal CaseNotesDialog. Badge se preenchidas. */}
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() => setNotesOpen(true)}
+        title={hasNotes ? 'Editar notas' : 'Adicionar notas'}
+        className="gap-1.5"
+      >
+        <FileText
+          className={cn(
+            'h-3.5 w-3.5',
+            hasNotes ? 'text-primary' : 'text-muted-foreground',
+          )}
+        />
+        Notas
+        {hasNotes && (
+          <span className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground">
+            ✓
+          </span>
+        )}
+      </Button>
       <Button variant="ghost" size="sm" asChild>
         <Link to={isEdit ? `/cases/${id}` : '/cases'}>Cancelar</Link>
       </Button>
@@ -446,53 +485,18 @@ export function CaseFormPage() {
             </Button>
           </div>
         )}
-        {/* ───── Linha 1: Metadados (compacta) — Nome + Notas ───── */}
-        <Card className="shrink-0 overflow-hidden">
-          <CardContent className="grid grid-cols-[minmax(0,560px)_auto] items-end gap-3 p-3">
-            <InlineField
-              label="Nome do caso"
-              required
-              error={errors.name?.message}
-            >
-              <Input
-                {...register('name')}
-                placeholder="ex.: BC-01 catenária suspensa"
-                className="h-7"
-              />
-            </InlineField>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setNotesOpen((v) => !v)}
-              className="h-7 gap-1.5 text-[11px]"
-              title={hasNotes ? 'Notas preenchidas' : 'Adicionar notas'}
-            >
-              <FileText
-                className={cn(
-                  'h-3.5 w-3.5',
-                  hasNotes ? 'text-primary' : 'text-muted-foreground',
-                )}
-              />
-              Notas
-              {notesOpen ? (
-                <ChevronUp className="h-3 w-3" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-            </Button>
-          </CardContent>
-          {notesOpen && (
-            <div className="border-t border-border/60 px-3 pb-3 pt-2">
-              <Textarea
-                {...register('description')}
-                rows={2}
-                placeholder="Notas sobre o caso, condições de projeto, premissas, datas…"
-                className="resize-none text-sm"
-              />
-            </div>
-          )}
-        </Card>
+        {/* v1.0.12 — Card "Nome + Notas" removido. Nome agora editável
+            inline no breadcrumb (componente EditableCaseName), notas
+            via modal (CaseNotesDialog), botão na topbar. ~70-90px de
+            altura recuperados para gráfico e cards das abas. */}
+        <CaseNotesDialog
+          open={notesOpen}
+          onOpenChange={setNotesOpen}
+          value={(values.description as string | undefined) ?? ''}
+          onSave={(next) =>
+            setValue('description', next, { shouldDirty: true })
+          }
+        />
 
         {/* ═════════════════════════════════════════════════════════════
             Layout horizontal-on-top:
