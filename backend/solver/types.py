@@ -952,6 +952,14 @@ class SolverResult(BaseModel):
     # Vazio para casos single-segmento (compatibilidade).
     segment_boundaries: list[int] = Field(default_factory=list)
 
+    # --- Sprint 4 / Commit 40 — Work Wire visualization split ---
+    # Índice em coords_x/y onde COMEÇA o Work Wire concatenado após o
+    # mooring (Tier C ativo, sem fallback). Frontend usa para colorir
+    # Work Wire em cor distinta (laranja). None = não há Work Wire
+    # visualizável (Sprint 2, fallback ativo, ou Tier C com mooring
+    # 100% apoiado retornado em fallback).
+    work_wire_start_index: Optional[int] = None
+
     # --- Batimetria (F5.3.z) ---
     # Profundidade do seabed nos dois pontos críticos do problema, ambos
     # medidos da superfície da água (positivo = abaixo). Em casos sem

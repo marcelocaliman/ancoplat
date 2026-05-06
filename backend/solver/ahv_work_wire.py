@@ -470,6 +470,9 @@ def solve_with_work_wire(
         np.array(r_moor.tension_magnitude or []),
         np.array(r_ww.tension_magnitude or []),
     ]).tolist()
+    # Sprint 4 / Commit 40 — índice onde Work Wire começa no array
+    # concatenado (frontend usa para colorir distintamente).
+    ww_start_idx = len(coords_x_moor)
 
     L_total_unstretched = seg_moor.length + ww.length
     L_total_stretched = (r_moor.stretched_length or seg_moor.length) + (
@@ -525,6 +528,7 @@ def solve_with_work_wire(
         water_depth=h,
         startpoint_depth=boundary.startpoint_depth,
         solver_version=SOLVER_VERSION,
+        work_wire_start_index=ww_start_idx,
     )
 
 
