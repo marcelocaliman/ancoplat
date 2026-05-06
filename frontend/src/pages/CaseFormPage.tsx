@@ -504,7 +504,7 @@ export function CaseFormPage() {
             simultaneamente; metrics fica DIRETAMENTE ao lado do plot.
         ═════════════════════════════════════════════════════════════ */}
         {/* ───── Top: Tabs com inputs físicos (altura compacta) ───── */}
-        <Card className="shrink-0 overflow-hidden">
+        <Card className="w-full shrink-0 overflow-hidden">
           <Tabs defaultValue="linha" className="flex flex-col">
             <TabsList className="mx-2 mt-1.5 h-auto w-fit p-0.5">
               <TabsTrigger value="linha" className="h-6 gap-1 px-2 text-[11px]">
@@ -588,7 +588,7 @@ export function CaseFormPage() {
                 {segmentsArray.fields.map((field, idx) => (
                   <div
                     key={field.id}
-                    className="w-[300px] shrink-0"
+                    className="w-[280px] shrink-0"
                   >
                     <SegmentEditor
                       index={idx}
