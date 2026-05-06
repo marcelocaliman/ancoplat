@@ -944,9 +944,9 @@ export function CaseFormPage() {
                 value="analise"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
+              {/* Aba Análise: 3 campos numa linha + UserDefined limits abaixo */}
               <div className="flex flex-col gap-3">
-                {/* Modo + valor lado a lado (grid 2 cols) */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   <InlineField label="Modo de cálculo">
                     <Controller
                       control={control}
@@ -1002,8 +1002,7 @@ export function CaseFormPage() {
                       />
                     )}
                   </InlineField>
-                </div>
-                {/* Critério em linha separada (Select largo precisa de espaço) */}
+                {/* Critério na mesma linha (3a coluna) */}
                 <InlineField label="Critério de utilização">
                   <Controller
                     control={control}
@@ -1031,6 +1030,7 @@ export function CaseFormPage() {
                     )}
                   />
                 </InlineField>
+                </div>
                 {criteriaProfile === 'UserDefined' && (
                   <div className="grid grid-cols-3 gap-2">
                     {(
