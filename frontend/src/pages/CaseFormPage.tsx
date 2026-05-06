@@ -55,6 +55,7 @@ import {
   SolverDiagnosticsCard,
   type SolverDiagnostic,
 } from '@/components/common/SolverDiagnosticsCard'
+import { AHVInstallEditor } from '@/components/common/AHVInstallEditor'
 import { TemplatePicker } from '@/components/common/TemplatePicker'
 import { VesselEditor } from '@/components/common/VesselEditor'
 import { getTemplate, type CaseTemplate } from '@/lib/caseTemplates'
@@ -572,6 +573,22 @@ export function CaseFormPage() {
                 )}
                 <TabValidationCounter prefix="vessel." />
               </TabsTrigger>
+              <TabsTrigger
+                value="ahv-install"
+                className="h-6 gap-1 px-2 text-[11px]"
+              >
+                <Anchor className="h-3.5 w-3.5" />
+                AHV Install
+                {values.boundary?.ahv_install != null && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-4 px-1 text-[10px]"
+                  >
+                    1
+                  </Badge>
+                )}
+                <TabValidationCounter prefix="boundary.ahv_install." />
+              </TabsTrigger>
               <TabsTrigger value="analise" className="h-6 gap-1 px-2 text-[11px]">
                 <Sigma className="h-3.5 w-3.5" />
                 Análise
@@ -876,6 +893,21 @@ export function CaseFormPage() {
                     control={control}
                     setValue={setValue}
                     vessel={values.vessel ?? null}
+                  />
+                </div>
+              </TabsContent>
+
+              {/* ───────── Aba AHV Install (Sprint 2 / Commit 27) ───────── */}
+              <TabsContent
+                forceMount
+                value="ahv-install"
+                className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
+              >
+                <div className="max-w-3xl">
+                  <AHVInstallEditor
+                    control={control}
+                    setValue={setValue}
+                    ahvInstall={values.boundary?.ahv_install ?? null}
                   />
                 </div>
               </TabsContent>
