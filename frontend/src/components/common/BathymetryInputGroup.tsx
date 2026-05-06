@@ -157,9 +157,11 @@ export function BathymetryInputGroup({
             : 'Estimativa para derivar slope; não substitui o X do solver'
         }
       />
-      <div className="rounded-md border border-border/60 bg-muted/30 px-2 py-1">
+      {/* Inclinação derivada — read-only, destacada com tom mais escuro
+          que os campos editáveis para sinalizar "computado, não input". */}
+      <div className="rounded-md border border-primary/30 bg-primary/[0.07] px-2 py-1">
         <div className="flex items-center gap-2">
-          <span className="flex-1 text-[10px] text-muted-foreground">
+          <span className="flex-1 text-[10px] font-medium text-primary/80">
             Inclinação
           </span>
           <span className="w-[80px] text-right font-mono text-[11px] font-semibold tabular-nums">
