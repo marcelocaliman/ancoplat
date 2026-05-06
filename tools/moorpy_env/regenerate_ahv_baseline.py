@@ -70,17 +70,19 @@ if str(MOORPY_DIR) not in sys.path:
 # Espelham R4 chain 76mm + IWRCEIPS wire 76mm típicos de instalação.
 # ─────────────────────────────────────────────────────────────────
 MOORING_TYPE = {
-    "name": "mooring_chain_R4_76mm",
+    # Wire 76mm IWRCEIPS (mais leve que chain — suspensão parcial em
+    # cenários típicos de instalação AHV com bollard moderado).
+    "name": "mooring_wire_IWRCEIPS_76mm",
     "d_nom": 0.076,
     "d_vol": 0.076,
-    "m": 130.0,        # kg/m (massa no ar)
-    "w": 1241.0,       # N/m (peso submerso)
-    "EA": 6.0e8,       # N
-    "MBL": 7.5e6,      # N
-    "material": "chain",
+    "m": 22.0,         # kg/m (massa no ar)
+    "w": 170.0,        # N/m (peso submerso)
+    "EA": 5.5e8,       # N
+    "MBL": 6.5e6,      # N
+    "material": "wire",
     "cost": 0.0,
     "input_d": 76.0,
-    "input_type": "chain",
+    "input_type": "wire",
 }
 WW_TYPE = {
     "name": "work_wire_IWRCEIPS_76mm",
@@ -192,6 +194,32 @@ CASES = [
         "deck_z": 10.0,
         "L_moor": 2000.0,
         "L_ww": 200.0,
+    },
+    {
+        "id": "BC-AHV-MOORPY-09",
+        "mode": "deepwater taut",
+        "description": (
+            "Águas profundas com mooring suspenso real — gate Tier C matemático."
+        ),
+        "h": 1500.0,
+        "endpoint_depth": 1500.0,
+        "X_AHV": 2000.0,
+        "deck_z": 15.0,
+        "L_moor": 2700.0,   # chord ≈ 2502, folga 8%
+        "L_ww": 300.0,
+    },
+    {
+        "id": "BC-AHV-MOORPY-10",
+        "mode": "deepwater taut",
+        "description": (
+            "Águas ultra-profundas — Tier C matemático com suspensão completa."
+        ),
+        "h": 2000.0,
+        "endpoint_depth": 2000.0,
+        "X_AHV": 2500.0,
+        "deck_z": 20.0,
+        "L_moor": 3500.0,   # chord ≈ 3208, folga 9%
+        "L_ww": 350.0,
     },
 ]
 
