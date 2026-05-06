@@ -10,12 +10,12 @@ import {
 } from 'react-hook-form'
 import { AttachmentAdvancedDialog } from '@/components/common/AttachmentAdvancedDialog'
 import { BuoyPicker } from '@/components/common/BuoyPicker'
+import { EnvCard, EnvField } from '@/components/common/EnvCard'
 import { UnitInput } from '@/components/common/UnitInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { BuoyOutput } from '@/api/types'
 import type { CaseFormValues } from '@/lib/caseSchema'
-import { cn } from '@/lib/utils'
 
 type T = CaseFormValues
 
@@ -34,14 +34,11 @@ export interface AttachmentsTableProps {
 }
 
 /**
- * Tabela de attachments (boias OU clumps) — mesmo padrão tabular do
- * SegmentsTable (estilo QMoor):
- *   - linhas = propriedades (Nome, Catálogo, Força, Posição, Pendant)
- *   - colunas = attachments individuais
- *   - "⚙ Avançado" abre modal com tipo de boia, dimensões, end_type
- *
- * Filtragem: apenas attachments com `kind` correspondente são
- * mostrados; novo attachment criado herda o `kind` da prop.
+ * Lista de attachments (boias OU clumps) em layout de **cards
+ * individuais** (v1.0.11), estilo aba Ambiente: cada attachment
+ * é um EnvCard bordado azulado com header + campos relevantes
+ * (Nome, Catálogo só boia, Força, Posição, Pendant) + botão ⚙
+ * para modal avançado.
  */
 export function AttachmentsTable({
   control,
@@ -70,13 +67,10 @@ export function AttachmentsTable({
     )
 
   const [advancedIdx, setAdvancedIdx] = useState<number | null>(null)
-  const total = visibleItems.length
   const Icon = kind === 'buoy' ? Waves : Anchor
-  const title = kind === 'buoy' ? 'Boias' : 'Clump weights'
+  const labelKind = kind === 'buoy' ? 'Boia' : 'Clump'
 
   function addNew() {
-    // Default sensato: posicionamento por distância (modo distance), no
-    // meio da linha (totalLength/2). Pendant 0 = direto na linha.
     const defaultPos =
       totalLength != null && totalLength > 0 ? totalLength / 2 : 100
     attachments.append({
@@ -97,182 +91,49 @@ export function AttachmentsTable({
     } as never)
   }
 
-  // Header: Boias (3) + ícone
+  // Empty state com hint para casos sem junção (clump precisa de junção)
   if (visibleItems.length === 0 && !hasJunctions && kind !== 'buoy') {
     return (
-      <div className="rounded-md border border-border/40 bg-muted/10 p-2">
-        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-          <Icon className="h-3.5 w-3.5" />
-          <span>{title} (0)</span>
-        </div>
-        <p className="mt-1 px-1 text-[11px] text-muted-foreground">
-          Adicione 1+ segmento para usar attachments.
-        </p>
+      <div className="rounded-md border border-primary/20 bg-primary/[0.04] p-3 text-[11px] text-muted-foreground">
+        <Icon className="mr-1.5 inline h-3.5 w-3.5" />
+        Adicione 1+ segmento para usar {labelKind.toLowerCase()}s.
       </div>
     )
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-max border-collapse text-[11px]">
-        <thead>
-          <tr className="border-b border-border/40">
-            <th className="sticky left-0 z-10 bg-background pr-2 text-left text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Icon className="h-3 w-3" />
-                {title} ({total})
-              </span>
-            </th>
-            {visibleItems.map(({ field, realIdx }, displayIdx) => (
-              <th
-                key={field.id}
-                className="min-w-[140px] px-1.5 pb-1 text-left align-bottom"
-              >
-                <div className="flex items-center gap-1">
-                  <span className="text-[11px] font-semibold text-foreground">
-                    {kind === 'buoy' ? 'Boia' : 'Clump'} {displayIdx + 1}
-                  </span>
-                  <div className="ml-auto flex items-center">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0"
-                      onClick={() => setAdvancedIdx(realIdx)}
-                      title="Configuração avançada (pendant, tipo de boia, dimensões)"
-                    >
-                      <Settings2 className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0 text-danger hover:bg-danger/10 hover:text-danger"
-                      onClick={() => attachments.remove(realIdx)}
-                      title="Remover"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-              </th>
-            ))}
-            <th className="px-1.5 pb-1 align-bottom">
-              {allFields.length < 20 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-6 gap-1 border-dashed text-[10px]"
-                  onClick={addNew}
-                  title={`Adicionar ${kind === 'buoy' ? 'boia' : 'clump weight'}`}
-                >
-                  <Plus className="h-3 w-3" />
-                  Adicionar
-                </Button>
-              )}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {/* Nome (opcional) */}
-          <PropertyRow label="Nome">
-            {visibleItems.map(({ field, realIdx }) => (
-              <td key={field.id} className="min-w-[140px] px-1 py-0.5">
-                <Controller
-                  control={control}
-                  name={`${basePath}.${realIdx}.name` as Path<T>}
-                  render={({ field: f }) => (
-                    <Input
-                      type="text"
-                      value={(f.value as string | null) ?? ''}
-                      onChange={(e) => f.onChange(e.target.value || null)}
-                      placeholder="opcional"
-                      className="h-6 text-[11px]"
-                      maxLength={80}
-                    />
-                  )}
-                />
-              </td>
-            ))}
-            <td />
-          </PropertyRow>
+    <div className="flex flex-wrap items-stretch justify-start gap-2">
+      {visibleItems.map(({ field, realIdx }, displayIdx) => (
+        <AttachmentCard
+          key={field.id}
+          realIdx={realIdx}
+          displayIdx={displayIdx}
+          basePath={basePath}
+          control={control}
+          setValue={setValue}
+          kind={kind}
+          maxJunctions={maxJunctions}
+          totalLength={totalLength}
+          onRemove={() => attachments.remove(realIdx)}
+          onOpenAdvanced={() => setAdvancedIdx(realIdx)}
+        />
+      ))}
 
-          {/* Catálogo (BuoyPicker) — apenas para kind=buoy */}
-          {kind === 'buoy' && (
-            <PropertyRow label="Catálogo">
-              {visibleItems.map(({ field, realIdx }) => (
-                <BuoyPickerCell
-                  key={field.id}
-                  realIdx={realIdx}
-                  basePath={basePath}
-                  control={control}
-                  setValue={setValue}
-                />
-              ))}
-              <td />
-            </PropertyRow>
-          )}
-
-          {/* Força submersa */}
-          <PropertyRow label={kind === 'buoy' ? 'Força (empuxo)' : 'Peso submerso'}>
-            {visibleItems.map(({ field, realIdx }) => (
-              <ForceCell
-                key={field.id}
-                realIdx={realIdx}
-                basePath={basePath}
-                control={control}
-                setValue={setValue}
-                isBuoy={kind === 'buoy'}
-              />
-            ))}
-            <td />
-          </PropertyRow>
-
-          {/* Posição (distância do fairlead OU junção) */}
-          <PropertyRow label="Posição (m do fairlead)">
-            {visibleItems.map(({ field, realIdx }) => (
-              <PositionCell
-                key={field.id}
-                realIdx={realIdx}
-                basePath={basePath}
-                control={control}
-                setValue={setValue}
-                hasJunctions={hasJunctions}
-                totalLength={totalLength}
-                maxJunction={maxJunctions - 1}
-              />
-            ))}
-            <td />
-          </PropertyRow>
-
-          {/* Pendant (m) — direto na linha por default */}
-          <PropertyRow label="Pendant (m)">
-            {visibleItems.map(({ field, realIdx }) => (
-              <td key={field.id} className="min-w-[140px] px-1 py-0.5">
-                <Controller
-                  control={control}
-                  name={`${basePath}.${realIdx}.tether_length` as Path<T>}
-                  render={({ field: f }) => (
-                    <Input
-                      type="number"
-                      step="1"
-                      min={0}
-                      value={(f.value as number | null) ?? 0}
-                      onChange={(e) =>
-                        f.onChange(parseFloat(e.target.value || '0'))
-                      }
-                      placeholder="0 = direto na linha"
-                      className="h-6 font-mono text-[11px]"
-                    />
-                  )}
-                />
-              </td>
-            ))}
-            <td />
-          </PropertyRow>
-        </tbody>
-      </table>
+      {allFields.length < 20 && (
+        <button
+          type="button"
+          className="flex h-auto min-h-[180px] w-[160px] shrink-0 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/30 bg-primary/[0.02] text-primary/70 transition-colors hover:border-primary/50 hover:bg-primary/[0.06] hover:text-primary"
+          onClick={addNew}
+          title={`Adicionar ${labelKind.toLowerCase()}`}
+        >
+          <Plus className="h-5 w-5" />
+          <span className="text-center text-[10px] font-medium leading-tight">
+            Adicionar
+            <br />
+            {labelKind.toLowerCase()}
+          </span>
+        </button>
+      )}
 
       {advancedIdx != null && (
         <AttachmentAdvancedDialog
@@ -291,28 +152,126 @@ export function AttachmentsTable({
   )
 }
 
-function PropertyRow({
-  label,
-  children,
+/**
+ * Card individual de um attachment.
+ */
+function AttachmentCard({
+  realIdx,
+  displayIdx,
+  basePath,
+  control,
+  setValue,
+  kind,
+  maxJunctions,
+  totalLength,
+  onRemove,
+  onOpenAdvanced,
 }: {
-  label: string
-  children: React.ReactNode
+  realIdx: number
+  displayIdx: number
+  basePath: string
+  control: Control<T>
+  setValue: UseFormSetValue<T>
+  kind: 'buoy' | 'clump_weight'
+  maxJunctions: number
+  totalLength?: number
+  onRemove: () => void
+  onOpenAdvanced: () => void
 }) {
+  const labelKind = kind === 'buoy' ? 'Boia' : 'Clump'
   return (
-    <tr className={cn(label && 'border-b border-border/30')}>
-      <th
-        scope="row"
-        className="sticky left-0 z-10 bg-background pr-2 py-0.5 text-right align-middle text-[10px] font-medium text-muted-foreground"
-      >
-        {label}
-      </th>
-      {children}
-    </tr>
+    <EnvCard
+      title={`${labelKind} ${displayIdx + 1}`}
+      className="w-[260px]"
+      trailing={
+        <div className="flex items-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-5 w-5 p-0"
+            onClick={onOpenAdvanced}
+            title="Configuração avançada"
+          >
+            <Settings2 className="h-3 w-3" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-5 w-5 p-0 text-danger hover:bg-danger/10 hover:text-danger"
+            onClick={onRemove}
+            title="Remover"
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      }
+    >
+      <Controller
+        control={control}
+        name={`${basePath}.${realIdx}.name` as Path<T>}
+        render={({ field }) => (
+          <Input
+            type="text"
+            value={(field.value as string | null) ?? ''}
+            onChange={(e) => field.onChange(e.target.value || null)}
+            placeholder="Nome (opcional)"
+            className="h-6 text-[11px]"
+            maxLength={80}
+          />
+        )}
+      />
+
+      {kind === 'buoy' && (
+        <BuoyPickerInline
+          realIdx={realIdx}
+          basePath={basePath}
+          control={control}
+          setValue={setValue}
+        />
+      )}
+
+      <ForceField
+        realIdx={realIdx}
+        basePath={basePath}
+        control={control}
+        setValue={setValue}
+        isBuoy={kind === 'buoy'}
+      />
+
+      <PositionField
+        realIdx={realIdx}
+        basePath={basePath}
+        control={control}
+        setValue={setValue}
+        hasJunctions={maxJunctions > 0}
+        totalLength={totalLength}
+        maxJunction={maxJunctions - 1}
+      />
+
+      <EnvField label="Pendant" unit="m">
+        <Controller
+          control={control}
+          name={`${basePath}.${realIdx}.tether_length` as Path<T>}
+          render={({ field }) => (
+            <Input
+              type="number"
+              step="1"
+              min={0}
+              value={(field.value as number | null) ?? 0}
+              onChange={(e) => field.onChange(parseFloat(e.target.value || '0'))}
+              placeholder="0"
+              className="h-7 w-[80px] font-mono text-[11px]"
+            />
+          )}
+        />
+      </EnvField>
+    </EnvCard>
   )
 }
 
-/** Célula com BuoyPicker integrado + clear catalog link em manual edit. */
-function BuoyPickerCell({
+function BuoyPickerInline({
   realIdx,
   basePath,
   control,
@@ -355,19 +314,16 @@ function BuoyPickerCell({
     )
   }
   return (
-    <td className="min-w-[140px] px-1 py-0.5">
-      <BuoyPicker
-        selectedId={buoyCatalogId ?? null}
-        onPick={apply}
-        onClear={clear}
-        className="h-6 text-[11px]"
-      />
-    </td>
+    <BuoyPicker
+      selectedId={buoyCatalogId ?? null}
+      onPick={apply}
+      onClear={clear}
+      className="h-7 text-[11px]"
+    />
   )
 }
 
-/** Célula da força submersa com badge MANUAL quando override do catálogo. */
-function ForceCell({
+function ForceField({
   realIdx,
   basePath,
   control,
@@ -385,9 +341,8 @@ function ForceCell({
     name: `${basePath}.${realIdx}.buoy_catalog_id` as Path<T>,
   }) as number | null | undefined
   const isManual = isBuoy && buoyCatalogId == null
-
   return (
-    <td className="min-w-[140px] px-1 py-0.5">
+    <EnvField label={isBuoy ? 'Empuxo' : 'Peso submerso'}>
       <div className="flex items-center gap-1">
         <Controller
           control={control}
@@ -407,7 +362,7 @@ function ForceCell({
               }}
               quantity="force"
               digits={2}
-              className="h-6 flex-1"
+              className="h-7 w-[80px]"
               inputClassName="text-[11px] py-0.5"
             />
           )}
@@ -415,18 +370,17 @@ function ForceCell({
         {isManual && (
           <span
             title="Modo manual (sem vínculo com catálogo)"
-            className="inline-flex items-center gap-0.5 rounded-sm bg-warning/15 px-1 text-[8px] font-semibold uppercase tracking-wide text-warning"
+            className="inline-flex h-4 items-center gap-0.5 rounded-sm bg-warning/15 px-1 text-[8px] font-semibold uppercase text-warning"
           >
             <AlertTriangle className="h-2 w-2" /> M
           </span>
         )}
       </div>
-    </td>
+    </EnvField>
   )
 }
 
-/** Célula de posição com toggle distance/junction. */
-function PositionCell({
+function PositionField({
   realIdx,
   basePath,
   control,
@@ -495,14 +449,13 @@ function PositionCell({
   }
 
   return (
-    <td className="min-w-[140px] px-1 py-0.5">
+    <EnvField label={mode === 'distance' ? 'Pos. (m do FL)' : 'Junção'}>
       <div className="flex items-center gap-1">
         {mode === 'distance' ? (
           <Controller
             control={control}
             name={`${basePath}.${realIdx}.position_s_from_anchor` as Path<T>}
             render={({ field }) => {
-              // Storage = position_s_from_anchor (s_anc), display = s_fl
               const sAnc = (field.value as number | null) ?? 0
               const sFl =
                 totalLength != null && totalLength > 0
@@ -523,12 +476,7 @@ function PositionCell({
                         : newSfl
                     field.onChange(newSanc)
                   }}
-                  className="h-6 flex-1 font-mono text-[11px]"
-                  title={
-                    totalLength
-                      ? `Comprimento de cabo desde o fairlead. Range válido: 0 < s_fl < ${totalLength.toFixed(1)} m`
-                      : 'Comprimento de cabo (arc length) desde o fairlead'
-                  }
+                  className="h-7 w-[80px] font-mono text-[11px]"
                 />
               )
             }}
@@ -547,7 +495,7 @@ function PositionCell({
                 onChange={(e) =>
                   field.onChange(parseInt(e.target.value || '0', 10))
                 }
-                className="h-6 flex-1 font-mono text-[11px]"
+                className="h-7 w-[80px] font-mono text-[11px]"
                 title={`Junção ${field.value} de ${maxJunction}`}
               />
             )}
@@ -559,7 +507,7 @@ function PositionCell({
             onClick={() =>
               setMode(mode === 'distance' ? 'junction' : 'distance')
             }
-            className="text-[8px] uppercase tracking-wide text-primary hover:underline"
+            className="text-[8px] font-medium uppercase tracking-wide text-primary hover:underline"
             title={
               mode === 'distance'
                 ? 'Alternar para junção'
@@ -570,6 +518,6 @@ function PositionCell({
           </button>
         )}
       </div>
-    </td>
+    </EnvField>
   )
 }
