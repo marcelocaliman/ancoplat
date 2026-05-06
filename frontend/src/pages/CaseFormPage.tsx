@@ -576,45 +576,55 @@ export function CaseFormPage() {
                 <LineSummaryPanel segments={values.segments ?? []} />
               </div>
               {/*
-               * Layout horizontal: cards em row scroll horizontal.
-               * Decisão UX (2026-05-05 / D7): ordem visual de
-               * fairlead → âncora (esquerda → direita), espelhando
-               * a leitura natural do plot que tem fairlead à esquerda.
-               * Implementado via flex-row-reverse — DOM mantém ordem
-               * natural [seg0=anchor, ..., segN=fairlead, addBtn] mas
-               * visual fica [addBtn, segN=fairlead, ..., seg0=anchor].
+               * Layout horizontal v1.0.4: cards em row scroll horizontal,
+               * começando da ESQUERDA. Ordem visual: fairlead → âncora
+               * (espelha leitura do plot). Implementação: ordem natural
+               * do DOM (sem flex-row-reverse) iterando o array em ordem
+               * REVERSA. Botão "+ Adicionar" fica no FINAL do DOM, ou
+               * seja, à direita visualmente (depois de todos os cards).
                */}
-              <div className="flex flex-row-reverse flex-nowrap gap-2 overflow-x-auto pb-1">
-                {segmentsArray.fields.map((field, idx) => (
-                  <div
-                    key={field.id}
-                    className="w-[280px] shrink-0"
-                  >
-                    <SegmentEditor
-                      index={idx}
-                      total={segmentsArray.fields.length}
-                      control={control}
-                      register={register}
-                      watch={watch}
-                      setValue={setValue}
-                      onMoveUp={
-                        idx > 0
-                          ? () => segmentsArray.move(idx, idx - 1)
-                          : undefined
-                      }
-                      onMoveDown={
-                        idx < segmentsArray.fields.length - 1
-                          ? () => segmentsArray.move(idx, idx + 1)
-                          : undefined
-                      }
-                      onRemove={
-                        segmentsArray.fields.length > 1
-                          ? () => segmentsArray.remove(idx)
-                          : undefined
-                      }
-                    />
-                  </div>
-                ))}
+              <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+                {segmentsArray.fields
+                  .slice()
+                  .reverse()
+                  .map((field) => {
+                    // mapeia field renderizado → realIdx no array data
+                    const realIdx = segmentsArray.fields.findIndex(
+                      (f) => f.id === field.id,
+                    )
+                    return (
+                      <div
+                        key={field.id}
+                        className="w-[280px] shrink-0"
+                      >
+                        <SegmentEditor
+                          index={realIdx}
+                          total={segmentsArray.fields.length}
+                          control={control}
+                          register={register}
+                          watch={watch}
+                          setValue={setValue}
+                          onMoveUp={
+                            realIdx > 0
+                              ? () =>
+                                  segmentsArray.move(realIdx, realIdx - 1)
+                              : undefined
+                          }
+                          onMoveDown={
+                            realIdx < segmentsArray.fields.length - 1
+                              ? () =>
+                                  segmentsArray.move(realIdx, realIdx + 1)
+                              : undefined
+                          }
+                          onRemove={
+                            segmentsArray.fields.length > 1
+                              ? () => segmentsArray.remove(realIdx)
+                              : undefined
+                          }
+                        />
+                      </div>
+                    )
+                  })}
                 {segmentsArray.fields.length < 10 && (
                   <Button
                     type="button"
@@ -622,13 +632,16 @@ export function CaseFormPage() {
                     size="sm"
                     className="h-auto w-[200px] shrink-0 gap-1.5 border-dashed text-[11px]"
                     onClick={() => {
-                      const last = segmentsArray.fields[
-                        segmentsArray.fields.length - 1
+                      // Adiciona no início do array (idx 0 = âncora side),
+                      // que aparece visualmente à direita pelo render
+                      // reverse acima. Coerente com a label do botão.
+                      const first = segmentsArray.fields[
+                        0
                       ] as unknown as CaseFormValues['segments'][number]
-                      segmentsArray.append({ ...last, length: 100 })
+                      segmentsArray.prepend({ ...first, length: 100 })
                     }}
                   >
-                    + Adicionar (próximo do fairlead)
+                    + Adicionar (próximo da âncora)
                   </Button>
                 )}
               </div>

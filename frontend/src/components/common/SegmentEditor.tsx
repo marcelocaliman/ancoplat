@@ -228,154 +228,171 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
         )}
       />
 
-      <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
-        <InlineLabeled label="Comprimento" unit="m" required>
-          <Input
-            type="number"
-            step="1"
-            {...register(p('length'), { valueAsNumber: true })}
-            className="h-7 font-mono"
-          />
-        </InlineLabeled>
-        <InlineLabeled label="Diâmetro" unit="m">
-          <Input
-            type="number"
-            step="0.001"
-            min="0"
-            {...register(p('diameter'), { valueAsNumber: true })}
-            className="h-7 font-mono"
-          />
-        </InlineLabeled>
-        <InlineLabeled label="Categoria" className="col-span-2">
-          <Controller
-            control={control}
-            name={p('category')}
-            render={({ field }) => (
-              <Select
-                value={(field.value as string | undefined) ?? undefined}
-                onValueChange={field.onChange}
-              >
-                <SelectTrigger className="h-7 text-[11px]">
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Wire">Wire</SelectItem>
-                  <SelectItem value="StuddedChain">Studded chain</SelectItem>
-                  <SelectItem value="StudlessChain">Studless chain</SelectItem>
-                  <SelectItem value="Polyester">Poliéster</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </InlineLabeled>
-        <InlineLabeled label="Peso submerso" required>
-          <Controller
-            control={control}
-            name={p('w')}
-            render={({ field }) => (
-              <UnitInput
-                value={field.value as number}
-                onChange={field.onChange}
-                quantity="force_per_m"
-                digits={2}
-                className="h-7"
-              />
-            )}
-          />
-        </InlineLabeled>
-        <InlineLabeled label="Peso seco">
-          <Controller
-            control={control}
-            name={p('dry_weight')}
-            render={({ field }) => (
-              <UnitInput
-                value={(field.value as number | null) ?? null}
-                onChange={field.onChange}
-                quantity="force_per_m"
-                digits={2}
-                className="h-7"
-              />
-            )}
-          />
-        </InlineLabeled>
-        <InlineLabeled label="EA">
-          <Controller
-            control={control}
-            name={p('EA')}
-            render={({ field }) => (
-              <UnitInput
-                value={field.value as number}
-                onChange={field.onChange}
-                quantity="force"
-                digits={2}
-                className="h-7"
-              />
-            )}
-          />
-        </InlineLabeled>
-        <InlineLabeled label="MBL">
-          <Controller
-            control={control}
-            name={p('MBL')}
-            render={({ field }) => (
-              <UnitInput
-                value={field.value as number}
-                onChange={field.onChange}
-                quantity="force"
-                digits={2}
-                className="h-7"
-              />
-            )}
-          />
-        </InlineLabeled>
-        <InlineLabeled label="Módulo" unit="Pa" className="col-span-2">
-          <Input
-            type="number"
-            step="1e9"
-            {...register(p('modulus'), { valueAsNumber: true })}
-            className="h-7 font-mono"
-          />
-        </InlineLabeled>
-        {/* ─── Fase 1: EA source + atrito per-segmento (lado a lado) ─ */}
-        <InlineLabeled label="EA source">
-          <Controller
-            control={control}
-            name={p('ea_source')}
-            render={({ field }) => (
-              <Select
-                value={(field.value as string | undefined) ?? 'qmoor'}
-                onValueChange={field.onChange}
-              >
-                <SelectTrigger className="h-7 text-[11px]" title="EA estático (QMoor) ou dinâmico (GMoor — modelo NREL/MoorPy). Default QMoor.">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="qmoor">QMoor (estático)</SelectItem>
-                  <SelectItem value="gmoor">GMoor (dinâmico)</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </InlineLabeled>
-        <InlineLabeled label="μ override" unit="">
-          <Input
-            type="number"
-            step="0.05"
-            min="0"
-            placeholder={(() => {
-              const cf = watch(p('seabed_friction_cf')) as number | null
-              return cf != null
-                ? `Catálogo: ${fmtNumber(cf, 2)} (deixe vazio p/ usar)`
-                : 'Vazio = usa global do seabed'
-            })()}
-            {...register(p('mu_override'), {
-              setValueAs: (v) =>
-                v === '' || v == null ? null : Number(v),
-            })}
-            className="h-7 font-mono"
-          />
-        </InlineLabeled>
-      </div>
+      {/*
+       * Layout compacto (v1.0.4): apenas Comprimento sempre visível.
+       * Demais campos vêm preenchidos automaticamente do catálogo via
+       * LineTypePicker e raramente são editados manualmente — vão para
+       * <details> colapsado por default. Reduz altura do card de
+       * ~400px → ~150px no estado padrão.
+       */}
+      <InlineLabeled label="Comprimento" unit="m" required>
+        <Input
+          type="number"
+          step="1"
+          {...register(p('length'), { valueAsNumber: true })}
+          className="h-7 font-mono"
+        />
+      </InlineLabeled>
+
+      <details className="group">
+        <summary className="flex cursor-pointer select-none items-center gap-1 py-0.5 text-[10px] font-medium text-muted-foreground hover:text-foreground">
+          <span className="transition-transform group-open:rotate-90">▸</span>
+          Detalhes técnicos
+          <span className="ml-auto text-[9px] text-muted-foreground/60">
+            (do catálogo)
+          </span>
+        </summary>
+        <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1.5 rounded-md border border-border/40 bg-muted/20 p-2">
+          <InlineLabeled label="Diâmetro" unit="m">
+            <Input
+              type="number"
+              step="0.001"
+              min="0"
+              {...register(p('diameter'), { valueAsNumber: true })}
+              className="h-7 font-mono"
+            />
+          </InlineLabeled>
+          <InlineLabeled label="Categoria">
+            <Controller
+              control={control}
+              name={p('category')}
+              render={({ field }) => (
+                <Select
+                  value={(field.value as string | undefined) ?? undefined}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger className="h-7 text-[11px]">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Wire">Wire</SelectItem>
+                    <SelectItem value="StuddedChain">Studded chain</SelectItem>
+                    <SelectItem value="StudlessChain">Studless chain</SelectItem>
+                    <SelectItem value="Polyester">Poliéster</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </InlineLabeled>
+          <InlineLabeled label="Peso submerso" required>
+            <Controller
+              control={control}
+              name={p('w')}
+              render={({ field }) => (
+                <UnitInput
+                  value={field.value as number}
+                  onChange={field.onChange}
+                  quantity="force_per_m"
+                  digits={2}
+                  className="h-7"
+                />
+              )}
+            />
+          </InlineLabeled>
+          <InlineLabeled label="Peso seco">
+            <Controller
+              control={control}
+              name={p('dry_weight')}
+              render={({ field }) => (
+                <UnitInput
+                  value={(field.value as number | null) ?? null}
+                  onChange={field.onChange}
+                  quantity="force_per_m"
+                  digits={2}
+                  className="h-7"
+                />
+              )}
+            />
+          </InlineLabeled>
+          <InlineLabeled label="EA">
+            <Controller
+              control={control}
+              name={p('EA')}
+              render={({ field }) => (
+                <UnitInput
+                  value={field.value as number}
+                  onChange={field.onChange}
+                  quantity="force"
+                  digits={2}
+                  className="h-7"
+                />
+              )}
+            />
+          </InlineLabeled>
+          <InlineLabeled label="MBL">
+            <Controller
+              control={control}
+              name={p('MBL')}
+              render={({ field }) => (
+                <UnitInput
+                  value={field.value as number}
+                  onChange={field.onChange}
+                  quantity="force"
+                  digits={2}
+                  className="h-7"
+                />
+              )}
+            />
+          </InlineLabeled>
+          <InlineLabeled label="Módulo" unit="Pa" className="col-span-2">
+            <Input
+              type="number"
+              step="1e9"
+              {...register(p('modulus'), { valueAsNumber: true })}
+              className="h-7 font-mono"
+            />
+          </InlineLabeled>
+          {/* ─── Fase 1: EA source + atrito per-segmento (lado a lado) ─ */}
+          <InlineLabeled label="EA source">
+            <Controller
+              control={control}
+              name={p('ea_source')}
+              render={({ field }) => (
+                <Select
+                  value={(field.value as string | undefined) ?? 'qmoor'}
+                  onValueChange={field.onChange}
+                >
+                  <SelectTrigger className="h-7 text-[11px]" title="EA estático (QMoor) ou dinâmico (GMoor — modelo NREL/MoorPy). Default QMoor.">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="qmoor">QMoor (estático)</SelectItem>
+                    <SelectItem value="gmoor">GMoor (dinâmico)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </InlineLabeled>
+          <InlineLabeled label="μ override" unit="">
+            <Input
+              type="number"
+              step="0.05"
+              min="0"
+              placeholder={(() => {
+                const cf = watch(p('seabed_friction_cf')) as number | null
+                return cf != null
+                  ? `Catálogo: ${fmtNumber(cf, 2)} (deixe vazio p/ usar)`
+                  : 'Vazio = usa global do seabed'
+              })()}
+              {...register(p('mu_override'), {
+                setValueAs: (v) =>
+                  v === '' || v == null ? null : Number(v),
+              })}
+              className="h-7 font-mono"
+            />
+          </InlineLabeled>
+        </div>
+      </details>
     </div>
   )
 }
