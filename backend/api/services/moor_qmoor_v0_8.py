@@ -58,6 +58,7 @@ from backend.api.services.moor_service import (
     _parse_quantity,
 )
 from backend.solver.types import (
+    AHVInstall,
     BoundaryConditions,
     CriteriaProfile,
     CurrentLayer,
@@ -858,29 +859,119 @@ def _parse_boundary(
             f"profile[{line_idx}.{prof_idx}].boundary sem profundidade."
         )
 
-    # `inputParam` é o nome canônico do QMoor; sinônimo do `mode`.
-    mode_raw = (_get_str(profile.get("solution") or {}, "inputParam")
-                or _get_str(bd, "mode")
-                or "Tension").lower()
+    # ── Sprint 2 / Commit 24 — Detecção de cenário AHV ──
+    # Quando QMoor 0.8.0 marca `boundary.startpointType="AHV"` (cenários
+    # Backing Down / Hookup / Load Transfer), forçamos mode=Tension
+    # com bollard_pull = fairleadTension. Razão:
+    #   1. Cenários AHV têm L_total < L_min(X, h) frequentemente —
+    #      L < L_min é INVIÁVEL em mode Range (catenária não fecha).
+    #   2. Em QMoor real, o solver desses cases é dirigido por bollard
+    #      pull (força aplicada pelo cabo de trabalho), não por X target.
+    #   3. `horzDistance` no JSON desses cases é informativo (X resultante
+    #      de uma execução prévia), preservado em ahv_install.target_horz_distance.
+    startpoint_type_raw = (_get_str(bd, "startpointType") or "").lower()
+    is_ahv_install = "ahv" in startpoint_type_raw
+
     sol = profile.get("solution") or {}
-    if isinstance(sol, dict) and mode_raw in ("tension", "fairlead", "fl"):
+    if not isinstance(sol, dict):
+        sol = {}
+    fairlead_tension = (
+        _parse_q(sol.get("fairleadTension"), "force", unit_system)
+        or _parse_q(bd.get("fairleadTension"), "force", unit_system)
+        or _parse_q(bd.get("tension"), "force", unit_system)
+        or _parse_q(bd.get("T_fl"), "force", unit_system)
+    )
+    horz_distance_qmoor = (
+        _parse_q(bd.get("horzDistance"), "length", unit_system)
+        or _parse_q(sol.get("rangeToAnchor"), "length", unit_system)
+        or _parse_q(bd.get("range"), "length", unit_system)
+    )
+
+    ahv_install: Optional[AHVInstall] = None
+    if is_ahv_install:
+        # Bollard pull: usa fairleadTension se presente. Senão usa
+        # heurística adaptativa: max(50 te, 1.5 × w_max × h) — garantia
+        # de que T_fl é alto suficiente pra levantar a linha mais pesada
+        # do anchor (evita "fully grounded" onde solver tem path
+        # numericamente difícil). Tipico AHV operação real: 50-200 te.
+        AHV_DEFAULT_BOLLARD_PULL_N = 50.0 * 9806.65  # 50 te → 490.3 kN
+        if fairlead_tension is None:
+            # Heurística adaptativa: 1.5 × w_pesado × h
+            try:
+                segs_data = profile.get("segments") or []
+                w_max = 0.0
+                for s in segs_data:
+                    w_i = _seg_q(
+                        s if isinstance(s, dict) else {},
+                        ["wetWeight", "submergedWeight", "w"],
+                        "weight_per_length", unit_system,
+                    )
+                    if w_i and w_i > w_max:
+                        w_max = w_i
+                heuristic_n = 1.5 * w_max * h if w_max > 0 else 0.0
+            except Exception:
+                heuristic_n = 0.0
+            bollard_pull = max(AHV_DEFAULT_BOLLARD_PULL_N, heuristic_n)
+            log.append({
+                "field": (f"profiles[{line_idx}.{prof_idx}]"
+                          ".solution.fairleadTension"),
+                "old": None,
+                "new": f"{bollard_pull:.0f} N ({bollard_pull/9806.65:.1f} te)",
+                "reason": (
+                    f"Cenário AHV sem fairleadTension — heurística "
+                    f"max(50 te, 1.5·w_max·h) = {bollard_pull/9806.65:.1f} te "
+                    "aplicada. Edite via aba 'AHV Install' na UI."
+                ),
+            })
+        else:
+            bollard_pull = fairlead_tension
+        deck_level = _parse_q(bd.get("deckLevelAboveSWL"), "length",
+                              unit_system) or 0.0
+        stern_angle = 0.0
+        try:
+            sa = bd.get("sternAngle")
+            if sa is not None:
+                stern_angle = float(sa)
+        except (ValueError, TypeError):
+            stern_angle = 0.0
+        ahv_install = AHVInstall(
+            bollard_pull=bollard_pull,
+            deck_level_above_swl=deck_level,
+            stern_angle_deg=stern_angle,
+            target_horz_distance=horz_distance_qmoor,
+        )
+        # D021 — diagnóstico informativo para o user
+        log.append({
+            "field": f"profiles[{line_idx}.{prof_idx}].boundary",
+            "old": "startpointType=AHV",
+            "new": (f"mode=Tension, bollard_pull={bollard_pull:.0f}N, "
+                    f"target_X={horz_distance_qmoor or '—'}m"),
+            "reason": (
+                "D021: Cenário AHV de instalação detectado — modo Tension "
+                "aplicado (bollard pull substitui horzDistance). target_X "
+                "preservado em ahv_install.target_horz_distance."
+            ),
+        })
         mode = SolutionMode.TENSION
-        input_value = (
-            _parse_q(sol.get("fairleadTension"), "force", unit_system)
-            or _parse_q(bd.get("fairleadTension"), "force", unit_system)
-            or _parse_q(bd.get("tension"), "force", unit_system)
-            or _parse_q(bd.get("T_fl"), "force", unit_system)
-            or _parse_q(bd.get("input_value"), "force", unit_system)
-        )
+        input_value = bollard_pull
     else:
-        mode = SolutionMode.RANGE
-        input_value = (
-            _parse_q(bd.get("horzDistance"), "length", unit_system)
-            or (_parse_q(sol.get("rangeToAnchor"), "length", unit_system)
-                if isinstance(sol, dict) else None)
-            or _parse_q(bd.get("range"), "length", unit_system)
-            or _parse_q(bd.get("input_value"), "length", unit_system)
-        )
+        # Caminho legacy: respeita inputParam do JSON (Tension OR Range).
+        mode_raw = (_get_str(sol, "inputParam")
+                    or _get_str(bd, "mode")
+                    or "Tension").lower()
+        if mode_raw in ("tension", "fairlead", "fl"):
+            mode = SolutionMode.TENSION
+            input_value = (
+                fairlead_tension
+                or _parse_q(bd.get("input_value"), "force", unit_system)
+            )
+        else:
+            mode = SolutionMode.RANGE
+            input_value = (
+                horz_distance_qmoor
+                or _parse_q(bd.get("input_value"), "length", unit_system)
+            )
+
     if input_value is None or input_value <= 0:
         raise QMoorV08ParseError(
             f"profile[{line_idx}.{prof_idx}].boundary sem input_value."
@@ -895,12 +986,24 @@ def _parse_boundary(
     # MVP v1 do AncoPlat trata startpoint_depth=0 nessa convenção.
     sd = 0.0
 
+    # `startpoint_type` (cosmético do plot, Fase 3): mapeia QMoor → AncoPlat.
+    if is_ahv_install:
+        sp_type: Any = "ahv"
+    elif "barge" in startpoint_type_raw:
+        sp_type = "barge"
+    elif "semi" in startpoint_type_raw or "fairlead" in startpoint_type_raw:
+        sp_type = "semisub"
+    else:
+        sp_type = "semisub"
+
     return BoundaryConditions(
         h=h,
         mode=mode,
         input_value=input_value,
         startpoint_depth=sd,
         endpoint_grounded=bool(bd.get("endpointGrounded", True)),
+        startpoint_type=sp_type,
+        ahv_install=ahv_install,
     )
 
 
