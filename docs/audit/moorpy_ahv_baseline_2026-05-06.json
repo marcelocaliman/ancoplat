@@ -1,0 +1,553 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-06T21:28:20.466203+00:00",
+  "moorpy_commit": "1fb29f8eca2618543b2df7056adfdfce0265737b",
+  "ancoplat_phase": "Sprint 4 / Tier C",
+  "comment": "Baseline MoorPy Subsystem para AHV Tier C. 8 cenários (6 grounded + 2 uplift). Materiais canônicos R4 chain 76mm + IWRCEIPS wire 76mm. Output usado pelo test_ahv_tier_c_vs_moorpy.py com gate rtol < 1e-2.",
+  "cases": [
+    {
+      "id": "BC-AHV-MOORPY-01",
+      "mode": "backing-down",
+      "description": "Backing Down taut elástico — L≈chord, T_anchor>0.",
+      "inputs": {
+        "h": 100.0,
+        "endpoint_depth": 100.0,
+        "X_AHV": 800.0,
+        "deck_z": 5.0,
+        "L_moor": 802.0,
+        "L_ww": 100.0,
+        "mooring": {
+          "name": "mooring_chain_R4_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 130.0,
+          "w": 1241.0,
+          "EA": 600000000.0,
+          "MBL": 7500000.0,
+          "material": "chain",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "chain"
+        },
+        "work_wire": {
+          "name": "work_wire_IWRCEIPS_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 336.93493566281523,
+        "T_pega_moor": 6519.918454256517,
+        "T_pega_ww": 6519.91848921146,
+        "T_AHV": 27867.103250667544,
+        "lay_length_moor": 796.7049790270061,
+        "fA_moor": [
+          336.93493566281523,
+          0.0,
+          0.0
+        ],
+        "fB_moor": [
+          -336.93493566281523,
+          0.0,
+          -6511.20660855456
+        ],
+        "fA_ww": [
+          336.93493643865776,
+          0.0,
+          6511.206643516125
+        ],
+        "fB_ww": [
+          -336.93493643865776,
+          0.0,
+          -27865.066273597353
+        ],
+        "H_continuity_residual": 7.758425226711552e-07
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-MOORPY-02",
+      "mode": "backing-down",
+      "description": "Backing Down águas profundas taut elástico.",
+      "inputs": {
+        "h": 200.0,
+        "endpoint_depth": 200.0,
+        "X_AHV": 1500.0,
+        "deck_z": 8.0,
+        "L_moor": 1520.0,
+        "L_ww": 150.0,
+        "mooring": {
+          "name": "mooring_chain_R4_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 130.0,
+          "w": 1241.0,
+          "EA": 600000000.0,
+          "MBL": 7500000.0,
+          "material": "chain",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "chain"
+        },
+        "work_wire": {
+          "name": "work_wire_IWRCEIPS_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 14359.057386592056,
+        "T_pega_moor": 87474.55357557813,
+        "T_pega_ww": 87474.57140585246,
+        "T_AHV": 119160.78482656134,
+        "lay_length_moor": 1449.829188966436,
+        "fA_moor": [
+          14359.057386592056,
+          0.0,
+          0.0
+        ],
+        "fB_moor": [
+          -14359.057386592056,
+          0.0,
+          -86287.97711277769
+        ],
+        "fA_ww": [
+          14359.05992791137,
+          0.0,
+          86287.99476534514
+        ],
+        "fB_ww": [
+          -14359.05992791137,
+          0.0,
+          -118292.4766773809
+        ],
+        "H_continuity_residual": 0.0025413193143322133
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-MOORPY-03",
+      "mode": "hookup",
+      "description": "Hookup conexão inicial — linha frouxa, bollard baixo.",
+      "inputs": {
+        "h": 100.0,
+        "endpoint_depth": 100.0,
+        "X_AHV": 600.0,
+        "deck_z": 5.0,
+        "L_moor": 800.0,
+        "L_ww": 80.0,
+        "mooring": {
+          "name": "mooring_chain_R4_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 130.0,
+          "w": 1241.0,
+          "EA": 600000000.0,
+          "MBL": 7500000.0,
+          "material": "chain",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "chain"
+        },
+        "work_wire": {
+          "name": "work_wire_IWRCEIPS_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_moor": 30734.31096886231,
+        "T_pega_ww": 30734.31097841528,
+        "T_AHV": 47771.85106827068,
+        "lay_length_moor": 775.0063496746006,
+        "fA_moor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_moor": [
+          0.0,
+          0.0,
+          -30734.31096886231
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          30734.31097841528
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -47771.85106827068
+        ],
+        "H_continuity_residual": 0.0
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-MOORPY-04",
+      "mode": "hookup",
+      "description": "Hookup intermediário — folga 20%.",
+      "inputs": {
+        "h": 150.0,
+        "endpoint_depth": 150.0,
+        "X_AHV": 900.0,
+        "deck_z": 6.0,
+        "L_moor": 1100.0,
+        "L_ww": 120.0,
+        "mooring": {
+          "name": "mooring_chain_R4_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 130.0,
+          "w": 1241.0,
+          "EA": 600000000.0,
+          "MBL": 7500000.0,
+          "material": "chain",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "chain"
+        },
+        "work_wire": {
+          "name": "work_wire_IWRCEIPS_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_moor": 44251.70961287841,
+        "T_pega_ww": 44251.709618367364,
+        "T_AHV": 69876.44658776402,
+        "lay_length_moor": 1064.0137773875613,
+        "fA_moor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_moor": [
+          0.0,
+          0.0,
+          -44251.70961287841
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          44251.709618367364
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -69876.44658776402
+        ],
+        "H_continuity_residual": 0.0
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-MOORPY-05",
+      "mode": "load-transfer",
+      "description": "Load Transfer transição — folga 12%.",
+      "inputs": {
+        "h": 200.0,
+        "endpoint_depth": 200.0,
+        "X_AHV": 1300.0,
+        "deck_z": 8.0,
+        "L_moor": 1480.0,
+        "L_ww": 200.0,
+        "mooring": {
+          "name": "mooring_chain_R4_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 130.0,
+          "w": 1241.0,
+          "EA": 600000000.0,
+          "MBL": 7500000.0,
+          "material": "chain",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "chain"
+        },
+        "work_wire": {
+          "name": "work_wire_IWRCEIPS_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_moor": 9823.436074106223,
+        "T_pega_ww": 9823.436098983508,
+        "T_AHV": 52622.5349155117,
+        "lay_length_moor": 1472.0114192090114,
+        "fA_moor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_moor": [
+          0.0,
+          0.0,
+          -9823.436074106223
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          9823.436098983508
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -52622.5349155117
+        ],
+        "H_continuity_residual": 0.0
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-MOORPY-06",
+      "mode": "load-transfer",
+      "description": "Load Transfer águas ultra-profundas — folga 12%.",
+      "inputs": {
+        "h": 300.0,
+        "endpoint_depth": 300.0,
+        "X_AHV": 2000.0,
+        "deck_z": 10.0,
+        "L_moor": 2280.0,
+        "L_ww": 300.0,
+        "mooring": {
+          "name": "mooring_chain_R4_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 130.0,
+          "w": 1241.0,
+          "EA": 600000000.0,
+          "MBL": 7500000.0,
+          "material": "chain",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "chain"
+        },
+        "work_wire": {
+          "name": "work_wire_IWRCEIPS_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_moor": 12266.933534041107,
+        "T_pega_ww": 12266.933564376359,
+        "T_AHV": 76556.81802197543,
+        "lay_length_moor": 2270.024326635292,
+        "fA_moor": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_moor": [
+          0.0,
+          0.0,
+          -12266.933534041107
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          12266.933564376359
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -76556.81802197543
+        ],
+        "H_continuity_residual": 0.0
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-MOORPY-07",
+      "mode": "backing-down + uplift",
+      "description": "Backing Down com anchor suspenso — uplift 20m, folga moderada.",
+      "inputs": {
+        "h": 200.0,
+        "endpoint_depth": 180.0,
+        "X_AHV": 1300.0,
+        "deck_z": 8.0,
+        "L_moor": 1500.0,
+        "L_ww": 150.0,
+        "mooring": {
+          "name": "mooring_chain_R4_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 130.0,
+          "w": 1241.0,
+          "EA": 600000000.0,
+          "MBL": 7500000.0,
+          "material": "chain",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "chain"
+        },
+        "work_wire": {
+          "name": "work_wire_IWRCEIPS_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 24593.191232657624,
+        "T_pega_moor": 71288.20614307378,
+        "T_pega_ww": 71288.20615781707,
+        "T_AHV": 103296.3421679872,
+        "lay_length_moor": 1422.0276608397835,
+        "fA_moor": [
+          0.0,
+          0.0,
+          -24593.191232657624
+        ],
+        "fB_moor": [
+          0.0,
+          0.0,
+          -71288.20614307378
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          71288.20615781707
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -103296.3421679872
+        ],
+        "H_continuity_residual": 0.0
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-MOORPY-08",
+      "mode": "load-transfer + uplift",
+      "description": "Load Transfer com anchor suspenso — uplift 30m águas profundas.",
+      "inputs": {
+        "h": 300.0,
+        "endpoint_depth": 270.0,
+        "X_AHV": 1700.0,
+        "deck_z": 10.0,
+        "L_moor": 2000.0,
+        "L_ww": 200.0,
+        "mooring": {
+          "name": "mooring_chain_R4_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 130.0,
+          "w": 1241.0,
+          "EA": 600000000.0,
+          "MBL": 7500000.0,
+          "material": "chain",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "chain"
+        },
+        "work_wire": {
+          "name": "work_wire_IWRCEIPS_76mm",
+          "d_nom": 0.076,
+          "d_vol": 0.076,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 36889.408856580085,
+        "T_pega_moor": 135180.10035982227,
+        "T_pega_ww": 135180.10045071095,
+        "T_AHV": 177888.077864916,
+        "lay_length_moor": 1860.0702273958595,
+        "fA_moor": [
+          0.0,
+          0.0,
+          -36889.408856580085
+        ],
+        "fB_moor": [
+          0.0,
+          0.0,
+          -135180.10035982227
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          135180.10045071095
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -177888.077864916
+        ],
+        "H_continuity_residual": 0.0
+      },
+      "status": "converged"
+    }
+  ]
+}
