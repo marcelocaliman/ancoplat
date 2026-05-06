@@ -150,6 +150,24 @@ export const boundarySchema = z
     startpoint_type: z
       .enum(['semisub', 'ahv', 'barge', 'none'])
       .default('semisub'),
+    // Sprint 2 / Commit 26 — Cenário AHV de instalação (Backing Down,
+    // Hookup, Load Transfer). Quando presente, parser do QMoor 0.8.0
+    // popula automaticamente; user pode editar via aba "AHV Install".
+    ahv_install: z
+      .object({
+        bollard_pull: z
+          .number()
+          .positive('Bollard pull deve ser > 0 N'),
+        deck_level_above_swl: z.number().min(0).default(0),
+        stern_angle_deg: z.number().default(0),
+        target_horz_distance: z
+          .number()
+          .positive()
+          .nullable()
+          .optional(),
+      })
+      .nullable()
+      .optional(),
   })
   .refine(
     (b) =>
@@ -296,6 +314,7 @@ export const EMPTY_CASE: CaseFormValues = {
     startpoint_offset_horz: 0,
     startpoint_offset_vert: 0,
     startpoint_type: 'semisub',
+    ahv_install: null,
   },
   seabed: { mu: 0.6, slope_rad: 0 },  // default de wire em argila firme
   criteria_profile: 'MVP_Preliminary',
