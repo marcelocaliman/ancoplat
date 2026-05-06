@@ -680,7 +680,7 @@ export function CaseFormPage() {
                 value="ambiente"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-              <div className="flex flex-col gap-3">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-3">
 
                 {/* Grupo 1 — Geometria (batimetria 2-pontos primária) */}
                 <div className="space-y-1.5">
@@ -710,12 +710,12 @@ export function CaseFormPage() {
                   />
                 </div>
 
-                {/* Grupo 2 — Fairlead em grid 2-cols (4 campos: 2x2) */}
+                {/* Grupo 2 — Fairlead (4 campos empilhados na coluna estreita) */}
                 <div className="space-y-1.5">
                   <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Fairlead
                   </h4>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
                     <InlineField
                       label="Prof. abaixo da água"
                       unit="m"
@@ -800,7 +800,7 @@ export function CaseFormPage() {
                         control={control}
                         name="boundary.endpoint_depth"
                         render={({ field: depthField }) => (
-                          <div className="grid grid-cols-2 gap-2 items-start">
+                          <div className="space-y-1.5">
                             <fieldset className="space-y-0.5">
                               <legend className="text-[10px] font-medium text-muted-foreground mb-1">
                                 Tipo de fixação
@@ -874,12 +874,12 @@ export function CaseFormPage() {
                   />
                 </div>
 
-                {/* Grupo 4 — Seabed (μ inline com details slope direto) */}
+                {/* Grupo 4 — Seabed (μ + details slope direto empilhados) */}
                 <div className="space-y-1.5">
                   <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Seabed
                   </h4>
-                  <div className="grid grid-cols-2 gap-2 items-start">
+                  <div className="space-y-1.5">
                     <InlineField
                       label="μ (atrito) global"
                       tooltip="Atrito global do seabed. Pode ser sobrescrito por segmento na aba Linha (μ override). Wire ~0,3 · Corrente ~1,0 · Poliéster ~0,25"
