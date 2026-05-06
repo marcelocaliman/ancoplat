@@ -903,25 +903,76 @@ export function CatenaryPlot({
           clumpY.push(bodyY)
           clumpText.push(label)
         }
-        // Linha do pendant (cabo de conexão) — só desenhada quando
-        // tether_length > 0; conecta o ponto na linha ao corpo.
+        // Linha do pendant (cabo de conexão).
+        //
+        // Quando o attachment tem `pendant_segments[]` (Sprint 1 /
+        // Commit 12), renderiza N traços coloridos por category —
+        // cada trecho ocupa uma fração de tetherLen proporcional ao
+        // seu length. Quando tem só pendant_line_type/pendant_diameter
+        // (pendant simples), renderiza UMA linha pontilhada como antes.
         if (tetherLen > 0) {
-          pushTrace({
-            type: 'scatter',
-            mode: 'lines',
-            x: [px, px],
-            y: [py, bodyY],
-            line: {
-              color:
-                att.kind === 'buoy'
-                  ? palette.buoyIconColor
-                  : palette.clumpIconColor,
-              width: 1.2,
-              dash: 'dot',
-            },
-            showlegend: false,
-            hoverinfo: 'skip',
-          })
+          const pendSegs =
+            (att as {
+              pendant_segments?: Array<{
+                length: number
+                category?: string | null
+                line_type?: string | null
+              }> | null
+            }).pendant_segments ?? null
+          if (pendSegs && pendSegs.length > 0) {
+            const totalL = pendSegs.reduce((sum, s) => sum + s.length, 0)
+            // Trecho 0 = lado da linha (ponto py); último = lado do corpo (bodyY).
+            // dy é positivo para boia (sobe), negativo para clump.
+            let yCursor = py
+            for (let k = 0; k < pendSegs.length; k += 1) {
+              const seg = pendSegs[k]!
+              const frac = seg.length / totalL
+              const yNext = yCursor + dy * frac
+              const cat = seg.category as
+                | 'Wire' | 'StuddedChain' | 'StudlessChain' | 'Polyester'
+                | undefined
+                | null
+              const style = cat ? CATEGORY_STYLE[cat] : undefined
+              pushTrace({
+                type: 'scatter',
+                mode: 'lines',
+                x: [px, px],
+                y: [yCursor, yNext],
+                line: {
+                  color:
+                    att.kind === 'buoy'
+                      ? palette.buoyIconColor
+                      : palette.clumpIconColor,
+                  width: style?.width ? style.width * 0.5 : 1.5,
+                  dash: style?.dash ?? 'dot',
+                },
+                name:
+                  seg.line_type
+                    ? `${seg.line_type} (${seg.length.toFixed(1)} m)`
+                    : `Trecho ${k + 1} (${seg.length.toFixed(1)} m)`,
+                showlegend: false,
+                hoverinfo: 'name',
+              })
+              yCursor = yNext
+            }
+          } else {
+            pushTrace({
+              type: 'scatter',
+              mode: 'lines',
+              x: [px, px],
+              y: [py, bodyY],
+              line: {
+                color:
+                  att.kind === 'buoy'
+                    ? palette.buoyIconColor
+                    : palette.clumpIconColor,
+                width: 1.2,
+                dash: 'dot',
+              },
+              showlegend: false,
+              hoverinfo: 'skip',
+            })
+          }
         }
       }
       if (buoyX.length > 0) {
