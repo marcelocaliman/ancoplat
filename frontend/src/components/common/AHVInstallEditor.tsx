@@ -1,4 +1,4 @@
-import { Anchor, CheckCircle2, Loader2, Plus, Sparkles, Trash2, XCircle } from 'lucide-react'
+import { Anchor, CheckCircle2, ChevronDown, ChevronUp, Loader2, Plus, Sparkles, Trash2, XCircle, Zap } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import {
@@ -7,11 +7,14 @@ import {
   type Path,
   type UseFormSetValue,
   type UseFormGetValues,
+  useWatch,
 } from 'react-hook-form'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LineTypePicker } from '@/components/common/LineTypePicker'
 import { UnitInput } from '@/components/common/UnitInput'
 import {
   iterateBollardPullForTargetX,
@@ -19,7 +22,7 @@ import {
   type IterationResult,
 } from '@/lib/ahvIteration'
 import type { CaseFormValues } from '@/lib/caseSchema'
-import type { CaseInput } from '@/api/types'
+import type { CaseInput, LineTypeOutput } from '@/api/types'
 
 type T = CaseFormValues
 
@@ -280,10 +283,241 @@ export function AHVInstallEditor({
                 )}
               </div>
             )}
+            {/* Sprint 4 / Commit 39 — Work Wire subcard (Tier C). */}
+            <WorkWireSubcard control={control} setValue={setValue} />
           </div>
         )}
       </CardContent>
     </Card>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Sprint 4 / Commit 39 — WorkWireSubcard (Tier C físico AHV).
+//
+// Subcard colapsado por default que permite habilitar Tier C
+// (modelagem física do Work Wire elástico). Usa o mesmo
+// LineTypePicker dos segmentos da linha principal: ao escolher um
+// catálogo, popula `length` placeholder + EA + w + MBL + diameter.
+//
+// Quando Tier C está habilitado, o solver passa a usar
+// `solve_with_work_wire` (catenárias acopladas via continuidade
+// horizontal no ponto de pega). Em regime degenerado (mooring
+// totalmente apoiado), o solver cai automaticamente em fallback
+// Sprint 2 com D024 — UI mostra mensagem informativa.
+// ──────────────────────────────────────────────────────────────────
+
+
+function WorkWireSubcard({
+  control,
+  setValue,
+}: {
+  control: Control<T>
+  setValue: UseFormSetValue<T>
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const ww = useWatch({
+    control,
+    name: 'boundary.ahv_install.work_wire',
+  })
+  const enabled = ww != null
+
+  const DEFAULT_WW: NonNullable<
+    NonNullable<CaseFormValues['boundary']['ahv_install']>['work_wire']
+  > = {
+    length: 200.0,
+    EA: 5.5e8,
+    w: 170.0,
+    MBL: 6.5e6,
+    category: 'Wire',
+    n_segs: 1,
+    line_type_id: null,
+    line_type: null,
+    diameter: 0.076,
+    dry_weight: null,
+  }
+
+  function toggleEnabled() {
+    if (enabled) {
+      setValue('boundary.ahv_install.work_wire', null, { shouldDirty: true })
+    } else {
+      setValue('boundary.ahv_install.work_wire', { ...DEFAULT_WW }, {
+        shouldDirty: true,
+      })
+      setExpanded(true)
+    }
+  }
+
+  function applyLineType(lt: LineTypeOutput | null) {
+    if (!lt) {
+      setValue('boundary.ahv_install.work_wire.line_type_id', null, {
+        shouldDirty: true,
+      })
+      setValue('boundary.ahv_install.work_wire.line_type', null, {
+        shouldDirty: true,
+      })
+      return
+    }
+    setValue('boundary.ahv_install.work_wire.line_type_id', lt.id, {
+      shouldDirty: true,
+    })
+    setValue('boundary.ahv_install.work_wire.line_type', lt.line_type, {
+      shouldDirty: true,
+    })
+    setValue('boundary.ahv_install.work_wire.diameter', lt.diameter, {
+      shouldDirty: true,
+    })
+    setValue('boundary.ahv_install.work_wire.EA', lt.qmoor_ea, {
+      shouldDirty: true,
+    })
+    setValue('boundary.ahv_install.work_wire.w', lt.wet_weight, {
+      shouldDirty: true,
+    })
+    setValue('boundary.ahv_install.work_wire.MBL', lt.break_strength, {
+      shouldDirty: true,
+    })
+  }
+
+  const lineTypeValue = enabled && ww?.line_type
+    ? ({
+        id: ww.line_type_id ?? 0,
+        line_type: ww.line_type,
+        category: 'Wire',
+        diameter: ww.diameter ?? 0,
+        dry_weight: ww.dry_weight ?? 0,
+        wet_weight: ww.w ?? 0,
+        break_strength: ww.MBL ?? 0,
+        qmoor_ea: ww.EA ?? 0,
+        data_source: 'legacy_qmoor',
+      } as unknown as LineTypeOutput)
+    : null
+
+  return (
+    <div className="rounded-md border border-warning/20 bg-warning/[0.02]">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] hover:bg-warning/[0.04]"
+      >
+        {expanded ? (
+          <ChevronUp className="h-3 w-3 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        )}
+        <Zap className="h-3 w-3 text-warning" />
+        <span className="font-medium">Work Wire físico (Tier C)</span>
+        {enabled ? (
+          <Badge variant="outline" className="ml-auto h-4 border-warning/40 bg-warning/10 px-1.5 text-[9px] text-warning">
+            ATIVO
+          </Badge>
+        ) : (
+          <span className="ml-auto text-[10px] text-muted-foreground">
+            opcional · clique para habilitar
+          </span>
+        )}
+      </button>
+      {expanded && (
+        <div className="space-y-2 border-t border-warning/20 px-2 py-2">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={enabled ? 'destructive' : 'outline'}
+              size="sm"
+              className="h-6 gap-1 text-[10px]"
+              onClick={toggleEnabled}
+            >
+              {enabled ? (
+                <>
+                  <Trash2 className="h-3 w-3" />
+                  Desativar Tier C
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3 w-3" />
+                  Ativar Tier C (Work Wire)
+                </>
+              )}
+            </Button>
+            {enabled && (
+              <span className="text-[10px] italic text-muted-foreground">
+                Solver usa modelo físico Work Wire elástico
+              </span>
+            )}
+          </div>
+          {enabled && (
+            <>
+              <p className="text-[10px] text-muted-foreground">
+                Solver Tier C resolve catenárias acopladas (mooring + Work
+                Wire) via continuidade horizontal na pega. Em regime
+                degenerado (mooring 100% apoiado), cai automaticamente
+                em Sprint 2 (transparente, indicado por D024).
+              </p>
+              <div className="space-y-2">
+                <Field label="Modelo do cabo (catálogo)">
+                  <LineTypePicker
+                    value={lineTypeValue}
+                    onChange={applyLineType}
+                    className="h-7"
+                  />
+                </Field>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-4">
+                  <Field label="Comprimento" unit="m">
+                    <NumberCtrl
+                      control={control}
+                      name={'boundary.ahv_install.work_wire.length' as Path<T>}
+                      step="1"
+                      min={0}
+                    />
+                  </Field>
+                  <Field label="EA" unit="N">
+                    <NumberCtrl
+                      control={control}
+                      name={'boundary.ahv_install.work_wire.EA' as Path<T>}
+                      step="1e7"
+                      min={0}
+                    />
+                  </Field>
+                  <Field label="Peso submerso" unit="N/m">
+                    <NumberCtrl
+                      control={control}
+                      name={'boundary.ahv_install.work_wire.w' as Path<T>}
+                      step="1"
+                      min={0}
+                    />
+                  </Field>
+                  <Field label="MBL" unit="N">
+                    <NumberCtrl
+                      control={control}
+                      name={'boundary.ahv_install.work_wire.MBL' as Path<T>}
+                      step="1e5"
+                      min={0}
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-4">
+                  <Field label="Sub-segmentos">
+                    <NumberCtrl
+                      control={control}
+                      name={'boundary.ahv_install.work_wire.n_segs' as Path<T>}
+                      step="1"
+                      min={1}
+                    />
+                  </Field>
+                  <Field label="Diâmetro" unit="m">
+                    <NumberCtrl
+                      control={control}
+                      name={'boundary.ahv_install.work_wire.diameter' as Path<T>}
+                      step="0.001"
+                      min={0}
+                    />
+                  </Field>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

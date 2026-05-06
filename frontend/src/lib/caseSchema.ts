@@ -168,6 +168,24 @@ export const boundarySchema = z
           .positive()
           .nullable()
           .optional(),
+        // Sprint 4 / Commit 39 — Work Wire físico (Tier C).
+        // Quando populado, solver usa modelo elastic acoplado ao mooring
+        // via ponto de pega. Default null preserva comportamento Sprint 2.
+        work_wire: z
+          .object({
+            length: z.number().positive('Comprimento deve ser > 0'),
+            EA: z.number().positive('EA deve ser > 0 N'),
+            w: z.number().min(0, 'Peso submerso ≥ 0'),
+            MBL: z.number().positive('MBL deve ser > 0 N'),
+            category: z.literal('Wire').default('Wire'),
+            n_segs: z.number().int().min(1).max(20).default(1),
+            line_type_id: z.number().int().nullable().optional(),
+            line_type: z.string().nullable().optional(),
+            diameter: z.number().positive().nullable().optional(),
+            dry_weight: z.number().min(0).nullable().optional(),
+          })
+          .nullable()
+          .optional(),
       })
       .nullable()
       .optional(),
