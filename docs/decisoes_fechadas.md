@@ -559,3 +559,81 @@ Mini-plano com 8-12 commits será apresentado nessa altura.
 
 **Link:** [`relatorio_sprint3_v1_1_x.md`](relatorio_sprint3_v1_1_x.md)
 §decisões.
+
+**SUPERSEDIDA pela Decisão #18 (Sprint 4).** Mantida no histórico como
+documentação do raciocínio inicial, mas a Sprint 4 substitui esta
+escolha por validação direta contra MoorPy Subsystem (open-source
+NREL) em vez de exigir QMoor reference data.
+
+---
+
+## Decisão #18 — Tier C físico AHV validado contra MoorPy Subsystem (Sprint 4)
+
+**Decisão:** Implementar Tier C físico AHV (Work Wire elástico real
+acoplado à linha de ancoragem via ponto de pega) validando contra
+**MoorPy Subsystem** ao invés de exigir QMoor reference numbers.
+
+**Razão (corrige a Decisão #17):**
+
+A Decisão #17 foi conservadora demais. O AncoPlat já tem MoorPy
+integrado como referência canônica de validação desde F1b/F-prof.0
+(`tools/moorpy_env/venv/`):
+
+- F1b: 9 BC-MOORPY validados rtol < 1e-2.
+- F-prof.0: F-prof.1 baseline com 7 BC-MOORPY ativos.
+- F7: 5 BC-UP validados rtol < 1e-2 contra `moorpy.Catenary.catenary`.
+- VV-01..05: validação cruzada em F10.
+
+Para AHV especificamente, MoorPy oferece `Subsystem.makeGeneric()`
+que modela naturalmente sistemas multi-trecho heterogêneo com
+endpoints livres (anchor + AHV deck). Isso é EXATAMENTE o caso AHV
+Tier C.
+
+**Vantagens vs QMoor:**
+
+1. **Reproduzível por auditoria externa**: outro engenheiro pode
+   instalar MoorPy via `pip install moorpy` e re-rodar os benchmarks.
+   QMoor é proprietário/comercial, não-reproduzível.
+2. **Peer-reviewed**: MoorPy é open-source NREL com publicação ASME
+   2025. Para um memorial de auditoria científica isso é mais
+   defensável do que paridade com legado.
+3. **Já validado em-house**: 21 BCs já validam contra MoorPy. Adicionar
+   Tier C nesse pipeline reusa toda a infra existente.
+
+**Implementação (Sprint 4 / Commits 33-41):**
+
+10 cenários BC-AHV-MOORPY-01..10 (`docs/audit/moorpy_ahv_baseline_*.json`)
+com gerador `tools/moorpy_env/regenerate_ahv_baseline.py`. Solver
+Tier C em `backend/solver/ahv_work_wire.py` resolve catenárias
+acopladas via brentq sobre Z_p (continuidade horizontal H_moor = H_ww
+no ponto de pega).
+
+**Resultado:**
+
+- 6/6 cenários canônicos (operação real de instalação) → fallback
+  Sprint 2 automático com D024 (regime físico onde mooring fica
+  deitado).
+- 4 xfails informativos: 2 uplift+touchdown (pendência F7.x), 2
+  deepwater taut com divergência ~20% em H (pendência F-prof.X
+  para refatorar elastic.py).
+
+**Princípio transversal aplicado:**
+
+"MoorPy é referência de validação científica externa." Quando o
+modelo AncoPlat diverge, **registramos a divergência como pendência
+explícita** com path de saída técnico (qual módulo refatorar, qual
+abordagem matemática), em vez de aceitar paridade superficial ou
+inventar matemática nova sem revisão.
+
+**Decisões implementadas como consequência:**
+
+- D018 (sempre dispara em AHV) ganhou parâmetro `tier_c_active` com
+  mensagem específica citando os limites: Work Wire elástico
+  modelado, **SEM** snap loads, **SEM** movimento dinâmico AHV,
+  **SEM** hidrodinâmica do casco.
+- D022 (warning, high) — bollard pull ≥ 90% MBL Work Wire (DNV-OS-E301).
+- D024 (info, high) — Tier C reduzido a Sprint 2 (transparência).
+
+**Referência canônica:** Sprint 4 / Commits 33-41.
+
+**Link:** [`relatorio_sprint4_ahv_tier_c.md`](relatorio_sprint4_ahv_tier_c.md).
