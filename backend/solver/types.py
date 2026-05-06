@@ -746,6 +746,24 @@ class BoundaryConditions(BaseModel):
         ),
     )
 
+    # Sprint 2 / Commit 23 — Cenário AHV de instalação.
+    # Quando populado (presença != None), o caso é interpretado como
+    # operação temporária de installation/hookup/load-transfer. Parser
+    # do QMoor 0.8.0 popula automaticamente quando `startpointType="AHV"`.
+    # Editor manual via UI quando `startpoint_type="ahv"` selecionado.
+    # SOLVER: usa `ahv_install.bollard_pull` como input_value em mode
+    # Tension (mais robusto numericamente que mode Range em scenarios
+    # AHV onde L < L_min é comum).
+    ahv_install: Optional["AHVInstall"] = Field(
+        default=None,
+        description=(
+            "Cenário AHV de instalação. Quando presente, define "
+            "bollard_pull (força do AHV) que substitui o input_value "
+            "do mode Tension. target_horz_distance é informativo — "
+            "X resultante depende do bollard_pull aplicado."
+        ),
+    )
+
     @field_validator("h", "input_value")
     @classmethod
     def _must_be_positive(cls, v: float) -> float:
@@ -1169,6 +1187,87 @@ class CurrentProfile(BaseModel):
         return self
 
 
+class AHVInstall(BaseModel):
+    """
+    Cenário AHV (Anchor Handler Vessel) de instalação — Sprint 2 / Commit 23.
+
+    Modela operações TEMPORÁRIAS onde um navio AHV está na superfície
+    segurando a linha durante uma fase de:
+
+      • **Backing Down** — AHV recua liberando comprimento da linha.
+      • **Hookup** — primeira conexão da linha ao sistema antes de
+        transferir para o rig.
+      • **Load Transfer** — passagem de tensão do rig para o AHV (ou
+        vice-versa) durante manutenção.
+
+    Diferença vs `LineAttachment.kind="ahv"` (Fase 8):
+      - Aquele modela um AHV **ao longo da linha** (carga pontual num
+        ponto da linha já instalada).
+      - Este (`AHVInstall`) modela o AHV **como o startpoint da
+        linha** durante operação de instalação. O "fairlead" virtual
+        é o convés do AHV na superfície.
+
+    Convenção física no AncoPlat (modelo 2D plano vertical):
+
+        [AHV] ◀ surface (y = +deck_level_above_swl)
+         |
+         | Work Wire (último segmento da linha)
+         |
+         o--- connection point (intermediário)
+          \\
+           \\  Mooring line restante
+            \\
+             v Anchor (X = horzDistance, y = -h)
+
+    Solver: quando `BoundaryConditions.ahv_install` está populado, o
+    parser força `mode=Tension` com `input_value = bollard_pull` (a
+    força aplicada pelo AHV via cabo de trabalho). O `target_horz_distance`
+    é informativo — o X resultante depende do bollard_pull aplicado.
+
+    Para atingir um X específico, use o painel de Sensitivity Panel
+    para iterar bollard_pull até X resultar próximo do target.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    bollard_pull: float = Field(
+        ..., gt=0,
+        description=(
+            "Bollard pull do AHV (N) — força aplicada pelo cabo de "
+            "trabalho. Equivalente ao T_fl em modo Tension. Tipico: "
+            "10-200 te (98 kN - 1.96 MN). Heurística para QMoor sem "
+            "fairleadTension definido: 30 te = 294 kN."
+        ),
+    )
+    deck_level_above_swl: float = Field(
+        default=0.0, ge=0,
+        description=(
+            "Altura do convés do AHV acima do nível médio do mar (m). "
+            "0 = convés ao nível da água (simplificação 2D). Reservado "
+            "para refinamento futuro do modelo elevado."
+        ),
+    )
+    stern_angle_deg: float = Field(
+        default=0.0,
+        description=(
+            "Ângulo da popa do AHV no plano horizontal (graus). "
+            "Cosmético em v1.1.0 — não afeta o cálculo. Aparece em "
+            "relatórios profissionais para documentar orientação."
+        ),
+    )
+    target_horz_distance: Optional[float] = Field(
+        default=None, gt=0,
+        description=(
+            "X informativo (m) — distância horizontal anchor → AHV "
+            "que o usuário/QMoor reporta como target operacional. "
+            "Quando importado de QMoor 0.8.0 com `inputParam='Range'`, "
+            "este campo recebe o `horzDistance` original. SOLVER NÃO "
+            "USA — apenas exibido na UI. Para iterar bollard_pull até "
+            "X resultar ≈ target, use o Sensitivity Panel."
+        ),
+    )
+
+
 class Vessel(BaseModel):
     """
     Vessel/plataforma associada ao caso (Sprint 1 / v1.1.0).
@@ -1377,7 +1476,14 @@ class WatchcircleResult(BaseModel):
     solver_version: str = Field(default="")
 
 
+# Sprint 2 / Commit 23 — resolve forward reference de
+# `BoundaryConditions.ahv_install: Optional["AHVInstall"]` agora que
+# `AHVInstall` foi declarada acima neste arquivo.
+BoundaryConditions.model_rebuild()
+
+
 __all__ = [
+    "AHVInstall",
     "AlertLevel",
     "AttachmentKind",
     "BoundaryConditions",
