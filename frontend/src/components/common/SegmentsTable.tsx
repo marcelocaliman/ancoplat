@@ -119,7 +119,7 @@ export function SegmentsTable({
           <EnvCard
             key={field.id}
             title={positionLabel}
-            className="w-[260px]"
+            className="w-[300px]"
             trailing={
               <div className="flex items-center">
                 <Button
@@ -208,7 +208,7 @@ export function SegmentsTable({
                 {...register(p(realIdx, 'length') as Path<T>, {
                   valueAsNumber: true,
                 })}
-                className="h-7 w-[80px] font-mono text-[11px]"
+                className="h-7 w-[110px] font-mono text-[11px]"
               />
             </EnvField>
 
@@ -220,7 +220,7 @@ export function SegmentsTable({
                 {...register(p(realIdx, 'diameter') as Path<T>, {
                   valueAsNumber: true,
                 })}
-                className="h-7 w-[80px] font-mono text-[11px]"
+                className="h-7 w-[110px] font-mono text-[11px]"
               />
             </EnvField>
 
@@ -234,7 +234,7 @@ export function SegmentsTable({
                     onChange={f.onChange}
                     quantity="force_per_m"
                     digits={2}
-                    className="h-7 w-[80px]"
+                    className="h-7 w-[110px]"
                     inputClassName="text-[11px] py-0.5"
                   />
                 )}
@@ -251,7 +251,7 @@ export function SegmentsTable({
                     onChange={f.onChange}
                     quantity="force_per_m"
                     digits={2}
-                    className="h-7 w-[80px]"
+                    className="h-7 w-[110px]"
                     inputClassName="text-[11px] py-0.5"
                   />
                 )}

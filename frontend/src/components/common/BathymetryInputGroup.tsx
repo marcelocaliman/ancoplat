@@ -164,7 +164,7 @@ export function BathymetryInputGroup({
           <span className="flex-1 text-[10px] font-medium text-primary/80">
             Inclinação
           </span>
-          <span className="w-[80px] text-right font-mono text-[11px] font-semibold tabular-nums">
+          <span className="w-[110px] text-right font-mono text-[11px] font-semibold tabular-nums">
             {fmtNumber(slopeDeg, 2)}
           </span>
           <span className="w-3 shrink-0 font-mono text-[9px] text-muted-foreground">
@@ -212,7 +212,7 @@ function FieldRow({
           min={min}
           value={Number.isFinite(value) ? value : 0}
           onChange={(e) => onChange(parseFloat(e.target.value || '0'))}
-          className="h-7 w-[80px] font-mono text-[11px]"
+          className="h-7 w-[110px] font-mono text-[11px]"
         />
         <span className="w-3 shrink-0 font-mono text-[9px] text-muted-foreground">
           {unit}
