@@ -379,3 +379,133 @@ técnicas.
 | F-prof.7 | #3 ext, #12 (convenção MoorPy) |
 | F-prof.8 | #9 (AHV idealização), #13 (H per-seg) |
 | F-prof.10| #11 (ProcessPool watchcircle)  |
+| Sprint 1 | #14 (Vessel case-level metadata) |
+| Sprint 2 | #15 (AHV install via mode Tension), #16 (heurística bollard pull) |
+
+---
+
+## #14 — `Vessel` é metadado de CASE, não AttachmentKind
+
+**Tomada em:** Sprint 1 (v1.1.0, 2026-05-06).
+
+QMoor JSON tem `vessels[]` como top-level, semanticamente o
+**hull flutuante** ao qual a linha está conectada via fairlead.
+Distinto de `LineAttachment.kind="ahv"` (Fase 8) que modela carga
+pontual APLICADA ao longo da linha.
+
+**Decisão:** criar `Vessel` model em `backend/solver/types.py` e
+expor como `CaseInput.vessel: Optional[Vessel]` (case-level
+metadata). NÃO criar `AttachmentKind="vessel"` (que confundiria
+com AHV pontual e não mapearia direto à estrutura QMoor).
+
+Solver não consome `Vessel` — é metadado puro. Plot desenha
+casco rectangular com LOA × draft quando preenchido.
+
+**Referência canônica:** Sprint 1 / Commit 3 `e957398`
+(`feat(schema): adiciona Vessel + CaseInput.vessel`).
+
+**Link:** [`relatorio_sprint1_qmoor_import.md`](relatorio_sprint1_qmoor_import.md) §1.
+
+---
+
+## #15 — Cenário AHV de instalação resolve via mode Tension forçado
+
+**Tomada em:** Sprint 2 (v1.1.x, 2026-05-06).
+
+**Contexto físico:**
+
+Cenários AHV de instalação (Backing Down / Hookup / Load Transfer)
+são fases TEMPORÁRIAS onde um Anchor Handler Vessel está na
+superfície segurando a linha. Estrutura no plano vertical 2D:
+
+```
+ [AHV] superfície (y = +deck_level)
+  |
+  | Work Wire (último segmento)
+  |
+  o--- connection point
+   \\
+    \\  Mooring line restante
+     v Anchor (X = horzDistance, y = -h)
+```
+
+**Problema observado:** QMoor 0.8.0 exporta esses cases às vezes em
+`inputParam: "Range"` com `horzDistance > L_min = √(X² + h²)`.
+L_total não-esticada insuficiente — solução matemática não existe.
+fsolve diverge.
+
+**Análise:** os 4 cases AHV que convergiam pré-Sprint 2 estavam em
+`inputParam: "Tension"` com `fairleadTension` definido. Inferência
+empírica: QMoor real sempre dirige cenários AHV por **bollard pull**
+(força do cabo de trabalho), não por X target. `horzDistance` no JSON
+Range é informativo (X resultante de execução prévia).
+
+**Decisão:**
+
+Schema novo `AHVInstall` em `backend/solver/types.py` com 4 campos:
+`bollard_pull` (req), `deck_level_above_swl`, `stern_angle_deg`,
+`target_horz_distance` (informativo). Anexado a
+`BoundaryConditions.ahv_install: Optional[AHVInstall]`.
+
+Parser QMoor 0.8.0 detecta cenário AHV por DOIS sinais:
+1. `boundary.startpointType="AHV"` explícito.
+2. Nome do mooringLine contém "Hookup", "Backing Down",
+   "Load Transfer" ou "Install".
+
+Quando detectado, parser **força `mode=Tension`** com
+`input_value = bollard_pull`, preserva `horzDistance` em
+`ahv_install.target_horz_distance` (NÃO consumido pelo solver).
+Diagnostic D021 (info) emitido no migration log.
+
+**Solver core INALTERADO** — caminho Tension já validado em F1+.
+
+**Diferença vs `LineAttachment.kind="ahv"` (Fase 8):**
+- F8: AHV como carga pontual aplicada NUM PONTO da linha.
+- Sprint 2: AHV como "fairlead virtual" durante instalação
+  (substitui o rig fairlead pelo convés do AHV na superfície).
+- Coexistem — podem aparecer juntos em casos complexos.
+
+**Resultado:** 16/16 KAR006 cases convergem em produção
+(era 11/16 pós-Sprint 1).
+
+**Referência canônica:** Sprint 2 / Commit 24 `0fd4205` +
+Commit 24.1 `2746f9f`.
+
+**Link:** [`relatorio_sprint2_ahv_install.md`](relatorio_sprint2_ahv_install.md).
+
+---
+
+## #16 — Heurística adaptativa de bollard pull
+
+**Tomada em:** Sprint 2 (v1.1.x, 2026-05-06).
+
+Quando JSON QMoor 0.8.0 marca cenário AHV mas omite
+`solution.fairleadTension`, o parser precisa inferir um bollard
+pull para popular `ahv_install`. Decisão:
+
+```
+bollard_pull = max(50 te, 1.5 × w_max × h)
+```
+
+Onde:
+- `w_max` = peso submerso por unidade do segmento mais pesado (N/m).
+- `h` = profundidade da âncora (m).
+- 50 te = 490.3 kN (piso conservador).
+
+**Justificativa:**
+
+Para Hookup ML3 (KAR006): w_max = 1477 N/m (Rig Chain), h = 311 m
+→ 1.5·1477·311 ≈ 689 kN ≈ 70 te. Operação AHV real tipicamente
+usa 50-200 te, então 70 te é razoável.
+
+Heurística garante T_fl alto suficiente para levantar o segmento
+mais pesado do anchor (evita regime "fully grounded" onde fsolve
+trava numericamente — testado: 30 te bate em invalid_case;
+50 te já converge para ML3).
+
+User pode editar via aba "AHV Install" do CaseFormPage se valor
+heurístico não for o desejado para o cenário operacional real.
+
+**Referência canônica:** Sprint 2 / Commit 24 (mesmo commit que #15).
+
+**Link:** [`relatorio_sprint2_ahv_install.md`](relatorio_sprint2_ahv_install.md) §3.
