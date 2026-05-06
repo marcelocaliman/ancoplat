@@ -10,6 +10,7 @@ import {
   type UseFormSetValue,
 } from 'react-hook-form'
 import { BuoyPicker } from '@/components/common/BuoyPicker'
+import { LineTypePicker } from '@/components/common/LineTypePicker'
 import { UnitInput } from '@/components/common/UnitInput'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { AttachmentKind, BuoyOutput } from '@/api/types'
+import type { AttachmentKind, BuoyOutput, LineTypeOutput } from '@/api/types'
 import type { CaseFormValues } from '@/lib/caseSchema'
 import { cn } from '@/lib/utils'
 
@@ -257,6 +258,18 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
   const buoyCatalogId = useWatch({
     control,
     name: p('buoy_catalog_id'),
+  }) as number | null | undefined
+
+  // hotfix-buoy-pendant: nome + diâmetro do cabo do pendant. Usados
+  // para reconstruir um LineTypeOutput "fake" e alimentar o picker
+  // (mesmo pattern do SegmentEditor para line_type da linha principal).
+  const pendantLineType = useWatch({
+    control,
+    name: p('pendant_line_type'),
+  }) as string | null | undefined
+  const pendantDiameter = useWatch({
+    control,
+    name: p('pendant_diameter'),
   }) as number | null | undefined
 
   /**
@@ -863,35 +876,62 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
             </div>
           )}
 
+          {/* hotfix-buoy-pendant: cabo do pendant agora vem do catálogo
+              de line_types via LineTypePicker (mesmo componente usado
+              pelos segmentos da linha principal). Ao escolher, popula
+              `pendant_line_type` (nome) e `pendant_diameter` (m).
+              Diâmetro permanece editável manualmente para override. */}
           <div className="space-y-2">
             <Label className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Pendant — cabo de conexão
             </Label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
               <div className="flex flex-col gap-0.5">
                 <Label className="text-[10px] font-medium text-muted-foreground">
                   Modelo do cabo
                 </Label>
-                <Controller
-                  control={control}
-                  name={`${basePath}.${realIndex}.pendant_line_type` as Path<T>}
-                  render={({ field }) => (
-                    <Input
-                      type="text"
-                      value={(field.value as string | null) ?? ''}
-                      onChange={(e) =>
-                        field.onChange(e.target.value || null)
-                      }
-                      placeholder="ex.: IWRCEIPS"
-                      className="h-7 font-mono text-xs"
-                      maxLength={80}
-                    />
-                  )}
+                <LineTypePicker
+                  value={
+                    pendantLineType
+                      ? ({
+                          id: 0,
+                          line_type: pendantLineType,
+                          category: 'Wire',
+                          diameter: pendantDiameter ?? 0,
+                          dry_weight: 0,
+                          wet_weight: 0,
+                          break_strength: 0,
+                          qmoor_ea: 0,
+                          data_source: 'legacy_qmoor',
+                        } as unknown as LineTypeOutput)
+                      : null
+                  }
+                  onChange={(lt) => {
+                    if (lt) {
+                      setValue(p('pendant_line_type'), lt.line_type as never, {
+                        shouldValidate: true,
+                      })
+                      setValue(p('pendant_diameter'), lt.diameter as never, {
+                        shouldValidate: true,
+                      })
+                    } else {
+                      setValue(p('pendant_line_type'), null as never, {
+                        shouldValidate: true,
+                      })
+                      setValue(p('pendant_diameter'), null as never, {
+                        shouldValidate: true,
+                      })
+                    }
+                  }}
+                  className="h-8"
                 />
               </div>
               <div className="flex flex-col gap-0.5">
                 <Label className="text-[10px] font-medium text-muted-foreground">
-                  Diâmetro (m)
+                  Diâmetro (m){' '}
+                  <span className="font-normal normal-case text-muted-foreground/70">
+                    — override manual
+                  </span>
                 </Label>
                 <Controller
                   control={control}
