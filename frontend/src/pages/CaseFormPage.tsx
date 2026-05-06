@@ -39,7 +39,7 @@ import {
   updateCase,
 } from '@/api/endpoints'
 import type { SolverResult } from '@/api/types'
-import { AttachmentsEditor } from '@/components/common/AttachmentsEditor'
+import { AttachmentsTable } from '@/components/common/AttachmentsTable'
 import { BathymetryInputGroup } from '@/components/common/BathymetryInputGroup'
 import { LineSummaryPanel } from '@/components/common/LineSummaryPanel'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
@@ -155,8 +155,9 @@ export function CaseFormPage() {
 
   // Lista dinâmica de segmentos (F5.1). useFieldArray cuida do estado.
   const segmentsArray = useFieldArray({ control, name: 'segments' })
-  // Lista dinâmica de attachments (F5.2): boias e clump weights nas junções.
-  const attachmentsArray = useFieldArray({ control, name: 'attachments' })
+  // attachmentsArray (boias/clumps) agora é gerenciado internamente
+  // pela AttachmentsTable em cada aba — não precisa do array no escopo
+  // do CaseFormPage. F5.2 / v1.0.6.
 
   useEffect(() => {
     if (existing) {
@@ -595,43 +596,41 @@ export function CaseFormPage() {
               />
             </TabsContent>
 
-              {/* ───────── Aba Boias ───────── */}
+              {/* ───────── Aba Boias (layout tabular v1.0.6) ───────── */}
               <TabsContent
                 forceMount
                 value="boias"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-                <AttachmentsEditor
+                <AttachmentsTable
                   control={control}
-                  attachments={attachmentsArray}
-                  segmentCount={segmentsArray.fields.length}
                   setValue={setValue}
-                  solverResult={previewQuery.data}
+                  kind="buoy"
+                  maxJunctions={Math.max(0, segmentsArray.fields.length - 1)}
                   totalLength={(values.segments ?? []).reduce(
                     (acc, s) => acc + (s.length ?? 0),
                     0,
                   )}
-                  kind="buoy"
+                  solverResult={previewQuery.data}
                 />
               </TabsContent>
 
-              {/* ───────── Aba Clumps ───────── */}
+              {/* ───────── Aba Clumps (layout tabular v1.0.6) ───────── */}
               <TabsContent
                 forceMount
                 value="clumps"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-                <AttachmentsEditor
+                <AttachmentsTable
                   control={control}
-                  attachments={attachmentsArray}
-                  segmentCount={segmentsArray.fields.length}
                   setValue={setValue}
-                  solverResult={previewQuery.data}
+                  kind="clump_weight"
+                  maxJunctions={Math.max(0, segmentsArray.fields.length - 1)}
                   totalLength={(values.segments ?? []).reduce(
                     (acc, s) => acc + (s.length ?? 0),
                     0,
                   )}
-                  kind="clump_weight"
+                  solverResult={previewQuery.data}
                 />
               </TabsContent>
 
