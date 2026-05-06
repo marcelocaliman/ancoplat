@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from backend.solver.types import (
     BoundaryConditions,
     CriteriaProfile,
+    CurrentProfile,
     LineAttachment,
     LineSegment,
     SeabedConfig,
@@ -120,6 +121,16 @@ class CaseInput(BaseModel):
             "(nome, tipo, dimensões, calado, heading) para Memorial "
             "PDF e UI. Quando ausente, o caso é interpretado como "
             "ancoragem genérica sem plataforma identificada."
+        ),
+    )
+    current_profile: Optional[CurrentProfile] = Field(
+        default=None,
+        description=(
+            "Perfil de corrente marinha V(z) — Sprint 1 / v1.1.0. "
+            "**METADADO em v1.0**: solver não consome diretamente. "
+            "Importado do campo `horzForces` do QMoor 0.8.0 e exibido "
+            "no Memorial PDF / UI. Discretização em AHVs pontuais é "
+            "opt-in via helper dedicado em Commit 5."
         ),
     )
 

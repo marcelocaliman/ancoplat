@@ -1080,6 +1080,95 @@ class MooringSystemResult(BaseModel):
 # ───────────────────────────────────────────────────────────────────────
 
 
+class CurrentLayer(BaseModel):
+    """
+    Ponto único da curva de corrente V(z) — velocidade do fluxo numa
+    profundidade específica (Sprint 1 / v1.1.0).
+
+    Convenção de heading: 0° = direção +X global do caso, anti-horário
+    positivo (mesmo referencial dos demais campos de heading).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    depth: float = Field(
+        ..., ge=0.0,
+        description="Profundidade (m). 0 = superfície da água; cresce para baixo.",
+    )
+    speed: float = Field(
+        ..., ge=0.0,
+        description="Velocidade horizontal do fluxo (m/s).",
+    )
+    heading_deg: float = Field(
+        default=0.0, ge=0.0, lt=360.0,
+        description=(
+            "Direção do fluxo (graus, 0° = +X global, anti-horário "
+            "positivo). Default 0°."
+        ),
+    )
+
+
+class CurrentProfile(BaseModel):
+    """
+    Perfil vertical de corrente marinha — V(z) (Sprint 1 / v1.1.0).
+
+    Permite representar qualquer perfil que o QMoor 0.8.0 carrega no
+    campo `horzForces`:
+      - **Uniforme**: 1 layer (mesmo speed em qualquer depth).
+      - **Linear**: 2 layers (superfície + fundo, interpolação linear).
+      - **Tabulado**: N layers (curva arbitrária, ≤20 pontos).
+
+    **METADADO em v1.0.0**: solver não consome o perfil. Sprint 1 /
+    Commit 5 introduzirá um helper opt-in para discretizar `layers` em
+    `LineAttachment(kind='ahv')` pontuais — preservando o solver atual
+    sem mudança no core. Esta separação garante:
+      1. Round-trip do JSON QMoor preserva o perfil EXATO.
+      2. Cálculo continua reprodutível bit-a-bit em casos sem discretização.
+      3. Discretização é função pura, testável independentemente.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    layers: list[CurrentLayer] = Field(
+        ..., min_length=1, max_length=20,
+        description=(
+            "Pontos de V(z). Recomendado ordenar por depth ascendente; "
+            "`_validate_layers_sorted` garante isso após validação."
+        ),
+    )
+    drag_coefficient: Optional[float] = Field(
+        default=None, gt=0,
+        description=(
+            "Coeficiente de arrasto Cd (adimensional). RESERVADO — "
+            "consumido em Commit 5 quando o usuário ativa a "
+            "discretização opt-in. Default empírico ≈ 1.2 para "
+            "correntes/wires."
+        ),
+    )
+    water_density: Optional[float] = Field(
+        default=None, gt=0,
+        description=(
+            "Densidade da água do mar (kg/m³). Default 1025 quando "
+            "consumido. METADADO em v1.0."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_layers_sorted(self) -> "CurrentProfile":
+        depths = [lyr.depth for lyr in self.layers]
+        if depths != sorted(depths):
+            raise ValueError(
+                "CurrentProfile.layers deve estar ordenado por "
+                "`depth` crescente (superfície → fundo)."
+            )
+        if len(set(depths)) != len(depths):
+            raise ValueError(
+                "CurrentProfile.layers tem profundidades duplicadas — "
+                "use uma única entrada por depth."
+            )
+        return self
+
+
 class Vessel(BaseModel):
     """
     Vessel/plataforma associada ao caso (Sprint 1 / v1.1.0).
@@ -1294,6 +1383,8 @@ __all__ = [
     "BoundaryConditions",
     "ConvergenceStatus",
     "CriteriaProfile",
+    "CurrentLayer",
+    "CurrentProfile",
     "EnvironmentalLoad",
     "LineAttachment",
     "LineCategory",
