@@ -9,7 +9,7 @@
 #   3. POST /api/v1/cases (BC01_LIKE)              → write path
 #   4. POST /api/v1/cases/{id}/solve               → solver core
 #   5. GET /api/v1/cases/{id}/export/memorial-pdf  → reports
-#   6. POST /api/v1/import-moor (round-trip)       → import/export
+#   6. POST /api/v1/import/moor (round-trip)       → import/export
 #   7. POST /api/v1/mooring-systems/{id}/watchcircle → feature flagship
 #
 # Uso:
@@ -106,14 +106,16 @@ fi
 _pass "health.status=ok"
 
 # ─── 2. GET /api/v1/line-types ──────────────────────────────────────
+# Endpoint retorna PaginatedResponse{items, total, page, page_size},
+# não array direto. Usamos .total para validar tamanho do catálogo.
 _step "2/7 GET /api/v1/line-types (catálogo legacy QMoor)"
-LINE_TYPES=$(_curl GET /api/v1/line-types?limit=1000)
-N_TYPES=$(echo "$LINE_TYPES" | jq '. | length')
+LINE_TYPES=$(_curl GET "/api/v1/line-types?page=1&page_size=10")
+N_TYPES=$(echo "$LINE_TYPES" | jq '.total')
 if [[ "$N_TYPES" -lt 500 ]]; then
-    echo "❌ /line-types retornou $N_TYPES entries (esperado ≥500)" >&2
+    echo "❌ /line-types total=$N_TYPES (esperado ≥500)" >&2
     exit 12
 fi
-_pass "line-types: $N_TYPES entries (≥500)"
+_pass "line-types total=$N_TYPES (≥500)"
 
 # ─── 3. POST /api/v1/cases (BC01_LIKE) ──────────────────────────────
 _step "3/7 POST /api/v1/cases (BC01_LIKE)"
@@ -184,7 +186,9 @@ if [[ "$PDF_SIZE" -lt 5000 ]]; then
 fi
 _pass "memorial PDF: $PDF_SIZE bytes, header %PDF válido"
 
-# ─── 6. POST /api/v1/import-moor (round-trip) ───────────────────────
+# ─── 6. Round-trip .moor (export GET → import POST JSON body) ──────
+# POST /import/moor aceita JSON body (não multipart). Path correto
+# é /import/moor (com barra), não /import-moor.
 _step "6/7 Round-trip .moor v2 (export → import)"
 MOOR_TMP=$(mktemp /tmp/smoke_export.XXXXXX.moor)
 HTTP_CODE=$(curl -sS -o "$MOOR_TMP" -w '%{http_code}' \
@@ -196,15 +200,16 @@ if [[ "$HTTP_CODE" -ne 200 ]]; then
     exit 16
 fi
 
-# Round-trip: importa o que acabamos de exportar.
+# Round-trip: importa via POST JSON body.
 IMPORT_RESP=$(curl -sS -X POST \
     ${CURL_AUTH[@]+"${CURL_AUTH[@]}"} \
-    -F "file=@${MOOR_TMP}" \
-    "${BASE_URL}/api/v1/import-moor")
+    -H "Content-Type: application/json" \
+    --data-binary "@${MOOR_TMP}" \
+    "${BASE_URL}/api/v1/import/moor")
 rm -f "$MOOR_TMP"
 IMPORTED_ID=$(echo "$IMPORT_RESP" | jq -r '.case.id // empty')
 if [[ -z "$IMPORTED_ID" || "$IMPORTED_ID" == "null" ]]; then
-    echo "❌ /import-moor não retornou case.id" >&2
+    echo "❌ /import/moor não retornou case.id" >&2
     echo "   resposta: $IMPORT_RESP" >&2
     exit 16
 fi
