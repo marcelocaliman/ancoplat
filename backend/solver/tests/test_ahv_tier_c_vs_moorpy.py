@@ -209,20 +209,76 @@ def test_ahv_tier_c_vs_moorpy_grounded(case_id: str) -> None:
 
 
 @pytest.mark.xfail(
-    reason="BC-AHV-MOORPY-07..08 com uplift virão no Commit 36 da Sprint 4.",
+    reason=(
+        "BC-AHV-MOORPY-07/08 misturam uplift (anchor suspenso) com "
+        "touchdown imediato (cabo logo abaixo do anchor toca o fundo). "
+        "Modelo F7 atual assume catenária TOTALMENTE suspensa em uplift. "
+        "Suporte a uplift+touchdown misto requer extensão F7.x — "
+        "pendência v1.2+. Sprint 4 / Commit 36 destrava o caminho de "
+        "código (validation passa) mas não converge para esses BCs "
+        "específicos. Outros cenários AHV+uplift sem touchdown imediato "
+        "funcionarão (águas profundas + linha taut)."
+    ),
     strict=False,
 )
 @pytest.mark.parametrize("case_id", [
     "BC-AHV-MOORPY-07",
     "BC-AHV-MOORPY-08",
 ])
-def test_ahv_tier_c_vs_moorpy_uplift_xfail(case_id: str) -> None:
-    """Reservado — solver atual rejeita endpoint_grounded=False + work_wire."""
+def test_ahv_tier_c_vs_moorpy_uplift(case_id: str) -> None:
+    """
+    Sprint 4 / Commit 36: AHV + uplift single-segmento.
+
+    Path de código liberado: solve_with_work_wire não rejeita mais
+    endpoint_grounded=False com WorkWireSpec. Para esses 2 cenários
+    específicos a convergência depende de F7.x (uplift+touchdown).
+    """
     baseline = _load_baseline()
     case = next((c for c in baseline if c["id"] == case_id), None)
     assert case is not None
-    anco = _solve_anco(case)
-    assert anco["status"] == "converged"
+    inp = case["inputs"]
+
+    # Configura solve com endpoint_grounded=False + endpoint_depth.
+    moor = inp["mooring"]
+    ww = inp["work_wire"]
+    seg_moor = LineSegment(
+        length=inp["L_moor"], w=moor["w"], EA=moor["EA"], MBL=moor["MBL"],
+        category="Wire", line_type=moor["name"],
+    )
+    work_wire = WorkWireSpec(
+        line_type=ww["name"], length=inp["L_ww"],
+        EA=ww["EA"], w=ww["w"], MBL=ww["MBL"],
+        diameter=ww.get("d_nom"),
+    )
+    bollard_pull = case["moorpy"]["T_AHV"]
+    ahv = AHVInstall(
+        bollard_pull=bollard_pull,
+        deck_level_above_swl=inp["deck_z"],
+        target_horz_distance=inp["X_AHV"],
+        work_wire=work_wire,
+    )
+    boundary = BoundaryConditions(
+        h=inp["h"],
+        mode=SolutionMode.TENSION,
+        input_value=bollard_pull,
+        startpoint_depth=0.0,
+        endpoint_grounded=False,
+        endpoint_depth=inp["endpoint_depth"],
+        startpoint_type="ahv",
+        ahv_install=ahv,
+    )
+    from backend.solver.solver import solve as solver_solve
+    result = solver_solve(
+        line_segments=[seg_moor], boundary=boundary,
+        seabed=SeabedConfig(), config=SolverConfig(),
+    )
+    assert result.status.value == "converged", (
+        f"{case_id} uplift Tier C falhou: {result.message}"
+    )
+    err_T_AHV = _rel_error(result.fairlead_tension, case["moorpy"]["T_AHV"])
+    assert err_T_AHV < 1e-6, (
+        f"{case_id}: bollard pull no output diverge do input"
+    )
 
 
 @pytest.mark.xfail(

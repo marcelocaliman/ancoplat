@@ -107,10 +107,20 @@ def _validate_tier_c_preconditions(
             "fica para v1.2+ — use single-segment ou aguarde."
         )
     if not boundary.endpoint_grounded:
-        raise NotImplementedError(
-            "Tier C com endpoint_grounded=False (anchor uplift) ainda "
-            "não suportado no Commit 35 — aguarda Commit 36."
-        )
+        # Sprint 4 / Commit 36: AHV + uplift single-seg suportado.
+        # Anchor virtual em (0, -endpoint_depth) com endpoint_depth < h.
+        if boundary.endpoint_depth is None:
+            raise NotImplementedError(
+                "AHV + uplift requer boundary.endpoint_depth set "
+                "(profundidade do anchor abaixo da superfície). "
+                "Sem isso o solver não tem onde posicionar o anchor."
+            )
+        if boundary.endpoint_depth >= boundary.h:
+            raise NotImplementedError(
+                f"AHV + uplift: endpoint_depth ({boundary.endpoint_depth}m) "
+                f"deve ser < h ({boundary.h}m). Para anchor no fundo, "
+                "use endpoint_grounded=True."
+            )
     if len(attachments) > 0:
         raise NotImplementedError(
             "Tier C com attachments fica para v1.2+."
@@ -156,14 +166,20 @@ def _try_solve_ww(
 
 def _try_solve_moor(
     Z_p: float,
-    h: float,
+    h_anchor_below_surface: float,
     T_pega: float,
     seg_moor: LineSegment,
     mu_moor: float,
     config: SolverConfig,
 ) -> Optional[dict]:
-    """mooring em mode TENSION com T_pega como input."""
-    h_moor = h + Z_p  # Z_p < 0 → h_moor < h
+    """
+    mooring em mode TENSION com T_pega como input.
+
+    `h_anchor_below_surface` é a profundidade do anchor abaixo da
+    superfície da água — para anchor no fundo isso é `boundary.h`,
+    para uplift isso é `boundary.endpoint_depth` (Commit 36).
+    """
+    h_moor = h_anchor_below_surface + Z_p  # Z_p < 0 → h_moor < h_anchor
     if h_moor <= 0:
         return None
     # Solver elastic_iterative valida T > w·h. Aqui tornamos a falha
@@ -211,20 +227,36 @@ def _build_fallback_sprint2(
     assert ahv is not None
     bollard_pull = ahv.bollard_pull
     h = boundary.h
+    # Uplift-aware: anchor pode estar suspenso (Commit 36).
+    h_anchor = (
+        boundary.endpoint_depth
+        if (not boundary.endpoint_grounded and boundary.endpoint_depth is not None)
+        else h
+    )
 
-    # Resolve mooring SEM Work Wire — solver normal Sprint 2.
+    # Resolve mooring SEM Work Wire — solver Sprint 2 efetivo.
+    # Em uplift, fallback delega para solve_suspended_endpoint (F7).
     try:
-        r = solve_elastic_iterative(
-            L=seg_moor.length,
-            h=h,
-            w=seg_moor.w,
-            EA=seg_moor.EA,
-            mode=SolutionMode.TENSION,
-            input_value=bollard_pull,
-            config=config,
-            mu=mu_moor,
-            MBL=seg_moor.MBL,
-        )
+        if boundary.endpoint_grounded:
+            r = solve_elastic_iterative(
+                L=seg_moor.length,
+                h=h,
+                w=seg_moor.w,
+                EA=seg_moor.EA,
+                mode=SolutionMode.TENSION,
+                input_value=bollard_pull,
+                config=config,
+                mu=mu_moor,
+                MBL=seg_moor.MBL,
+            )
+        else:
+            from .suspended_endpoint import solve_suspended_endpoint
+            r = solve_suspended_endpoint(
+                segment=seg_moor,
+                boundary=boundary,
+                seabed=seabed,
+                config=config,
+            )
     except (ValueError, RuntimeError) as exc:
         return SolverResult(
             status=ConvergenceStatus.INVALID_CASE,
@@ -295,6 +327,14 @@ def solve_with_work_wire(
     assert ahv is not None and ahv.work_wire is not None
     ww = ahv.work_wire
     h = boundary.h
+    # Profundidade do anchor abaixo da superfície (uplift se < h).
+    # Quando endpoint_grounded=True (default), anchor está no fundo: h.
+    # Quando False (Commit 36), anchor está em endpoint_depth.
+    h_anchor = (
+        boundary.endpoint_depth
+        if (not boundary.endpoint_grounded and boundary.endpoint_depth is not None)
+        else h
+    )
     deck_z = ahv.deck_level_above_swl
     bollard_pull = ahv.bollard_pull
 
@@ -316,7 +356,9 @@ def solve_with_work_wire(
         if ww_sol is None:
             return None
         T_pega = ww_sol["T_pega"]
-        moor_sol = _try_solve_moor(Z_p, h, T_pega, seg_moor, mu_moor, config)
+        moor_sol = _try_solve_moor(
+            Z_p, h_anchor, T_pega, seg_moor, mu_moor, config,
+        )
         if moor_sol is None:
             return None
         return ww_sol, moor_sol
@@ -332,10 +374,10 @@ def solve_with_work_wire(
         return ww_sol["H"] - moor_sol["H"]
 
     # ─── Tentativa de bracket-based brentq ─────────────────────────────
-    # Z_p físico ∈ [-h+1, deck_z-h_ww_min]. Procuramos Z_p tal que
-    # H_moor(Z_p) - H_ww(Z_p) muda de sinal. Sample ~20 pontos e detecta
-    # bracket.
-    Z_p_min = -h + 1.0
+    # Z_p físico ∈ [-h_anchor+1, deck_z-h_ww_min]. Procuramos Z_p tal que
+    # H_moor(Z_p) - H_ww(Z_p) muda de sinal. Sample ~24 pontos e detecta
+    # bracket. Em uplift: pega não pode ficar abaixo do anchor virtual.
+    Z_p_min = -h_anchor + 1.0
     Z_p_max = -1.0  # pega não pode estar acima da água
     samples = np.linspace(Z_p_min, Z_p_max, 24)
     bracket_found: Optional[tuple[float, float]] = None
@@ -366,7 +408,7 @@ def solve_with_work_wire(
 
     # Fallback fsolve sem bracket se brentq falhar.
     if Z_p_solution is None:
-        Z_p_0 = -h * 0.7
+        Z_p_0 = -h_anchor * 0.7
         try:
             sol_vars, info, ier, _msg = fsolve(
                 lambda v: [_residual(v[0])],
