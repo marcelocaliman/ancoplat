@@ -104,10 +104,17 @@ export function AHVInstallEditor({
           `Convergiu: bollard pull = ${(result.bollardPullFinal / 9806.65).toFixed(1)} te ` +
             `(X = ${result.xResultFinal?.toFixed(1)} m, erro ${result.errorFinal?.toFixed(2)} m)`,
         )
+      } else if (result.stopReason === 'saturation') {
+        // Caso geometricamente impossível — toast específico explicando.
+        const xMaxStr = result.xMaxTheoretical?.toFixed(1) ?? '—'
+        toast.warning(
+          `Target X = ${targetX.toFixed(1)} m FISICAMENTE IMPOSSÍVEL: ` +
+            `linha não alcança (X_max teórico ≈ ${xMaxStr} m). ` +
+            'Veja detalhe na tabela.',
+          { duration: 8000 },
+        )
       } else {
         // Não convergiu na tolerância — mostra resultado mas NÃO aplica.
-        // User pode clicar "Aplicar mesmo assim" no botão da tabela
-        // de progresso (handleApplyBestFound).
         const errStr = result.errorFinal?.toFixed(1) ?? '—'
         const errPct =
           result.errorFinal != null && targetX > 0
@@ -402,6 +409,56 @@ function IterationProgress({
               (aplicado ao form). X = {result.xResultFinal?.toFixed(1)} m,
               erro = {result.errorFinal?.toFixed(2)} m.
             </p>
+          ) : result.stopReason === 'saturation' ? (
+            // Saturação: linha curta demais para alcançar o target.
+            // Mensagem dedicada explicando o limite físico.
+            <div className="space-y-1.5 rounded border border-warning/40 bg-warning/5 p-2">
+              <p className="text-[10px] font-semibold text-warning">
+                ⚠ Target fisicamente impossível com essa linha
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                A linha não tem comprimento suficiente para alcançar X ={' '}
+                <span className="font-mono text-foreground">
+                  {targetX.toFixed(1)} m
+                </span>
+                {result.xMaxTheoretical != null && (
+                  <>
+                    {' '}com h dado. X máximo teórico ={' '}
+                    <span className="font-mono text-foreground">
+                      √(L² − h²) = {result.xMaxTheoretical.toFixed(1)} m
+                    </span>
+                    .
+                  </>
+                )}
+                {' '}Aumentar bollard além do limite faz T_fl ultrapassar
+                MBL (broken).
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Melhor X atingido:{' '}
+                <strong>
+                  {result.xResultFinal?.toFixed(1) ?? '—'} m
+                </strong>
+                {' '}(bollard {(result.bollardPullFinal / 9806.65).toFixed(1)} te,
+                erro {result.errorFinal?.toFixed(1) ?? '—'} m
+                {result.errorFinal != null && targetX > 0 && (
+                  <>{' '}≈ {((result.errorFinal / targetX) * 100).toFixed(1)}%</>
+                )}
+                ).
+              </p>
+              {onApplyAnyway && result.bollardPullFinal > 0 && (
+                <div className="flex justify-end pt-0.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 gap-1 text-[10px]"
+                    onClick={onApplyAnyway}
+                  >
+                    <CheckCircle2 className="h-3 w-3" /> Aplicar bollard ótimo
+                  </Button>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="flex items-center justify-between gap-2">
               <p className="flex-1 text-[10px] text-muted-foreground">

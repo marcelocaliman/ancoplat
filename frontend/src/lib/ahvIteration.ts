@@ -42,7 +42,14 @@ export interface IterationResult {
     | 'max_iters'
     | 'bracket_invalid'
     | 'all_invalid'
+    | 'saturation' // X mal cresce com bollard ↑, target fisicamente inviável
     | 'shortcut'
+  /**
+   * X máximo teórico atingível pela linha não-esticada (sqrt(L² - h²)).
+   * Quando definido, indica o limite físico para essa geometria.
+   * Útil para o user entender por que target não é atingível.
+   */
+  xMaxTheoretical?: number | null
 }
 
 export interface IterationOptions {
@@ -170,6 +177,24 @@ export async function iterateBollardPullForTargetX(
     }).ahv_install
   const bollardInitial = ahv?.bollard_pull ?? 50 * 9806.65
 
+  // ── X máximo teórico para esta geometria ──
+  // Linha 100% esticada: comprimento L_total (não-esticado, ignoramos
+  // alongamento elástico que é < 1% típico). Drop vertical = h.
+  // X_max = sqrt(L² - h²) quando h < L; senão linha não alcança seabed.
+  const segments = base.segments ?? []
+  const L_total = segments.reduce(
+    (sum: number, s: { length?: number | null }) =>
+      sum + (typeof s.length === 'number' ? s.length : 0),
+    0,
+  )
+  const h = base.boundary?.h ?? 0
+  const xMaxTheoretical =
+    L_total > 0 && h >= 0 && L_total > h
+      ? Math.sqrt(L_total * L_total - h * h)
+      : null
+  const targetExceedsXMax =
+    xMaxTheoretical != null && targetX > xMaxTheoretical + 1e-6
+
   const steps: IterationStep[] = []
   const cache: EvalRecord[] = []
   let iterCounter = 0
@@ -205,7 +230,17 @@ export async function iterateBollardPullForTargetX(
       errorFinal: Math.abs(evalInit.x - targetX),
       steps,
       stopReason: 'shortcut',
+      xMaxTheoretical,
     }
+  }
+
+  // ── Detecção precoce de saturação geométrica ──
+  // Se target > X_max teórico (linha curta demais), iteração não vai
+  // chegar lá. Retorna best fallback com stopReason='saturation'.
+  if (targetExceedsXMax) {
+    // Mesmo assim faz busca para encontrar o bollard que dá X mais
+    // próximo possível (X_max real ≈ X_max teórico, mas pode variar).
+    // Continua para o bracket loop e detecta saturação ali também.
   }
 
   // ── Etapa 1: bracket adaptativo. ──
@@ -258,13 +293,47 @@ export async function iterateBollardPullForTargetX(
     const best = bestInCache(cache, targetX)
     if (best) {
       const err = Math.abs(best.xResult! - targetX)
+      // Detecção de saturação: se best.xResult < target E aumentos de
+      // bollard pararam de produzir aumentos significativos de X
+      // (delta_X / delta_bollard < 0.05% nos últimos pontos válidos),
+      // é caso de linha geometricamente curta demais.
+      const validSorted = cache
+        .filter((e) => e.xResult != null)
+        .sort((a, b) => a.bollardPull - b.bollardPull)
+      const isSaturated =
+        best.xResult! < targetX
+        && validSorted.length >= 2
+        && (() => {
+          // Olha os 2 maiores bollards válidos: se Δx/Δb < threshold
+          // E ainda assim ambos < target, é saturação.
+          const last = validSorted[validSorted.length - 1]
+          const prev = validSorted[validSorted.length - 2]
+          if (last.xResult == null || prev.xResult == null) return false
+          if (last.xResult >= targetX) return false
+          const dx = last.xResult - prev.xResult
+          const db = last.bollardPull - prev.bollardPull
+          if (db <= 0) return false
+          // Marginal X gain per unit bollard increase. Valor relativo
+          // pequeno (~0.1m por kN ≈ 1m/te) indica saturação.
+          // Critério: ganho < 5m ao dobrar bollard = saturação.
+          const ratio = dx / (last.bollardPull - prev.bollardPull)
+          const expected_at_double = ratio * prev.bollardPull
+          return expected_at_double < 5 // < 5m de ganho ao dobrar
+        })()
+      const stopReason: IterationResult['stopReason'] =
+        err < tol
+          ? 'tolerance_met'
+          : isSaturated || targetExceedsXMax
+          ? 'saturation'
+          : 'bracket_invalid'
       return {
         converged: err < tol,
         bollardPullFinal: best.bollardPull,
         xResultFinal: best.xResult,
         errorFinal: err,
         steps,
-        stopReason: err < tol ? 'tolerance_met' : 'bracket_invalid',
+        stopReason,
+        xMaxTheoretical,
       }
     }
     return {
@@ -274,6 +343,7 @@ export async function iterateBollardPullForTargetX(
       errorFinal: null,
       steps,
       stopReason: 'all_invalid',
+      xMaxTheoretical,
     }
   }
 
@@ -310,6 +380,7 @@ export async function iterateBollardPullForTargetX(
         errorFinal: err,
         steps,
         stopReason: 'tolerance_met',
+        xMaxTheoretical,
       }
     }
 
@@ -327,5 +398,6 @@ export async function iterateBollardPullForTargetX(
     errorFinal: bestErr,
     steps,
     stopReason: 'max_iters',
+    xMaxTheoretical,
   }
 }

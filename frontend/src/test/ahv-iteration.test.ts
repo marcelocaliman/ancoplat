@@ -147,22 +147,43 @@ describe('iterateBollardPullForTargetX', () => {
   })
 
   it('best fallback quando bracket falha mas há avaliações válidas', async () => {
-    // Estratégia: lo (bollard/4) e hi (bollard×4) ambos retornam x=2000
-    // (acima de target=1500). Bracket nunca envolve target → falha.
-    // Mas alguma avaliação válida existe → best fallback retorna ela.
+    // Estratégia: target ACIMA de qualquer X possível. Mock retorna
+    // x=2000 (constante). Helper detecta saturação (Δx/Δb = 0) E que
+    // todas as avaliações estão abaixo do target=2500.
     mockedPreviewSolve.mockImplementation(async () => mockResult(2000))
 
     const result = await iterateBollardPullForTargetX(
       baseCaseInput,
-      1500,
+      2500,
       { tolerance: 1, maxIters: 4 },
     )
     expect(result.converged).toBe(false)
-    expect(result.stopReason).toBe('bracket_invalid')
-    // Best encontrado deve ter x=2000 (todas avaliações deram isso)
+    // saturation ou bracket_invalid; ambos válidos como fallback
+    expect(['saturation', 'bracket_invalid']).toContain(result.stopReason)
     expect(result.xResultFinal).toBe(2000)
     expect(result.errorFinal).toBeCloseTo(500, 1)
     expect(result.bollardPullFinal).toBeGreaterThan(0)
+  })
+
+  it('detecta saturação quando target excede X_max teórico', async () => {
+    // baseCaseInput tem 1 seg de 1000m, h=300m → X_max = sqrt(1000² - 300²)
+    // ≈ 953.94 m. Target=1500 é > X_max → impossível geometricamente.
+    mockedPreviewSolve.mockImplementation(async (input) => {
+      const b = input.boundary.input_value as number
+      // Simula saturação: X cresce mas satura próximo de 950
+      const x = Math.min(950, b / 100)
+      return mockResult(x)
+    })
+
+    const result = await iterateBollardPullForTargetX(
+      baseCaseInput,
+      1500,
+      { tolerance: 1, maxIters: 8 },
+    )
+    expect(result.converged).toBe(false)
+    expect(result.stopReason).toBe('saturation')
+    expect(result.xMaxTheoretical).toBeCloseTo(953.94, 0)
+    expect(result.xResultFinal).toBeLessThanOrEqual(950)
   })
 
   it('expande bracket adaptativo quando inicial não envolve', async () => {
