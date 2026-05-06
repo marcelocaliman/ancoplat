@@ -381,6 +381,7 @@ técnicas.
 | F-prof.10| #11 (ProcessPool watchcircle)  |
 | Sprint 1 | #14 (Vessel case-level metadata) |
 | Sprint 2 | #15 (AHV install via mode Tension), #16 (heurística bollard pull) |
+| Sprint 3 | #17 (modelagem AHV Tier C exige reference numbers) |
 
 ---
 
@@ -509,3 +510,52 @@ heurístico não for o desejado para o cenário operacional real.
 **Referência canônica:** Sprint 2 / Commit 24 (mesmo commit que #15).
 
 **Link:** [`relatorio_sprint2_ahv_install.md`](relatorio_sprint2_ahv_install.md) §3.
+
+---
+
+## #17 — Modelagem AHV Tier C exige QMoor reference numbers
+
+**Tomada em:** Sprint 3 (v1.1.x, 2026-05-06).
+
+**Contexto:** Sprint 2 entregou suporte AHV via **mode Tension
+forçado** (decisão #15) — robusto numericamente, simplificado
+fisicamente. 16/16 KAR006 cases convergem.
+
+Pendência identificada: implementar **modelagem física Tier C**
+com Work Wire elástico tratado separadamente do main mooring
+line (catenária dual / sistema acoplado).
+
+**Decisão:** **Adiada para v1.2.0+**, contingente em ground truth.
+
+**Razão:**
+
+Implementar Tier C **sem QMoor reference numbers** seria:
+
+1. Tomar decisões de modelagem (Work Wire em série vs paralelo;
+   anchor uplift; deck level efetivo; junção AHV-line; matriz de
+   compliance) baseadas em literatura genérica.
+2. Entregar números fisicamente plausíveis mas não-validados
+   contra software comercial.
+3. Risco de divergência sutil vs QMoor que só apareceria em
+   produção, depois de muito investimento.
+
+**Alinhamento com decisão #15** (Sprint 2): solver core inalterado
+até ter dados de validação.
+
+**Princípio transversal:** "MoorPy/QMoor são referência de validação,
+não target de paridade total" — válido em ambas as direções:
+- Não nivelar por baixo (não copiar limitações).
+- Não inventar matemática nova sem dado para validar.
+
+**Quando reabrir:** user passa **3-5 cases AHV install** com:
+- Input completo (CaseInput JSON ou .moor).
+- Output esperado do QMoor (T_fl, T_anchor, X_anchor, geometria
+  da linha, posição do AHV).
+- Tolerância aceitável (default sugerido: rtol=1e-2 = 1%).
+
+Mini-plano com 8-12 commits será apresentado nessa altura.
+
+**Referência canônica:** Sprint 3 / Commit 32.
+
+**Link:** [`relatorio_sprint3_v1_1_x.md`](relatorio_sprint3_v1_1_x.md)
+§decisões.
