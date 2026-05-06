@@ -84,7 +84,10 @@ describe('iterateBollardPullForTargetX', () => {
     )
     expect(result.converged).toBe(true)
     expect(result.errorFinal).toBeLessThan(1)
-    expect(result.bollardPullFinal).toBeCloseTo(150_000, -2)
+    // Tolerância 100 N em torno de 150_000 N — bissection 12 iter
+    // num range ~5e5 atinge ~100N de precisão.
+    expect(result.bollardPullFinal).toBeGreaterThan(149_900)
+    expect(result.bollardPullFinal).toBeLessThan(150_100)
   })
 
   it('reporta steps via onStep', async () => {
@@ -111,7 +114,7 @@ describe('iterateBollardPullForTargetX', () => {
     }
   })
 
-  it('status bracket_invalid quando todas avaliações falham', async () => {
+  it('status all_invalid quando TODAS avaliações falham', async () => {
     mockedPreviewSolve.mockImplementation(async () => {
       return {
         status: 'invalid_case',
@@ -124,7 +127,42 @@ describe('iterateBollardPullForTargetX', () => {
       { maxIters: 4 },
     )
     expect(result.converged).toBe(false)
+    expect(result.stopReason).toBe('all_invalid')
+    expect(result.xResultFinal).toBeNull()
+  })
+
+  it('atalho early-exit quando bollard inicial já satisfaz tolerância', async () => {
+    // bollard inicial = 50 te × 9806.65 ≈ 490_332 N. Mock dá X=1500
+    // diretamente. target=1500, tol=1 → primeiro chute resolve.
+    mockedPreviewSolve.mockImplementation(async () => mockResult(1500))
+
+    const result = await iterateBollardPullForTargetX(
+      baseCaseInput,
+      1500,
+      { tolerance: 5, maxIters: 12 },
+    )
+    expect(result.converged).toBe(true)
+    expect(result.stopReason).toBe('shortcut')
+    expect(result.steps).toHaveLength(1) // só uma avaliação
+  })
+
+  it('best fallback quando bracket falha mas há avaliações válidas', async () => {
+    // Estratégia: lo (bollard/4) e hi (bollard×4) ambos retornam x=2000
+    // (acima de target=1500). Bracket nunca envolve target → falha.
+    // Mas alguma avaliação válida existe → best fallback retorna ela.
+    mockedPreviewSolve.mockImplementation(async () => mockResult(2000))
+
+    const result = await iterateBollardPullForTargetX(
+      baseCaseInput,
+      1500,
+      { tolerance: 1, maxIters: 4 },
+    )
+    expect(result.converged).toBe(false)
     expect(result.stopReason).toBe('bracket_invalid')
+    // Best encontrado deve ter x=2000 (todas avaliações deram isso)
+    expect(result.xResultFinal).toBe(2000)
+    expect(result.errorFinal).toBeCloseTo(500, 1)
+    expect(result.bollardPullFinal).toBeGreaterThan(0)
   })
 
   it('expande bracket adaptativo quando inicial não envolve', async () => {

@@ -1,15 +1,17 @@
 /**
- * Iteração automática de bollard pull AHV (Sprint 3 / Commit 30).
+ * Iteração automática de bollard pull AHV (Sprint 3 / Commit 30,
+ * hotfix Sprint 3.1).
  *
  * Dado um CaseInput com `boundary.ahv_install.target_horz_distance`
  * setado, encontra o `bollard_pull` que produz `X ≈ target_X` quando
  * o solver roda em mode Tension.
  *
- * Algoritmo: bissection com bracket adaptativo.
+ * Algoritmo: bissection com bracket adaptativo + atalho early-exit
+ * + cache de avaliações para fallback robusto.
  *
- * Cada iteração chama `previewSolve(caseInput_modificado)` que é
- * leve (~50ms na produção atual). 10 iterações = ~500ms total —
- * aceitável para feedback síncrono na UI.
+ * Cada avaliação chama `previewSolve(caseInput_modificado)` (~50ms na
+ * produção atual). 12 iterações máx + ~5 chutes de bracket adaptativo
+ * = ~700ms-1s total. Aceitável para feedback síncrono.
  */
 import { previewSolve } from '@/api/endpoints'
 import type { CaseInput, SolverResult } from '@/api/types'
@@ -35,7 +37,12 @@ export interface IterationResult {
   /** Histórico completo das iterações. */
   steps: IterationStep[]
   /** Razão de parada. */
-  stopReason: 'tolerance_met' | 'max_iters' | 'bracket_invalid' | 'all_invalid'
+  stopReason:
+    | 'tolerance_met'
+    | 'max_iters'
+    | 'bracket_invalid'
+    | 'all_invalid'
+    | 'shortcut'
 }
 
 export interface IterationOptions {
@@ -48,8 +55,15 @@ export interface IterationOptions {
 }
 
 const DEFAULT_TOLERANCE = 0.5 // m
-const DEFAULT_MAX_ITERS = 10
+const DEFAULT_MAX_ITERS = 12
 const BRACKET_EXPANSION_LIMIT = 5 // máximo expansões de bracket adaptativo
+
+/** Cache de avaliações já feitas, ordenado por bollard. */
+interface EvalRecord {
+  bollardPull: number
+  xResult: number | null
+  status: IterationStep['status']
+}
 
 /**
  * Build CaseInput com bollard_pull substituído (mode Tension forçado).
@@ -94,75 +108,47 @@ async function evaluateBollard(
 }
 
 /**
- * Encontra bracket [b_lo, b_hi] tal que x(b_lo) < target < x(b_hi).
- * Expansão adaptativa começando em [bollard/4, bollard×4]. Se ainda
- * não bracketear, dobra os limites até `BRACKET_EXPANSION_LIMIT` vezes.
- *
- * Convenção física: x cresce monotonicamente com bollard_pull
- * (mais força → linha mais esticada → maior X). Então:
- *   - x(b_lo) < target  → precisa aumentar bollard
- *   - x(b_hi) > target  → precisa diminuir bollard
+ * Procura par (lo, hi) no cache que envolve o target. Útil quando
+ * bracket search falha em encontrar [lo, hi] adjacentes mas o cache
+ * já tem pontos válidos suficientes.
  */
-async function findBracket(
-  base: CaseInput,
-  bollardInitial: number,
+function findBracketInCache(
+  cache: EvalRecord[],
   targetX: number,
-  onStep: (step: IterationStep) => void,
-  iterCounter: { value: number },
-): Promise<
-  | { ok: true; lo: number; hi: number; xLo: number; xHi: number }
-  | { ok: false; reason: string }
-> {
-  let lo = Math.max(1.0, bollardInitial / 4)
-  let hi = bollardInitial * 4
-  for (let expansion = 0; expansion < BRACKET_EXPANSION_LIMIT; expansion += 1) {
-    const evalLo = await evaluateBollard(base, lo)
-    iterCounter.value += 1
-    onStep({
-      iter: iterCounter.value,
-      bollardPull: lo,
-      xResult: evalLo.x,
-      error: evalLo.x != null ? Math.abs(evalLo.x - targetX) : null,
-      status: evalLo.status,
-      message: evalLo.message,
-    })
-    const evalHi = await evaluateBollard(base, hi)
-    iterCounter.value += 1
-    onStep({
-      iter: iterCounter.value,
-      bollardPull: hi,
-      xResult: evalHi.x,
-      error: evalHi.x != null ? Math.abs(evalHi.x - targetX) : null,
-      status: evalHi.status,
-      message: evalHi.message,
-    })
-    if (evalLo.x == null || evalHi.x == null) {
-      // Não conseguimos avaliar um dos extremos — expande para fora
-      lo = Math.max(1.0, lo / 2)
-      hi = hi * 2
-      continue
+): { lo: EvalRecord; hi: EvalRecord } | null {
+  const valid = cache
+    .filter((e) => e.xResult != null)
+    .sort((a, b) => a.bollardPull - b.bollardPull)
+  let lo: EvalRecord | null = null
+  let hi: EvalRecord | null = null
+  for (const e of valid) {
+    if (e.xResult! <= targetX) {
+      lo = e // último com x <= target
     }
-    if (evalLo.x <= targetX && evalHi.x >= targetX) {
-      return { ok: true, lo, hi, xLo: evalLo.x, xHi: evalHi.x }
-    }
-    // Não bracketou — expande no lado certo
-    if (evalLo.x > targetX) {
-      // Bollard mínimo já dá X grande — diminui ainda mais
-      lo = Math.max(1.0, lo / 2)
-    }
-    if (evalHi.x < targetX) {
-      // Bollard máximo dá X pequeno — aumenta ainda mais
-      hi = hi * 2
+    if (e.xResult! >= targetX && hi == null) {
+      hi = e // primeiro com x >= target
     }
   }
-  return {
-    ok: false,
-    reason: `Bracket adaptativo não envolveu target após ${BRACKET_EXPANSION_LIMIT} expansões.`,
-  }
+  if (lo && hi && lo.bollardPull < hi.bollardPull) return { lo, hi }
+  return null
 }
 
 /**
- * Iteração principal — bissection sobre bollard_pull até X ≈ target.
+ * Acha o ponto válido mais próximo do target no cache (fallback).
+ */
+function bestInCache(
+  cache: EvalRecord[],
+  targetX: number,
+): EvalRecord | null {
+  const valid = cache.filter((e) => e.xResult != null)
+  if (valid.length === 0) return null
+  return valid.reduce((best, e) =>
+    Math.abs(e.xResult! - targetX) < Math.abs(best.xResult! - targetX) ? e : best,
+  )
+}
+
+/**
+ * Iteração principal — atalho → bracket adaptativo → bissection.
  *
  * @param base CaseInput de baseline (já tem boundary.ahv_install).
  * @param targetX Target X em metros.
@@ -177,7 +163,6 @@ export async function iterateBollardPullForTargetX(
   const maxIters = options.maxIters ?? DEFAULT_MAX_ITERS
   const onStep = options.onStep ?? (() => {})
 
-  // Bollard inicial vem do ahv_install (ou fallback 50 te)
   const ahv =
     (base.boundary as unknown as {
       ahv_install?: { bollard_pull?: number } | null
@@ -185,63 +170,138 @@ export async function iterateBollardPullForTargetX(
   const bollardInitial = ahv?.bollard_pull ?? 50 * 9806.65
 
   const steps: IterationStep[] = []
-  const recordStep = (step: IterationStep) => {
+  const cache: EvalRecord[] = []
+  let iterCounter = 0
+
+  const recordEvaluation = (
+    bollardPull: number,
+    res: { x: number | null; status: IterationStep['status']; message?: string },
+  ) => {
+    iterCounter += 1
+    const err = res.x != null ? Math.abs(res.x - targetX) : null
+    const step: IterationStep = {
+      iter: iterCounter,
+      bollardPull,
+      xResult: res.x,
+      error: err,
+      status: res.status,
+      message: res.message,
+    }
     steps.push(step)
     onStep(step)
+    cache.push({ bollardPull, xResult: res.x, status: res.status })
   }
 
-  const iterCounter = { value: 0 }
+  // ── Etapa 0: atalho — avalia bollard inicial primeiro. ──
+  // Se já está dentro da tolerância, retorna imediato.
+  const evalInit = await evaluateBollard(base, bollardInitial)
+  recordEvaluation(bollardInitial, evalInit)
+  if (evalInit.x != null && Math.abs(evalInit.x - targetX) < tol) {
+    return {
+      converged: true,
+      bollardPullFinal: bollardInitial,
+      xResultFinal: evalInit.x,
+      errorFinal: Math.abs(evalInit.x - targetX),
+      steps,
+      stopReason: 'shortcut',
+    }
+  }
 
-  // Etapa 1: encontrar bracket
-  const bracket = await findBracket(
-    base, bollardInitial, targetX, recordStep, iterCounter,
-  )
-  if (!bracket.ok) {
+  // ── Etapa 1: bracket adaptativo. ──
+  // Inicial [bollard/4, bollard×4]. Expande até 5 vezes.
+  let lo = Math.max(1.0, bollardInitial / 4)
+  let hi = bollardInitial * 4
+  let bracketed: { lo: number; hi: number; xLo: number; xHi: number } | null = null
+
+  for (let expansion = 0; expansion < BRACKET_EXPANSION_LIMIT; expansion += 1) {
+    const evalLo = await evaluateBollard(base, lo)
+    recordEvaluation(lo, evalLo)
+    const evalHi = await evaluateBollard(base, hi)
+    recordEvaluation(hi, evalHi)
+
+    // Verifica se o cache já envolve o target (incluindo pontos prévios)
+    const fromCache = findBracketInCache(cache, targetX)
+    if (fromCache) {
+      bracketed = {
+        lo: fromCache.lo.bollardPull,
+        hi: fromCache.hi.bollardPull,
+        xLo: fromCache.lo.xResult!,
+        xHi: fromCache.hi.xResult!,
+      }
+      break
+    }
+
+    // Sem bracket — decide direção da expansão
+    if (evalLo.x == null && evalHi.x == null) {
+      // Ambos extremos falharam — encolhe lo (regime mais favorável) e
+      // dobra hi pra explorar mais
+      lo = Math.max(1.0, lo / 2)
+      hi = hi * 2
+    } else if (evalLo.x != null && evalLo.x > targetX) {
+      // bollard mínimo já dá X grande — diminui lo
+      lo = Math.max(1.0, lo / 2)
+    } else if (evalHi.x != null && evalHi.x < targetX) {
+      // bollard máximo dá X pequeno — aumenta hi
+      hi = hi * 2
+    } else if (evalLo.x == null) {
+      // lo falhou, hi convergiu mas não envolve target — encolhe lo
+      lo = Math.max(1.0, lo / 2)
+    } else if (evalHi.x == null) {
+      // hi falhou, lo convergiu mas não envolve target — dobra hi
+      hi = hi * 2
+    }
+  }
+
+  // ── Etapa 2: bissection se bracketou; senão, retorna best do cache. ──
+  if (!bracketed) {
+    const best = bestInCache(cache, targetX)
+    if (best) {
+      const err = Math.abs(best.xResult! - targetX)
+      return {
+        converged: err < tol,
+        bollardPullFinal: best.bollardPull,
+        xResultFinal: best.xResult,
+        errorFinal: err,
+        steps,
+        stopReason: err < tol ? 'tolerance_met' : 'bracket_invalid',
+      }
+    }
     return {
       converged: false,
       bollardPullFinal: bollardInitial,
       xResultFinal: null,
       errorFinal: null,
       steps,
-      stopReason: 'bracket_invalid',
+      stopReason: 'all_invalid',
     }
   }
 
-  // Etapa 2: bissection
-  let { lo, hi } = bracket
-  let bestB = bollardInitial
-  let bestX: number | null = null
-  let bestErr = Infinity
+  // Bissection
+  let { lo: bLo, hi: bHi } = bracketed
+  const initBest = bestInCache(cache, targetX)!
+  let bestB = initBest.bollardPull
+  let bestX: number | null = initBest.xResult
+  let bestErr = Math.abs(initBest.xResult! - targetX)
 
   for (let i = 0; i < maxIters; i += 1) {
-    const mid = (lo + hi) / 2
+    const mid = (bLo + bHi) / 2
     const res = await evaluateBollard(base, mid)
-    iterCounter.value += 1
-    const err = res.x != null ? Math.abs(res.x - targetX) : null
-    const step: IterationStep = {
-      iter: iterCounter.value,
-      bollardPull: mid,
-      xResult: res.x,
-      error: err,
-      status: res.status,
-      message: res.message,
-    }
-    recordStep(step)
+    recordEvaluation(mid, res)
 
     if (res.x == null) {
-      // Falhou — encolhe bracket conservadoramente. Se invalidar
-      // sucessivamente, eventualmente deixaremos com bestB já encontrado.
-      hi = mid
+      // Encolhe bracket conservadoramente do lado que falhou
+      bHi = mid
       continue
     }
 
-    if (err != null && err < bestErr) {
+    const err = Math.abs(res.x - targetX)
+    if (err < bestErr) {
       bestB = mid
       bestX = res.x
       bestErr = err
     }
 
-    if (err != null && err < tol) {
+    if (err < tol) {
       return {
         converged: true,
         bollardPullFinal: mid,
@@ -252,11 +312,10 @@ export async function iterateBollardPullForTargetX(
       }
     }
 
-    // Decide qual lado encolher
     if (res.x < targetX) {
-      lo = mid
+      bLo = mid
     } else {
-      hi = mid
+      bHi = mid
     }
   }
 
@@ -264,7 +323,7 @@ export async function iterateBollardPullForTargetX(
     converged: bestErr < tol,
     bollardPullFinal: bestB,
     xResultFinal: bestX,
-    errorFinal: bestErr === Infinity ? null : bestErr,
+    errorFinal: bestErr,
     steps,
     stopReason: 'max_iters',
   }
