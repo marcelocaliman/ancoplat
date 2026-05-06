@@ -1403,10 +1403,10 @@ function MetricsColumn({
 
   if (!previewReady || !result) {
     return (
-      <div className="flex w-[280px] shrink-0 flex-col gap-2 overflow-y-auto">
+      <div className="flex w-[240px] shrink-0 flex-col gap-1.5 overflow-y-auto xl:w-[260px]">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i} className="shrink-0 bg-muted/10">
-            <CardContent className="flex h-[156px] flex-col justify-center gap-1 p-3">
+            <CardContent className="flex h-[120px] flex-col justify-center gap-1 p-2.5">
               <div className="h-2.5 w-16 rounded bg-muted/40" />
               <div className="h-5 w-24 rounded bg-muted/30" />
               <div className="h-2 w-20 rounded bg-muted/30" />
@@ -1442,7 +1442,7 @@ function MetricsColumn({
   }
 
   return (
-    <div className="flex w-[280px] shrink-0 flex-col gap-2 overflow-y-auto pr-1">
+    <div className="flex w-[240px] shrink-0 flex-col gap-1.5 overflow-y-auto pr-1 xl:w-[260px]">
       {/* Tração — primário com gauge */}
       <MetricCard
         label="Tração no fairlead"
@@ -1535,17 +1535,17 @@ function MetricCard({
 }) {
   return (
     <Card className="shrink-0">
-      <CardContent className="flex h-[156px] flex-col gap-1.5 p-3">
+      <CardContent className="flex min-h-[120px] flex-col gap-1 p-2.5">
         <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {label}
         </p>
         {primary && (
-          <div className="flex items-baseline gap-1.5 font-mono tabular-nums leading-none">
-            <span className="text-[17px] font-semibold tracking-tight">
+          <div className="flex items-baseline gap-1 font-mono tabular-nums leading-none">
+            <span className="text-[15px] font-semibold tracking-tight">
               {primary}
             </span>
             {secondary && (
-              <span className="text-[10px] font-normal text-muted-foreground">
+              <span className="text-[9.5px] font-normal text-muted-foreground">
                 {secondary}
               </span>
             )}
@@ -1553,7 +1553,7 @@ function MetricCard({
         )}
         {extra}
         {rows && (
-          <div className="mt-auto space-y-[2px] font-mono text-[10.5px] leading-tight tabular-nums">
+          <div className="mt-auto space-y-[2px] font-mono text-[10px] leading-tight tabular-nums">
             {rows.map(([k, v]) => (
               <div
                 key={k}
