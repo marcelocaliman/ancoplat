@@ -65,15 +65,20 @@ export function BathymetryInputGroup({
   // Distância horizontal: se xTotalEstimate disponível e nada local
   // ainda foi escrito, usa o estimate. Estado local mantém a edição
   // do usuário sem ser pisado pelo estimate de cada re-render.
+  // v1.0.7: arredonda para inteiro para display limpo (em offshore,
+  // distâncias em metros sem decimais é o padrão profissional).
   const [horizDistance, setHorizDistance] = useState<number>(
-    xTotalEstimate && xTotalEstimate > 0 ? xTotalEstimate : 500,
+    xTotalEstimate && xTotalEstimate > 0 ? Math.round(xTotalEstimate) : 500,
   )
 
   // Estado local de prof_fairlead. Inicializa a partir da fórmula
   // inversa: depthFairlead = depthAnchor - tan(slopeRad)·X.
   // Round-trip reverso ao carregar case salvo.
   const [depthFairlead, setDepthFairleadState] = useState<number>(
-    Math.max(0, depthAnchor - Math.tan(slopeRad) * (horizDistance || 1)),
+    Math.max(
+      0,
+      Math.round(depthAnchor - Math.tan(slopeRad) * (horizDistance || 1)),
+    ),
   )
 
   // Sincronização externa: quando o pai (form) muda h, slope ou X
@@ -81,10 +86,10 @@ export function BathymetryInputGroup({
   // via fórmulas inversas. Evita drift silencioso.
   useEffect(() => {
     if (xTotalEstimate && xTotalEstimate > 0) {
-      setHorizDistance(xTotalEstimate)
+      setHorizDistance(Math.round(xTotalEstimate))
       const derivedFairlead = Math.max(
         0,
-        depthAnchor - Math.tan(slopeRad) * xTotalEstimate,
+        Math.round(depthAnchor - Math.tan(slopeRad) * xTotalEstimate),
       )
       setDepthFairleadState(derivedFairlead)
     }
@@ -145,23 +150,23 @@ export function BathymetryInputGroup({
         value={horizDistance}
         onChange={handleHoriz}
         min={1}
-        step={10}
+        step={1}
         hint={
           xTotalEstimate && xTotalEstimate > 0
-            ? `Pré-preenchido com X do solve atual (${xTotalEstimate.toFixed(1)} m)`
+            ? `Pré-preenchido com X do solve atual (${Math.round(xTotalEstimate)} m)`
             : 'Estimativa para derivar slope; não substitui o X do solver'
         }
       />
-      <div className="rounded-md border border-border/60 bg-muted/30 p-2">
-        <div className="flex items-baseline justify-between gap-2 text-[12px]">
-          <span className="text-muted-foreground">→ Inclinação derivada</span>
+      <div className="max-w-[180px] rounded-md border border-border/60 bg-muted/30 p-1.5">
+        <div className="flex items-baseline justify-between gap-2 text-[10px]">
+          <span className="text-muted-foreground">Inclinação</span>
           <span className="font-mono font-semibold tabular-nums">
             {fmtNumber(slopeDeg, 2)}°
           </span>
         </div>
         {Math.abs(slopeDeg) > 45 && (
-          <p className="mt-1 text-[10px] text-warning">
-            Inclinação fora do range admitido (±45°). Solver vai recusar.
+          <p className="mt-1 text-[9px] text-warning">
+            Fora de ±45°. Solver vai recusar.
           </p>
         )}
       </div>
@@ -198,9 +203,9 @@ function FieldRow({
         min={min}
         value={Number.isFinite(value) ? value : 0}
         onChange={(e) => onChange(parseFloat(e.target.value || '0'))}
-        className="h-8 font-mono"
+        className="h-7 max-w-[120px] font-mono text-[11px]"
       />
-      {hint && <p className="text-[9px] text-muted-foreground">{hint}</p>}
+      {hint && <p className="text-[9px] leading-tight text-muted-foreground">{hint}</p>}
     </div>
   )
 }
