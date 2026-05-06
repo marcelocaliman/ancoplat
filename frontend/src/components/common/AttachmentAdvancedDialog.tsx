@@ -6,6 +6,7 @@ import {
   type UseFormSetValue,
 } from 'react-hook-form'
 import { LineTypePicker } from '@/components/common/LineTypePicker'
+import { PendantSegmentsEditor } from '@/components/common/PendantSegmentsEditor'
 import { UnitInput } from '@/components/common/UnitInput'
 import {
   Dialog,
@@ -280,6 +281,11 @@ export function AttachmentAdvancedDialog({
               )}
             />
           </Field>
+
+          <PendantSegmentsEditor
+            control={control}
+            attachmentPath={`${basePath}.${index}`}
+          />
         </div>
       </DialogContent>
     </Dialog>
