@@ -1249,6 +1249,8 @@ function PlotArea({
   segments?: Array<{
     category?: 'Wire' | 'StuddedChain' | 'StudlessChain' | 'Polyester' | null
     line_type?: string | null
+    length?: number | null
+    diameter?: number | null
   }>
   startpointType?: 'semisub' | 'ahv' | 'barge' | 'none'
   preSolveDiagnostics?: SolverDiagnostic[]
