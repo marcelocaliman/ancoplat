@@ -12,7 +12,8 @@
  * destacar campos do form (FieldValidationDot) e contar issues por
  * tab (TabValidationCounter).
  */
-import { AlertTriangle, Info, Lightbulb, XOctagon } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, Info, Lightbulb, XOctagon } from 'lucide-react'
+import { useState } from 'react'
 
 import type { SolverResult } from '@/api/types'
 import type { DiagnosticSeverity } from '@/lib/preSolveDiagnostics'
@@ -153,26 +154,47 @@ function DiagnosticItem({
 }) {
   const style = SEVERITY_STYLES[diagnostic.severity]
   const Icon = style.Icon
+  // Default colapsado — usuário expande para ler causa + sugestão.
+  // Critical/error sobem como expanded por padrão (engenheiro precisa
+  // ver imediatamente; clicar pra fechar é OK).
+  const defaultExpanded =
+    diagnostic.severity === 'critical' || diagnostic.severity === 'error'
+  const [expanded, setExpanded] = useState(defaultExpanded)
 
   return (
-    <div className={cn('rounded-md border p-3 text-sm', style.container)}>
-      <div className="flex items-start gap-2">
+    <div className={cn('rounded-md border text-sm', style.container)}>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className={cn(
+          'flex w-full items-start gap-2 p-3 text-left transition-colors',
+          'hover:bg-foreground/[0.02]',
+        )}
+      >
+        {expanded ? (
+          <ChevronDown className="mt-0.5 size-3.5 shrink-0 opacity-60" />
+        ) : (
+          <ChevronRight className="mt-0.5 size-3.5 shrink-0 opacity-60" />
+        )}
         <Icon className={cn('mt-0.5 size-4 shrink-0', style.icon)} />
-        <div className="flex-1 space-y-1.5">
-          <div className="flex items-baseline gap-2">
-            <span
-              className={cn(
-                'rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide',
-                style.badge,
-              )}
-            >
-              {style.label}
-            </span>
-            <span className="font-medium text-foreground">{diagnostic.title}</span>
-            <span className="ml-auto text-[10px] uppercase tracking-wide opacity-50">
-              {diagnostic.code}
-            </span>
-          </div>
+        <div className="flex flex-1 items-baseline gap-2">
+          <span
+            className={cn(
+              'rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide',
+              style.badge,
+            )}
+          >
+            {style.label}
+          </span>
+          <span className="font-medium text-foreground">{diagnostic.title}</span>
+          <span className="ml-auto text-[10px] uppercase tracking-wide opacity-50">
+            {diagnostic.code}
+          </span>
+        </div>
+      </button>
+      {expanded && (
+        <div className="space-y-1.5 px-3 pb-3 pl-9">
           <p className="text-xs leading-relaxed text-foreground/90">
             <span className="font-medium opacity-80">Causa:</span>{' '}
             {diagnostic.cause}
@@ -203,7 +225,7 @@ function DiagnosticItem({
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   )
 }
