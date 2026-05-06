@@ -928,69 +928,73 @@ export function CaseFormPage() {
                 value="analise"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-              <div className="flex max-w-[320px] flex-col gap-3">
-                <InlineField label="Modo de cálculo">
-                  <Controller
-                    control={control}
-                    name="boundary.mode"
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Tension">
-                            Tension (T_fl → X)
-                          </SelectItem>
-                          <SelectItem value="Range">
-                            Range (X → T_fl)
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </InlineField>
-                <InlineField
-                  label={mode === 'Tension' ? 'T_fl no fairlead' : 'X total'}
-                  unit={mode === 'Tension' ? undefined : 'm'}
-                  tooltip={
-                    mode === 'Tension'
-                      ? 'Tração total no fairlead. Solver computa X.'
-                      : 'Distância horizontal fairlead → âncora. Solver computa T_fl.'
-                  }
-                >
-                  {mode === 'Tension' ? (
+              <div className="flex flex-col gap-3">
+                {/* Modo + valor lado a lado (grid 2 cols) */}
+                <div className="grid grid-cols-2 gap-2">
+                  <InlineField label="Modo de cálculo">
                     <Controller
                       control={control}
-                      name="boundary.input_value"
+                      name="boundary.mode"
                       render={({ field }) => (
-                        <UnitInput
-                          value={field.value}
-                          onChange={field.onChange}
-                          quantity="force"
-                          digits={2}
-                          className="h-8"
-                        />
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger className="h-7 text-[11px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Tension">
+                              Tension (T_fl → X)
+                            </SelectItem>
+                            <SelectItem value="Range">
+                              Range (X → T_fl)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
                       )}
                     />
-                  ) : (
-                    <Input
-                      type="number"
-                      step="any"
-                      {...register('boundary.input_value', {
-                        valueAsNumber: true,
-                      })}
-                      className="h-8 font-mono"
-                    />
-                  )}
-                </InlineField>
+                  </InlineField>
+                  <InlineField
+                    label={mode === 'Tension' ? 'T_fl no fairlead' : 'X total'}
+                    unit={mode === 'Tension' ? undefined : 'm'}
+                    tooltip={
+                      mode === 'Tension'
+                        ? 'Tração total no fairlead. Solver computa X.'
+                        : 'Distância horizontal fairlead → âncora. Solver computa T_fl.'
+                    }
+                  >
+                    {mode === 'Tension' ? (
+                      <Controller
+                        control={control}
+                        name="boundary.input_value"
+                        render={({ field }) => (
+                          <UnitInput
+                            value={field.value}
+                            onChange={field.onChange}
+                            quantity="force"
+                            digits={2}
+                            className="h-7"
+                          />
+                        )}
+                      />
+                    ) : (
+                      <Input
+                        type="number"
+                        step="any"
+                        {...register('boundary.input_value', {
+                          valueAsNumber: true,
+                        })}
+                        className="h-7 font-mono"
+                      />
+                    )}
+                  </InlineField>
+                </div>
+                {/* Critério em linha separada (Select largo precisa de espaço) */}
                 <InlineField label="Critério de utilização">
                   <Controller
                     control={control}
                     name="criteria_profile"
                     render={({ field }) => (
                       <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="h-8">
+                        <SelectTrigger className="h-7 text-[11px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1012,13 +1016,13 @@ export function CaseFormPage() {
                   />
                 </InlineField>
                 {criteriaProfile === 'UserDefined' && (
-                  <div className="flex flex-col gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {(
                       ['yellow_ratio', 'red_ratio', 'broken_ratio'] as const
                     ).map((k) => (
                       <InlineField
                         key={k}
-                        label={`${k.replace('_ratio', '')} (limite)`}
+                        label={k.replace('_ratio', '')}
                       >
                         <Input
                           type="number"
@@ -1038,7 +1042,7 @@ export function CaseFormPage() {
                               { shouldValidate: true },
                             )
                           }
-                          className="h-8 font-mono"
+                          className="h-7 font-mono"
                         />
                       </InlineField>
                     ))}
