@@ -35,6 +35,11 @@ import {
 } from '@/api/endpoints'
 import type { ExecutionOutput, SolverResult } from '@/api/types'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
+import {
+  ImportedModelCard,
+  type CurrentProfileDisplay,
+  type VesselDisplay,
+} from '@/components/common/ImportedModelCard'
 import { SurfaceViolationsCard } from '@/components/common/SurfaceViolationsCard'
 import { SolverDiagnosticsCard } from '@/components/common/SolverDiagnosticsCard'
 import { EmptyState } from '@/components/common/EmptyState'
@@ -479,6 +484,17 @@ export function CaseDetailPage() {
                     aparecem aqui. Para aplicar sugestões, o usuário vai
                     pra página de edição. */}
                 <SolverDiagnosticsCard result={result} />
+                <ImportedModelCard
+                  vessel={(caseInput as unknown as {
+                    vessel?: VesselDisplay | null
+                  }).vessel ?? null}
+                  currentProfile={(caseInput as unknown as {
+                    current_profile?: CurrentProfileDisplay | null
+                  }).current_profile ?? null}
+                  metadata={(caseInput as unknown as {
+                    metadata?: Record<string, string> | null
+                  }).metadata ?? null}
+                />
                 <Card className="mb-4">
                   <CardContent className="h-[480px] p-2">
                     <CatenaryPlot
