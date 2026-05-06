@@ -40,6 +40,7 @@ import {
 } from '@/api/endpoints'
 import type { SolverResult } from '@/api/types'
 import { AttachmentsTable } from '@/components/common/AttachmentsTable'
+import { EnvCard, EnvField } from '@/components/common/EnvCard'
 import { BathymetryInputGroup } from '@/components/common/BathymetryInputGroup'
 import { LineSummaryPanel } from '@/components/common/LineSummaryPanel'
 import { CatenaryPlot } from '@/components/common/CatenaryPlot'
@@ -1025,67 +1026,6 @@ export function CaseFormPage() {
 }
 
 /* ───────────────────────── Helpers visuais ─────────────────────────── */
-
-/**
- * EnvCard — card bordado para um grupo da aba Ambiente
- * (Geometria, Fairlead, Âncora, Seabed). Largura fixa para
- * alinhamento estável entre cards.
- *
- * Visual v1.0.9: tom azulado sutil (bg-primary/5) sobre o fundo
- * externo + border-primary/20 + sombra leve. Diferencia visualmente
- * o card sem competir com o conteúdo.
- */
-function EnvCard({
-  title,
-  children,
-}: {
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <Card className="w-[260px] shrink-0 border-primary/20 bg-primary/[0.04] shadow-sm">
-      <CardContent className="space-y-1.5 p-2.5">
-        <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-primary/80">
-          {title}
-        </h4>
-        {children}
-      </CardContent>
-    </Card>
-  )
-}
-
-/**
- * EnvField — linha horizontal de input dentro de um EnvCard:
- *   [label flex-1] [input w-fixa] [unit]
- * Resolve o "unit solto à direita" do v1.0.7 — agora unit fica grudado
- * no input, alinhamento estável entre cards.
- */
-function EnvField({
-  label,
-  unit,
-  children,
-}: {
-  label: string
-  unit?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <Label className="flex-1 truncate text-[10px] font-medium text-muted-foreground">
-        {label}
-      </Label>
-      {children}
-      <span
-        className={cn(
-          'w-3 shrink-0 font-mono text-[9px] text-muted-foreground',
-          !unit && 'invisible',
-        )}
-      >
-        {unit ?? '—'}
-      </span>
-    </div>
-  )
-}
 
 function InlineField({
   label,
