@@ -1187,6 +1187,112 @@ class CurrentProfile(BaseModel):
         return self
 
 
+class WorkWireSpec(BaseModel):
+    """
+    Especificação física do Work Wire (cabo de trabalho do AHV) — Sprint 4
+    / Commit 33 (Tier C físico AHV, validado vs MoorPy Subsystem).
+
+    Modela o cabo de aço/wire que conecta o convés do AHV (`AHVInstall.
+    deck_level_above_swl`) ao ponto de pega na linha de ancoragem
+    (`AHVInstall.target_horz_distance`). Anteriormente (Sprint 2) o
+    bollard pull era aplicado diretamente como `T_fl` em mode Tension —
+    Work Wire ausente fisicamente. Tier C insere o Work Wire como
+    SEGMENTO ADICIONAL da linha (no início, lado AHV) com EA/peso/MBL
+    próprios.
+
+    Convenção física (modelo 2D plano vertical):
+
+        [AHV deck]  (X = target_X + stern_offset, Y = +deck_level)
+            |
+            | Work Wire (este modelo — wire elástico, peso submerso w)
+            |
+        [pega]  (X = target_X, Y = ?)  — endpoint da linha de ancoragem
+            \\
+             \\  Mooring line (segments[] do CaseInput)
+              \\
+               v Anchor
+
+    Campos físicos AUTORITATIVOS (consumidos pelo solver — não auditoria):
+      - `length`: comprimento não-esticado do Work Wire (m).
+      - `EA`: rigidez axial (N) — afeta alongamento elástico.
+      - `w`: peso submerso por unidade (N/m) — gera catenária do Work Wire.
+      - `MBL`: break strength (N) — usado por D022 (saturação ≥ 0.9·MBL).
+
+    Validação numérica: 8 BC-AHV-MOORPY-01..08 vs MoorPy Subsystem
+    `staticSolve()`, gate `rtol < 1e-2` em T_fl/T_anchor/X/lay_length.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    line_type_id: Optional[int] = Field(
+        default=None, ge=0,
+        description=(
+            "ID do catálogo `line_types` (rastreabilidade). NÃO autoritativo "
+            "em runtime — solver consome `EA`/`w`/`MBL` diretos. Quando "
+            "qualquer um dos 4 físicos é editado manualmente, este id "
+            "deve ser zerado pelo frontend (mesmo padrão Q7 das boias)."
+        ),
+    )
+    line_type: Optional[str] = Field(
+        default=None,
+        description=(
+            "Nome do tipo (ex.: 'IWRCEIPS 76mm') — metadado para Memorial PDF."
+        ),
+    )
+    length: float = Field(
+        ..., gt=0,
+        description=(
+            "Comprimento não-esticado do Work Wire (m). Típico em "
+            "instalação: 50-300m. Cresce/encolhe via guincho do AHV."
+        ),
+    )
+    EA: float = Field(
+        ..., gt=0,
+        description=(
+            "Rigidez axial (N). Wire 76mm IWRCEIPS típico: ~5e8 N. "
+            "Afeta alongamento elástico do Work Wire."
+        ),
+    )
+    w: float = Field(
+        ..., ge=0,
+        description=(
+            "Peso submerso por unidade (N/m). Wire 76mm IWRCEIPS: ~190 N/m. "
+            "Gera catenária do Work Wire entre AHV e pega."
+        ),
+    )
+    MBL: float = Field(
+        ..., gt=0,
+        description=(
+            "Minimum Breaking Load (N). Usado por D022 (warning quando "
+            "T_max_ww > 0.9·MBL). Wire 76mm IWRCEIPS: ~6 MN."
+        ),
+    )
+    category: Literal["Wire"] = Field(
+        default="Wire",
+        description=(
+            "Categoria fixa em 'Wire' — Work Wire de AHV é sempre cabo "
+            "de aço. Reservado para extensão futura (sintético)."
+        ),
+    )
+    n_segs: int = Field(
+        default=1, ge=1, le=20,
+        description=(
+            "Número de sub-segmentos para discretização do Work Wire "
+            "no solver. Default 1 — Work Wire homogêneo geralmente é "
+            "trecho curto e não precisa de discretização. Aumentar "
+            "para visualização de catenária com muitos pontos."
+        ),
+    )
+    diameter: Optional[float] = Field(
+        default=None, gt=0,
+        description="Diâmetro nominal (m) — metadado para Memorial PDF.",
+    )
+    dry_weight: Optional[float] = Field(
+        default=None, ge=0,
+        description="Peso seco por unidade (N/m) — metadado.",
+    )
+
+
 class AHVInstall(BaseModel):
     """
     Cenário AHV (Anchor Handler Vessel) de instalação — Sprint 2 / Commit 23.
@@ -1261,11 +1367,40 @@ class AHVInstall(BaseModel):
             "X informativo (m) — distância horizontal anchor → AHV "
             "que o usuário/QMoor reporta como target operacional. "
             "Quando importado de QMoor 0.8.0 com `inputParam='Range'`, "
-            "este campo recebe o `horzDistance` original. SOLVER NÃO "
-            "USA — apenas exibido na UI. Para iterar bollard_pull até "
-            "X resultar ≈ target, use o Sensitivity Panel."
+            "este campo recebe o `horzDistance` original. Em Sprint 2 "
+            "(sem work_wire) o solver NÃO USA — apenas exibido na UI. "
+            "Em Sprint 4 (com work_wire) define o X do PONTO DE PEGA "
+            "do Work Wire na linha de ancoragem (autoritativo)."
         ),
     )
+    work_wire: Optional[WorkWireSpec] = Field(
+        default=None,
+        description=(
+            "Sprint 4 / Tier C — especificação física do Work Wire (cabo "
+            "de trabalho do AHV). Quando None (default), o bollard_pull "
+            "é aplicado diretamente como T_fl em mode Tension (Sprint 2 "
+            "behavior, retro-compat). Quando populado, o Work Wire vira "
+            "primeiro segmento da linha com EA/peso/MBL próprios e "
+            "endpoint suspenso no convés do AHV — modelo físico completo "
+            "validado vs MoorPy Subsystem (BC-AHV-MOORPY-01..08)."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_work_wire_consistency(self) -> "AHVInstall":
+        """
+        Sprint 4 / Commit 33: Work Wire requer target_horz_distance set
+        (define X do ponto de pega). Sem isso o solver não tem onde
+        ancorar geometricamente o Work Wire na linha de ancoragem.
+        """
+        if self.work_wire is not None and self.target_horz_distance is None:
+            raise ValueError(
+                "AHVInstall.work_wire requer target_horz_distance "
+                "(distância horizontal anchor → ponto de pega do Work "
+                "Wire na linha de ancoragem). Sem ele, o solver não "
+                "consegue posicionar o Work Wire geometricamente."
+            )
+        return self
 
 
 class Vessel(BaseModel):
