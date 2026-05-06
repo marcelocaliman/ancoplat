@@ -640,10 +640,11 @@ export function CaseFormPage() {
                 value="ambiente"
                 className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
               >
-              {/* 4 cards bordados lado a lado (xl:grid-cols-4). Cada card tem
-                  conteúdo alinhado à direita (label flex-1 + input à direita
-                  + unit grudada) — visual compacto e profissional. */}
-              <div className="flex flex-wrap justify-end gap-2">
+              {/* 4 cards bordados alinhados à esquerda. Cada card tem
+                  conteúdo inline (label flex-1 + input + unit grudada) e
+                  destaque visual via tom azulado sutil sobre o fundo
+                  externo — visual compacto e profissional. */}
+              <div className="flex flex-wrap justify-start gap-2">
 
                 {/* Grupo 1 — Geometria (batimetria 2-pontos primária) */}
                 <EnvCard title="Geometria">
@@ -683,7 +684,7 @@ export function CaseFormPage() {
                       className="h-7 w-[80px] font-mono text-[11px]"
                     />
                   </EnvField>
-                  <EnvField label="Tipo de plataforma">
+                  <EnvField label="Tipo">
                     <Controller
                       control={control}
                       name="boundary.startpoint_type"
@@ -692,14 +693,14 @@ export function CaseFormPage() {
                           value={(field.value as string | undefined) ?? 'semisub'}
                           onValueChange={field.onChange}
                         >
-                          <SelectTrigger className="h-7 w-[140px] text-[11px]">
+                          <SelectTrigger className="h-7 w-[80px] text-[11px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="semisub">Semi-Sub / FPSO</SelectItem>
-                            <SelectItem value="ahv">AHV (Anchor Handler)</SelectItem>
+                            <SelectItem value="semisub">Semi-Sub</SelectItem>
+                            <SelectItem value="ahv">AHV</SelectItem>
                             <SelectItem value="barge">Barge</SelectItem>
-                            <SelectItem value="none">Sem ícone</SelectItem>
+                            <SelectItem value="none">—</SelectItem>
                           </SelectContent>
                         </Select>
                       )}
@@ -1033,8 +1034,12 @@ export function CaseFormPage() {
 
 /**
  * EnvCard — card bordado para um grupo da aba Ambiente
- * (Geometria, Fairlead, Âncora, Seabed). Largura fixa em viewports
- * >= md para garantir alinhamento estável entre os 4 cards.
+ * (Geometria, Fairlead, Âncora, Seabed). Largura fixa para
+ * alinhamento estável entre cards.
+ *
+ * Visual v1.0.9: tom azulado sutil (bg-primary/5) sobre o fundo
+ * externo + border-primary/20 + sombra leve. Diferencia visualmente
+ * o card sem competir com o conteúdo.
  */
 function EnvCard({
   title,
@@ -1044,9 +1049,9 @@ function EnvCard({
   children: React.ReactNode
 }) {
   return (
-    <Card className="w-[260px] shrink-0">
+    <Card className="w-[260px] shrink-0 border-primary/20 bg-primary/[0.04] shadow-sm">
       <CardContent className="space-y-1.5 p-2.5">
-        <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-primary/80">
           {title}
         </h4>
         {children}
