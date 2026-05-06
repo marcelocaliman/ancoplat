@@ -860,17 +860,24 @@ def _parse_boundary(
         )
 
     # ── Sprint 2 / Commit 24 — Detecção de cenário AHV ──
-    # Quando QMoor 0.8.0 marca `boundary.startpointType="AHV"` (cenários
-    # Backing Down / Hookup / Load Transfer), forçamos mode=Tension
-    # com bollard_pull = fairleadTension. Razão:
-    #   1. Cenários AHV têm L_total < L_min(X, h) frequentemente —
-    #      L < L_min é INVIÁVEL em mode Range (catenária não fecha).
-    #   2. Em QMoor real, o solver desses cases é dirigido por bollard
-    #      pull (força aplicada pelo cabo de trabalho), não por X target.
-    #   3. `horzDistance` no JSON desses cases é informativo (X resultante
-    #      de uma execução prévia), preservado em ahv_install.target_horz_distance.
+    # Detectamos cenário AHV de instalação por DUAS rotas:
+    #   1. Explícito: `boundary.startpointType="AHV"` no JSON.
+    #   2. Inferido: nome do mooringLine contém Hookup/Backing Down/
+    #      Load Transfer (cenários temporários de instalação).
+    #   3. Geometricamente impossível: mode=Range com L_total < L_min(X,h).
+    #      Catenária 2D estática não fecha — o solver real do QMoor
+    #      provavelmente usa modelo dirigido por bollard pull aqui.
+    # Em qualquer das 3 situações, forçamos mode=Tension com bollard_pull
+    # (fairleadTension se presente, senão heurística adaptativa) e
+    # preservamos `horzDistance` em ahv_install.target_horz_distance.
     startpoint_type_raw = (_get_str(bd, "startpointType") or "").lower()
-    is_ahv_install = "ahv" in startpoint_type_raw
+    explicit_ahv = "ahv" in startpoint_type_raw
+    line_name_lower = (
+        _get_str(line, "name") or _get_str(line, "displayName") or ""
+    ).lower()
+    install_keywords = ("hookup", "backing down", "load transfer", "install")
+    inferred_ahv_by_name = any(kw in line_name_lower for kw in install_keywords)
+    is_ahv_install = explicit_ahv or inferred_ahv_by_name
 
     sol = profile.get("solution") or {}
     if not isinstance(sol, dict):
