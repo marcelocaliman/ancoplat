@@ -272,26 +272,22 @@ def _build_fallback_sprint2(
     r_dict = r.model_dump()
     r_dict["message"] = (
         f"Tier C → fallback Sprint 2: {fallback_reason}. "
-        "Bollard pull aplicado direto como T_fl (Work Wire ignorado "
-        "fisicamente porque mooring está deitado e ww não tem suspensão "
-        "viável). D024 (info) informa o engenheiro."
+        "Bollard pull aplicado direto como T_fl. D024 (info) informa "
+        "o engenheiro."
     )
     r_dict["solver_version"] = SOLVER_VERSION
-    # Adiciona D024 explícito (info, high confidence — fato determinístico).
+    # D024 (info, high confidence) — usa helper canônico de diagnostics.
+    from .diagnostics import D024_tier_c_fallback_sprint2
+    lay_pct_extracted = (
+        (r.total_grounded_length or 0.0) / seg_moor.length
+        if seg_moor.length > 0 else None
+    )
+    d024 = D024_tier_c_fallback_sprint2(
+        fallback_reason=fallback_reason,
+        lay_pct=lay_pct_extracted,
+    )
     diags = list(r_dict.get("diagnostics") or [])
-    diags.append({
-        "code": "D024",
-        "severity": "info",
-        "confidence": "high",
-        "title": "Tier C reduzido a Sprint 2 (mooring totalmente apoiado)",
-        "message": (
-            f"Tier C detectou {fallback_reason} e usou modelo Sprint 2 "
-            "efetivo. Resultado equivalente: bollard pull aplicado "
-            "diretamente como T_fl. Para validar Tier C completo, "
-            "use cenário com mooring parcialmente suspenso."
-        ),
-        "suggested_changes": [],
-    })
+    diags.append(d024.model_dump())
     r_dict["diagnostics"] = diags
     return SolverResult(**r_dict)
 
@@ -487,6 +483,16 @@ def solve_with_work_wire(
     utilization_ww = (bollard_pull / ww.MBL) if ww.MBL > 0 else 0.0
     utilization = max(utilization_moor, utilization_ww)
 
+    # Sprint 4 / Commit 37 — D022 quando Work Wire próximo do MBL.
+    diags_list: list[dict] = []
+    if utilization_ww >= 0.90:
+        from .diagnostics import D022_work_wire_near_mbl
+        diags_list.append(
+            D022_work_wire_near_mbl(
+                bollard_pull=bollard_pull, work_wire_mbl=ww.MBL,
+            ).model_dump()
+        )
+
     return SolverResult(
         status=ConvergenceStatus.CONVERGED,
         message=(
@@ -495,6 +501,7 @@ def solve_with_work_wire(
             "ATENÇÃO: análise estática — não substitui análise dinâmica "
             "de instalação (snap loads, AHV motion)."
         ),
+        diagnostics=diags_list,
         coords_x=full_x,
         coords_y=full_y,
         tension_magnitude=full_tension,

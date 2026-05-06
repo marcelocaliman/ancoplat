@@ -580,7 +580,13 @@ def solve(
 
     # Fase 8 — D018 (sempre que há AHV) + D019 (componente fora do plano)
     ahv_attachments = [a for a in resolved_attachments if a.kind == "ahv"]
-    if ahv_attachments and result.status == ConvergenceStatus.CONVERGED:
+    # Sprint 4 — D018 dispara também quando há AHVInstall com Work Wire
+    # (Tier C ativo). Mensagem customizada cita Work Wire elástico.
+    tier_c_active = (
+        boundary.ahv_install is not None
+        and boundary.ahv_install.work_wire is not None
+    )
+    if (ahv_attachments or tier_c_active) and result.status == ConvergenceStatus.CONVERGED:
         from .diagnostics import (
             D018_ahv_static_idealization,
             D019_ahv_force_mostly_out_of_plane,
@@ -588,7 +594,10 @@ def solve(
         from .multi_segment import ahv_in_plane_fraction
         # D018 — sempre dispara (decisão Q6 não-negociável)
         diagnostics_list.append(
-            D018_ahv_static_idealization(n_ahv=len(ahv_attachments)).model_dump()
+            D018_ahv_static_idealization(
+                n_ahv=len(ahv_attachments),
+                tier_c_active=tier_c_active,
+            ).model_dump()
         )
         # D019 — para cada AHV cuja projeção no plano da linha < 30%
         for att in ahv_attachments:

@@ -100,10 +100,13 @@ def _solve_anco(case: dict) -> dict:
         config=SolverConfig(),
     )
     # Detecta fallback Sprint 2 via D024 nos diagnostics.
+    # Code canônico (Sprint 4 / Commit 37): "D024_TIER_C_FALLBACK_SPRINT2".
     diag_codes = {
         d.get("code") for d in (result.diagnostics or []) if d.get("code")
     }
-    fallback_active = "D024" in diag_codes
+    fallback_active = any(
+        c.startswith("D024") for c in diag_codes if c
+    )
     return {
         "status": result.status.value,
         "T_AHV": result.fairlead_tension,
