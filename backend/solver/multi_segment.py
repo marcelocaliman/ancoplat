@@ -682,6 +682,24 @@ def _integrate_segments_with_grounded(
             attachments, arches, n_points_per_segment,
         )
 
+    # Sprint 2 / Commit 21 — caminho EXTENDED-GROUNDED para regime slack.
+    # Quando L_g_0 > L_effs[0] (sem boias/arches), o trecho apoiado
+    # atravessa múltiplos segmentos do mesmo material. Delega para
+    # integrador especializado que acumula peso+atrito por sub-segmento
+    # e identifica o segmento que contém o touchdown. Restrição residual:
+    # qualquer attachment (boia/clump) NÃO pode estar na zona grounded
+    # neste caminho — ainda é responsabilidade do caller validar.
+    if L_g_0 > L_effs[0] + 1e-6:
+        total_L = sum(L_effs)
+        if L_g_0 < 0 or L_g_0 > total_L + 1e-6:
+            raise ValueError(
+                f"L_g_0={L_g_0:.2f} fora de [0, L_total={total_L:.2f}]"
+            )
+        return _integrate_with_extended_grounded(
+            segments, L_effs, H, L_g_0, slope_rad, mu,
+            attachments, n_points_per_segment,
+        )
+
     # (b) Defensiva interna: caminho sem arches, restrição mais apertada
     # (L_g_0 <= L_effs[0] — só segmento 0 grounded).
     if L_g_0 < 0 or L_g_0 > L_effs[0] + 1e-6:
@@ -866,6 +884,245 @@ def _integrate_segments_with_grounded(
         "T_anchor": T_anchor,
         "H": H,
         "L_g_0": L_g_0,
+        "x_td": x_td,
+        "y_td": y_td,
+        "coords_x": coords_x,
+        "coords_y": coords_y,
+        "tension_magnitude": tension_mag,
+        "tension_x": tension_x,
+        "tension_y": tension_y,
+        "boundaries": boundaries,
+        "T_mean_per_segment": t_mean_per_seg,
+    }
+
+
+def _integrate_with_extended_grounded(
+    segments: Sequence[LineSegment],
+    L_effs: Sequence[float],
+    H: float,
+    L_g_0: float,
+    slope_rad: float,
+    mu: float,
+    attachments: Sequence[LineAttachment] = (),
+    n_points_per_segment: int = 50,
+) -> dict:
+    """
+    Integrador para regime SLACK onde o trecho apoiado atravessa
+    múltiplos segmentos do mesmo (ou diferente) material.
+    Sprint 2 / Commit 21 — desbloqueio do caso KAR006 ML3
+    (L=1883m, X=1796m, T_fl=150te → L_g_real ~600m > L_0=488m).
+
+    Diferença vs `_integrate_segments_with_grounded`:
+      • `L_g_0` pode ser > `L_effs[0]` (atravessa múltiplos segmentos).
+      • Atrito + peso projetado acumulam por segmento grounded
+        (taxa `µ·w_i·cos(slope) + w_i·sin(slope)` muda quando muda
+        de segmento).
+      • Trecho suspenso começa no `touchdown_seg_idx` (primeiro
+        segmento parcial ou totalmente suspenso), não sempre em 0.
+
+    Restrição: NÃO suporta attachments (boia/clump) na zona grounded
+    (essa via fica em `_integrate_with_grounded_arches`). Suporta
+    attachments na zona suspensa (junctions normais com salto V).
+    """
+    m = math.tan(slope_rad)
+    sqrt_1pm2 = math.sqrt(1.0 + m * m)
+
+    # Distribui L_g_0 por segmento; identifica touchdown_seg_idx.
+    L_g_per_seg = [0.0] * len(segments)
+    cum = 0.0
+    touchdown_seg_idx = 0
+    L_g_in_touchdown_seg = 0.0
+    for i, L_i in enumerate(L_effs):
+        if cum >= L_g_0 - 1e-9:
+            touchdown_seg_idx = i
+            break
+        take = min(L_i, L_g_0 - cum)
+        L_g_per_seg[i] = take
+        cum += take
+        if take < L_i - 1e-9:
+            # Touchdown no MEIO desse segmento
+            touchdown_seg_idx = i
+            L_g_in_touchdown_seg = take
+            break
+        # Segmento i totalmente grounded; touchdown está no início do próximo
+        touchdown_seg_idx = i + 1
+        L_g_in_touchdown_seg = 0.0
+    if touchdown_seg_idx >= len(segments):
+        # Toda a linha apoiada — caso degenerado, recusar
+        raise ValueError(
+            "L_g_0 cobre toda a linha — caso totalmente apoiado deve "
+            "ir pelo caminho `_solve_fully_grounded`, não por este "
+            "integrador suspended-anchor."
+        )
+
+    # Tensão na âncora: T_anc = T_td − Σ taxa_i · L_g_i
+    T_td = H * sqrt_1pm2
+    delta_T = 0.0
+    for i, L_g_i in enumerate(L_g_per_seg):
+        if L_g_i <= 0:
+            continue
+        rate_i = (
+            mu * segments[i].w * math.cos(slope_rad)
+            + segments[i].w * math.sin(slope_rad)
+        )
+        delta_T += rate_i * L_g_i
+    T_anc = max(0.0, T_td - delta_T)
+
+    # Geometria do trecho grounded (segue a rampa)
+    x_td = L_g_0 / sqrt_1pm2 if sqrt_1pm2 > 0 else 0.0
+    y_td = m * x_td
+
+    coords_x: list[float] = []
+    coords_y: list[float] = []
+    tension_mag: list[float] = []
+    tension_x: list[float] = []
+    tension_y: list[float] = []
+    boundaries: list[int] = [0]
+    t_mean_per_seg: list[float] = []
+
+    # Trecho grounded: integra por sub-segmento. Pontos por segmento
+    # proporcionais ao seu comprimento grounded.
+    s_running = 0.0
+    T_running = T_anc
+    for i, L_g_i in enumerate(L_g_per_seg):
+        if L_g_i <= 0:
+            t_mean_per_seg.append(0.0)
+            boundaries.append(len(coords_x) - 1 if coords_x else 0)
+            continue
+        n_g_i = max(2, int(round(n_points_per_segment * L_g_i / L_effs[i])))
+        s_arr = np.linspace(s_running, s_running + L_g_i, n_g_i)
+        x_arr = s_arr / sqrt_1pm2
+        y_arr = m * x_arr
+        rate_i = (
+            mu * segments[i].w * math.cos(slope_rad)
+            + segments[i].w * math.sin(slope_rad)
+        )
+        T_at_end_i = T_running + rate_i * L_g_i
+        T_arr_i = np.linspace(T_running, T_at_end_i, n_g_i)
+        Tx_arr = T_arr_i * math.cos(slope_rad)
+        Ty_arr = T_arr_i * math.sin(slope_rad)
+        if i == 0:
+            coords_x.extend(x_arr.tolist())
+            coords_y.extend(y_arr.tolist())
+            tension_mag.extend(T_arr_i.tolist())
+            tension_x.extend(Tx_arr.tolist())
+            tension_y.extend(Ty_arr.tolist())
+        else:
+            # Skip primeiro ponto para evitar duplicação na junção
+            coords_x.extend(x_arr[1:].tolist())
+            coords_y.extend(y_arr[1:].tolist())
+            tension_mag.extend(T_arr_i[1:].tolist())
+            tension_x.extend(Tx_arr[1:].tolist())
+            tension_y.extend(Ty_arr[1:].tolist())
+        T_running = T_at_end_i
+        s_running += L_g_i
+        t_mean_per_seg.append((T_arr_i[0] + T_arr_i[-1]) / 2.0)
+        boundaries.append(len(coords_x) - 1)
+
+    # Trecho suspenso: começa em (x_td, y_td) com V_local = H·m no
+    # touchdown (tangência com a rampa). Integra do touchdown_seg_idx
+    # em diante, usando L_efetivo do touchdown_seg_idx = (L_effs[i] − L_g_i).
+    x_acc = x_td
+    y_acc = y_td
+    V_local = H * m
+
+    # Pre-tabela de força signada por junção (apenas suspended).
+    junction_force: dict[int, float] = {}
+    for att in attachments:
+        if att.position_index is None:
+            continue
+        if att.position_index < 0 or att.position_index >= len(segments) - 1:
+            raise ValueError(
+                f"Attachment '{att.name or att.kind}' tem position_index="
+                f"{att.position_index} fora do range válido."
+            )
+        # Junções dentro da zona grounded são ignoradas (a zona apoiada
+        # não tem componente vertical de tração para receber salto).
+        if att.position_index < touchdown_seg_idx:
+            continue
+        junction_force[att.position_index] = (
+            junction_force.get(att.position_index, 0.0) + _signed_force(att)
+        )
+
+    for i in range(touchdown_seg_idx, len(segments)):
+        # Aplica salto da junção anterior i-1 → i
+        if i > touchdown_seg_idx and (i - 1) in junction_force:
+            V_local = V_local + junction_force[i - 1]
+        # L efetivo: para o touchdown_seg_idx é parcial, demais é cheio
+        if i == touchdown_seg_idx:
+            L_eff_seg = L_effs[i] - L_g_in_touchdown_seg
+        else:
+            L_eff_seg = L_effs[i]
+        if L_eff_seg < 1e-9:
+            t_mean_per_seg.append(0.0)
+            boundaries.append(len(coords_x) - 1)
+            continue
+        seg = segments[i]
+        w_i = seg.w
+        a_i = H / w_i
+        s_start = V_local / w_i
+        s_end = (V_local + w_i * L_eff_seg) / w_i
+        n = max(2, n_points_per_segment)
+        s_phys = np.linspace(0.0, L_eff_seg, n)
+        s_local = s_start + s_phys
+        x_local = a_i * (np.arcsinh(s_local / a_i) - math.asinh(s_start / a_i))
+        y_local = (
+            np.sqrt(a_i * a_i + s_local * s_local)
+            - math.sqrt(a_i * a_i + s_start * s_start)
+        )
+        seg_x = x_acc + x_local
+        seg_y = y_acc + y_local
+        T_seg = w_i * np.sqrt(a_i * a_i + s_local * s_local)
+        Tx_seg = np.full_like(T_seg, H)
+        Ty_seg = w_i * s_local
+        # Pula primeiro ponto (coincide com touchdown ou junction anterior)
+        if i == touchdown_seg_idx and L_g_0 > 0:
+            coords_x.extend(seg_x[1:].tolist())
+            coords_y.extend(seg_y[1:].tolist())
+            tension_mag.extend(T_seg[1:].tolist())
+            tension_x.extend(Tx_seg[1:].tolist())
+            tension_y.extend(Ty_seg[1:].tolist())
+        elif i > touchdown_seg_idx:
+            coords_x.extend(seg_x[1:].tolist())
+            coords_y.extend(seg_y[1:].tolist())
+            tension_mag.extend(T_seg[1:].tolist())
+            tension_x.extend(Tx_seg[1:].tolist())
+            tension_y.extend(Ty_seg[1:].tolist())
+        else:
+            # Caso L_g_0=0 + i==touchdown_seg_idx==0 — não chegamos
+            # aqui pelo dispatcher, mas defensivo.
+            coords_x.extend(seg_x.tolist())
+            coords_y.extend(seg_y.tolist())
+            tension_mag.extend(T_seg.tolist())
+            tension_x.extend(Tx_seg.tolist())
+            tension_y.extend(Ty_seg.tolist())
+
+        # Atualiza V_local e cursor para próximo segmento
+        V_local = V_local + w_i * L_eff_seg
+        x_acc = seg_x[-1]
+        y_acc = seg_y[-1]
+        t_mean_per_seg.append((T_seg[0] + T_seg[-1]) / 2.0)
+        boundaries.append(len(coords_x) - 1)
+
+    V_fairlead = V_local
+    T_fl = math.sqrt(H * H + V_fairlead * V_fairlead)
+    # Anchor está apoiado: T_anchor é vetorial ao longo da rampa.
+    # V_anchor=0 na convenção do caller (entra no grounded sem
+    # componente vertical extra; tração apoiada já contabilizada).
+    V_anchor = 0.0
+    h_total = y_acc  # superfície relativa à âncora
+
+    return {
+        "X_total": x_acc,
+        "h_total": h_total,
+        "V_anchor": V_anchor,
+        "V_fairlead": V_fairlead,
+        "T_fairlead": T_fl,
+        "T_anchor": T_anc,
+        "H": H,
+        "L_g_0": L_g_0,
+        "L_grounded": L_g_0,
+        "L_suspended": sum(L_effs) - L_g_0,
         "x_td": x_td,
         "y_td": y_td,
         "coords_x": coords_x,
@@ -1177,7 +1434,13 @@ def _solve_multi_sloped(
     has_potential_grounded_buoys = any(
         att.kind == "buoy" for att in attachments
     )
-    L_g_max = total_L if has_potential_grounded_buoys else L_0
+    # Sprint 2 / Commit 21 — em regime SLACK (linha mais comprida que
+    # a distância horizontal), o trecho apoiado pode atravessar
+    # múltiplos segmentos mesmo sem boia. Antes: L_g_max=L_0 quando sem
+    # boia → fsolve travava na boundary em casos como KAR006 ML3
+    # (T_fl=150te, L=1883m, X=1796m, L_g_real ≈ 600-700m > L_0=488m).
+    # Agora: sempre permite L_g atravessar até total_L.
+    L_g_max = total_L
 
     # Pre-check de viabilidade: peso submerso total (linha + attachments)
     # deve ser positivo, senão a geometria seria invertida (boias > peso).
@@ -1266,22 +1529,36 @@ def _solve_multi_sloped(
         # Para Range, estima H a partir de geometria simples
         H_init = max(1.0, segments[0].w * (float(input_value) ** 2 + h * h) / (2 * h) / 5)
 
-    # F5.7.1 — fsolve robusto com múltiplos chutes iniciais. O caminho
-    # com arches tem residual descontínuo em L_g_total = s_buoy + s_arch/2
-    # (transição "arco cabe vs. não cabe"), e fsolve com chute único
-    # pode cair no lado errado da descontinuidade. Tentamos vários
-    # candidatos e ficamos com o que melhor converge.
-    initial_guesses: list[tuple[float, float]] = [(H_init, L_g_init)]
-    if has_potential_grounded_buoys:
-        # Adiciona candidatos: L_g_init em frações diferentes de total_L
-        # (o L_g real frequentemente ultrapassa L_effs[0] em casos com
-        # arches espalhados pela zona apoiada).
-        for frac in (0.4, 0.6, 0.8):
-            initial_guesses.append((H_init, total_L * frac))
-        # Também varia H_init (10x, 0.5x) — buoys mudam o equilíbrio
-        # e o estimador analítico pode estar longe do real.
-        initial_guesses.append((H_init * 0.5, L_g_init))
-        initial_guesses.append((max(H_init * 2.0, 1.0), L_g_init))
+    # F5.7.1 + Sprint 2 / Commit 21 — fsolve robusto com múltiplos
+    # chutes iniciais. O residual tem descontinuidades naturais
+    # (transição arco cabe/não cabe com boias; transição L_g atravessa
+    # boundary entre segmentos em regime slack), e fsolve com chute
+    # único pode cair no lado errado.
+    #
+    # Estratégia: tentar SEMPRE múltiplos chutes (boia ou não). Para
+    # evitar overhead em casos comuns: early exit no primeiro chute
+    # que converge com residual aceitável (norm < 1e-6 em escala
+    # absoluta de N e m, equivalente a ~0.001% em casos típicos).
+    initial_guesses: list[tuple[float, float]] = [
+        (H_init, L_g_init),
+        # Frações de total_L cobrem regimes slack (L_g grande) e
+        # taut com touchdown pequeno. 0.05 captura quase-taut; 0.7
+        # captura slack extremo.
+        (H_init, total_L * 0.05),
+        (H_init, total_L * 0.3),
+        (H_init, total_L * 0.5),
+        (H_init, total_L * 0.7),
+        # Variações de H_init para casos onde o estimador analítico
+        # subestima/superestima (boias mudam equilíbrio; slope reduz
+        # H efetivo na anchor).
+        (H_init * 0.5, L_g_init),
+        (max(H_init * 2.0, 1.0), L_g_init),
+    ]
+
+    # Tolerância de "early exit" — residual em (T_fl ou X) e em h_total
+    # combinados. 1e-3 N + 1e-3 m é amplamente suficiente; o fsolve
+    # frequentemente atinge ~1e-9.
+    EARLY_EXIT_RESIDUAL = 1e-3
 
     best_sol = None
     best_residual_norm = float("inf")
@@ -1296,12 +1573,13 @@ def _solve_multi_sloped(
             continue
         if ier_try != 1:
             continue
-        # Avalia o residual nessa solução
         res_vec = F(sol_try)
         res_norm = float(np.linalg.norm(res_vec))
         if res_norm < best_residual_norm:
             best_residual_norm = res_norm
             best_sol = sol_try
+            if res_norm < EARLY_EXIT_RESIDUAL:
+                break  # convergiu com folga — não precisa testar mais
     if best_sol is not None:
         sol = best_sol
         ier = 1
