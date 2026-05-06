@@ -175,11 +175,15 @@ export function AttachmentsEditor<T extends FieldValues = CaseFormValues>({
             {emptyMsg}
           </p>
         )}
+        {/* Cards em flex-wrap com largura mínima reduzida para caber
+            na coluna estreita do shell 3-pane (420-480px) sem
+            colapsar conteúdo. Em viewport mais larga, wrap natural
+            preserva legibilidade. */}
         <div className="flex flex-wrap gap-2">
           {visibleItems.map(({ field, realIdx }) => (
             <div
               key={field.id}
-              className="min-w-[280px] max-w-[360px] flex-1"
+              className="min-w-[180px] flex-1"
             >
               <AttachmentRow
                 realIndex={realIdx}
@@ -200,7 +204,7 @@ export function AttachmentsEditor<T extends FieldValues = CaseFormValues>({
               type="button"
               variant="outline"
               size="sm"
-              className="h-auto min-h-[44px] min-w-[280px] max-w-[360px] flex-1 gap-1.5 border-dashed text-[11px]"
+              className="h-auto min-h-[36px] min-w-[180px] flex-1 gap-1.5 border-dashed text-[11px]"
               onClick={addNew}
             >
               <Plus className="h-3.5 w-3.5" />
