@@ -340,6 +340,16 @@ def _parse_segments(
             "reason": "QMoor permite >10 segmentos; AncoPlat trunca.",
         })
         raw = raw[:10]
+    # ⚠ ORDEM CRÍTICA — Sprint 2 / Commit 22 ⚠
+    # QMoor JSON ordena segments[] na ordem `fairlead → anchor`
+    # (primeiro segmento é "Rig Chain" colado no rig/fairlead, último é
+    # "Anchor Chain" colado na âncora). AncoPlat espera o INVERSO:
+    # `segments[0]` é o mais próximo da ÂNCORA (vide
+    # `backend/api/schemas/cases.py:85-86`).
+    # → Inverte a lista AQUI antes de criar `LineSegment`s, para que
+    # toda a pipeline downstream (solver, plot, attachment positions
+    # via position_s_from_anchor) tenha a convenção correta.
+    raw = list(reversed(raw))
     out: list[LineSegment] = []
     for i, seg in enumerate(raw):
         if not isinstance(seg, dict):

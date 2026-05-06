@@ -47,48 +47,71 @@ def test_qmoorversion_alias_aceito() -> None:
 
 
 def test_segments_real_format_parse_ok() -> None:
+    """Sprint 2 / Commit 22: parser INVERTE a ordem de segments[] —
+    JSON QMoor é fairlead→anchor, AncoPlat é anchor→fairlead.
+    Então segments[0] no CaseInput é "Anchor Chain" (não "Rig Chain")."""
     payload = synthetic_qmoor_v0_8_kar006_real()
     cases, log = parse_qmoor_v0_8(payload)
     case = cases[0]
     assert len(case.segments) == 3
-    rig_chain, wire, anchor_chain = case.segments
+    # Após reverse: anchor → fairlead
+    anchor_chain, wire, rig_chain = case.segments
 
     # Lengths em metros
-    assert rig_chain.length == pytest.approx(475.0, rel=1e-9)
-    assert wire.length == pytest.approx(609.0, rel=1e-9)
     assert anchor_chain.length == pytest.approx(488.0, rel=1e-9)
+    assert wire.length == pytest.approx(609.0, rel=1e-9)
+    assert rig_chain.length == pytest.approx(475.0, rel=1e-9)
 
     # Wet weight: kgf/m → N/m (× 9.80665)
-    # 150.66 kgf/m = 150.66 × 9.80665 = 1477.5 N/m
+    # Rig Chain: 150.66 kgf/m = 150.66 × 9.80665 ≈ 1477.5 N/m
     assert rig_chain.w == pytest.approx(150.66171764698163 * 9.80665, rel=1e-3)
-    # 33.97 kgf/m = 333.13 N/m
+    # Wire (Insert Wire): 33.97 kgf/m = 333.13 N/m
     assert wire.w == pytest.approx(33.97113378709231 * 9.80665, rel=1e-3)
+    # Anchor Chain: 134.51 kgf/m = 1319 N/m
+    assert anchor_chain.w == pytest.approx(134.51347927617243 * 9.80665, rel=1e-3)
 
     # EA: te → N (× 9806.65)
-    # 81018.96 te = 81018.96 × 9806.65 ≈ 7.95e8 N
+    # Rig Chain qmoorEA = 81018.96 te → 7.95e8 N
     assert rig_chain.EA == pytest.approx(81018.96002399089 * 9806.65, rel=1e-3)
 
     # MBL: te → N
-    # 815.16 te = 7.99 MN
+    # Rig Chain breakStrength = 815.16 te → 7.99 MN
     assert rig_chain.MBL == pytest.approx(815.1553840507001 * 9806.65, rel=1e-3)
 
     # Diameter: mm → m
     assert rig_chain.diameter == pytest.approx(0.0889, rel=1e-3)
     assert wire.diameter == pytest.approx(0.098, rel=1e-3)
+    assert anchor_chain.diameter == pytest.approx(0.084, rel=1e-3)
 
     # line_type via lineProps
     assert rig_chain.line_type == "R4Chain"
     assert wire.line_type == "EIPS20"
+    assert anchor_chain.line_type == "R4Chain"
 
     # Category drillado de lineProps
     assert rig_chain.category == "StuddedChain"
     assert wire.category == "Wire"
+    assert anchor_chain.category == "StuddedChain"
+
+
+def test_segments_ordem_invertida_anchor_first() -> None:
+    """Sprint 2 / Commit 22 — gate explícito da ordem dos segments.
+    JSON QMoor: [Rig Chain (fairlead), ..., Anchor Chain (anchor)].
+    AncoPlat: [Anchor Chain, ..., Rig Chain]. O parser deve INVERTER."""
+    payload = synthetic_qmoor_v0_8_kar006_real()
+    cases, _ = parse_qmoor_v0_8(payload)
+    case = cases[0]
+    # Primeiro segmento (mais próximo da âncora): Anchor Chain (488m)
+    assert case.segments[0].length == 488.0
+    # Último segmento (mais próximo do fairlead): Rig Chain (475m)
+    assert case.segments[-1].length == 475.0
 
 
 def test_segments_dryweight_modulus_extraidos() -> None:
     payload = synthetic_qmoor_v0_8_kar006_real()
     cases, _ = parse_qmoor_v0_8(payload)
-    rig_chain = cases[0].segments[0]
+    # Após reverse, segments[-1] = Rig Chain (peso seco 173 kgf/m)
+    rig_chain = cases[0].segments[-1]
     assert rig_chain.dry_weight is not None
     assert rig_chain.dry_weight > rig_chain.w  # peso seco > submerso
     assert rig_chain.modulus is not None
