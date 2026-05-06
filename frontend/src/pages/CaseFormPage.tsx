@@ -493,16 +493,19 @@ export function CaseFormPage() {
         </Card>
 
         {/* ═════════════════════════════════════════════════════════════
-            Layout 3-pane profissional (padrão CAD/FEA/OrcaFlex):
-              Coluna 1 (esquerda) — Tabs + forms (largura fixa, scroll interno)
-              Coluna 2 (centro)   — Plot dominante (flex-1, ocupa todo espaço)
-              Coluna 3 (direita)  — KPIs/metrics (largura fixa)
-            Em viewport < 1280px, KPIs colapsam horizontalmente abaixo do plot.
+            Layout horizontal-on-top:
+              Top    — Tabs + conteúdo da aba ativa em row horizontal
+                       scroll. Cada aba tem altura compacta (~280px) com
+                       cards em flex-row para muitos segmentos/boias/clumps.
+              Bottom — Plot dominante (flex-1) + Metrics (240px) lado a lado,
+                       ocupando todo o espaço vertical restante.
+            Decisão de design: forms HORIZONTAIS no topo (não em coluna
+            estreita à esquerda) para múltiplos segmentos serem visíveis
+            simultaneamente; metrics fica DIRETAMENTE ao lado do plot.
         ═════════════════════════════════════════════════════════════ */}
-        <div className="flex min-h-0 flex-1 gap-2">
-        {/* ───── Coluna 1: Tabs com inputs físicos (scroll interno) ───── */}
-        <Card className="flex w-[420px] shrink-0 flex-col overflow-hidden xl:w-[480px]">
-          <Tabs defaultValue="linha" className="flex min-h-0 flex-1 flex-col">
+        {/* ───── Top: Tabs com inputs físicos (altura compacta) ───── */}
+        <Card className="shrink-0 overflow-hidden">
+          <Tabs defaultValue="linha" className="flex flex-col">
             <TabsList className="mx-2 mt-1.5 h-auto w-fit p-0.5">
               <TabsTrigger value="linha" className="h-6 gap-1 px-2 text-[11px]">
                 <Wrench className="h-3.5 w-3.5" />
@@ -557,11 +560,11 @@ export function CaseFormPage() {
             {/*
              * Stack das abas: todos os <TabsContent> são forceMount + grid
              * stacked (col/row-start-1) para preservar estado do form ao
-             * trocar de aba. Wrapper agora tem scroll interno (min-h-0 +
-             * overflow-y-auto) — altura é controlada pelo Card pai
-             * (3-pane shell), não pelo conteúdo, evitando esmagar o plot.
+             * trocar de aba. Altura máxima limitada (max-h-[300px]) com
+             * scroll interno se conteúdo exceder — garante que plot
+             * abaixo SEMPRE tem ≥ 60% da altura da viewport.
              */}
-            <div className="grid min-h-0 flex-1 overflow-y-auto">
+            <div className="grid max-h-[300px] overflow-y-auto">
               {/* ───────── Aba Linha: agregados + segmentos ───────── */}
               <TabsContent
                 forceMount
@@ -1058,7 +1061,8 @@ export function CaseFormPage() {
           </Tabs>
         </Card>
 
-        {/* ───── Coluna 2: Plot dominante (centro, ocupa todo espaço livre) ───── */}
+        {/* ───── Bottom: Plot dominante (centro) + Metrics (direita) ───── */}
+        <div className="flex min-h-0 flex-1 gap-2">
           <Card className="min-h-0 flex-1 overflow-hidden">
             <CardContent className="h-full p-1">
               <PlotArea
@@ -1091,7 +1095,7 @@ export function CaseFormPage() {
               />
             </CardContent>
           </Card>
-        {/* ───── Coluna 3: KPIs/metrics (largura fixa, scroll interno) ───── */}
+          {/* KPIs/metrics colados ao lado direito do plot */}
           <MetricsColumn
             result={previewQuery.data}
             previewReady={previewReady}
