@@ -31,10 +31,18 @@ export interface CurrentProfileDisplay {
   water_density?: number | null
 }
 
+export interface AHVInstallDisplay {
+  bollard_pull: number
+  deck_level_above_swl?: number | null
+  stern_angle_deg?: number | null
+  target_horz_distance?: number | null
+}
+
 export interface ImportedModelCardProps {
   vessel?: VesselDisplay | null
   currentProfile?: CurrentProfileDisplay | null
   metadata?: Record<string, string> | null
+  ahvInstall?: AHVInstallDisplay | null
   className?: string
 }
 
@@ -53,6 +61,7 @@ export function ImportedModelCard({
   vessel,
   currentProfile,
   metadata,
+  ahvInstall,
   className,
 }: ImportedModelCardProps) {
   const hasMetadata =
@@ -61,8 +70,10 @@ export function ImportedModelCard({
   const isImported = metadata?.['source_format'] === 'qmoor_0_8'
   const hasVessel = vessel != null
   const hasCurrent = currentProfile != null && currentProfile.layers.length > 0
+  const hasAHVInstall = ahvInstall != null
 
-  if (!hasVessel && !hasCurrent && !hasMetadata && !isImported) return null
+  if (!hasVessel && !hasCurrent && !hasMetadata && !isImported && !hasAHVInstall)
+    return null
 
   return (
     <Card className={cn('mb-4', className)}>
@@ -75,11 +86,20 @@ export function ImportedModelCard({
               QMoor 0.8.0
             </Badge>
           )}
+          {hasAHVInstall && (
+            <Badge
+              variant="outline"
+              className="border-warning/40 bg-warning/10 text-[10px] text-warning"
+            >
+              AHV Install
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid gap-3 lg:grid-cols-3">
           {hasVessel && <VesselBlock vessel={vessel!} />}
+          {hasAHVInstall && <AHVInstallBlock ahv={ahvInstall!} />}
           {hasCurrent && <CurrentBlock profile={currentProfile!} />}
           {(hasMetadata || isImported) && (
             <MetadataBlock metadata={metadata ?? {}} />
@@ -137,6 +157,48 @@ function VesselBlock({ vessel }: { vessel: VesselDisplay }) {
     </div>
   )
 }
+
+function AHVInstallBlock({ ahv }: { ahv: AHVInstallDisplay }) {
+  const rows: Array<[string, string]> = [
+    ['Bollard Pull', `${(ahv.bollard_pull / 1000).toFixed(1)} kN`],
+  ]
+  if (ahv.bollard_pull > 0) {
+    rows.push([
+      '',
+      `(${(ahv.bollard_pull / 9806.65).toFixed(1)} te)`,
+    ])
+  }
+  if (ahv.target_horz_distance != null) {
+    rows.push(['Target X', `${ahv.target_horz_distance.toFixed(1)} m`])
+  }
+  if (ahv.deck_level_above_swl != null && ahv.deck_level_above_swl > 0) {
+    rows.push(['Deck above SWL', `${ahv.deck_level_above_swl.toFixed(1)} m`])
+  }
+  if (ahv.stern_angle_deg != null && ahv.stern_angle_deg !== 0) {
+    rows.push(['Stern Angle', `${ahv.stern_angle_deg.toFixed(0)}°`])
+  }
+  return (
+    <div className="rounded-md border border-warning/30 bg-warning/[0.04] p-3">
+      <div className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-warning/90">
+        <Anchor className="h-3 w-3" />
+        AHV Install
+      </div>
+      <dl className="space-y-0.5 text-[12px]">
+        {rows.map(([k, v], i) => (
+          <div key={i} className="flex justify-between gap-2">
+            <dt className="text-muted-foreground">{k}</dt>
+            <dd className="font-mono text-foreground">{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="mt-2 text-[10px] italic text-muted-foreground">
+        Cenário temporário (Hookup / Backing Down / Load Transfer).
+        X resultante depende do bollard pull aplicado.
+      </p>
+    </div>
+  )
+}
+
 
 function CurrentBlock({ profile }: { profile: CurrentProfileDisplay }) {
   const layers = profile.layers

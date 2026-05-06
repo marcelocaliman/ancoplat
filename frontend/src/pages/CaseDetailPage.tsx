@@ -539,6 +539,14 @@ export function CaseDetailPage() {
                   metadata={(caseInput as unknown as {
                     metadata?: Record<string, string> | null
                   }).metadata ?? null}
+                  ahvInstall={(caseInput.boundary as unknown as {
+                    ahv_install?: {
+                      bollard_pull: number
+                      deck_level_above_swl?: number | null
+                      stern_angle_deg?: number | null
+                      target_horz_distance?: number | null
+                    } | null
+                  }).ahv_install ?? null}
                 />
                 <Card className="mb-4">
                   <CardContent className="h-[480px] p-2">
@@ -570,6 +578,15 @@ export function CaseDetailPage() {
                         ((liveInput ?? caseInput) as unknown as {
                           vessel?: VesselDisplay | null
                         }).vessel ?? null
+                      }
+                      ahvInstall={
+                        ((liveInput ?? caseInput).boundary as unknown as {
+                          ahv_install?: {
+                            bollard_pull: number
+                            target_horz_distance?: number | null
+                            deck_level_above_swl?: number | null
+                          } | null
+                        }).ahv_install ?? null
                       }
                     />
                   </CardContent>

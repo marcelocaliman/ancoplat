@@ -321,6 +321,19 @@ export interface CatenaryPlotProps {
     draft?: number | null
     heading_deg?: number | null
   } | null
+  /**
+   * Cenário AHV de instalação (Sprint 2 / Commit 28). Quando setado,
+   * o plot:
+   *   - Desenha linha vertical pontilhada em x=target_horz_distance
+   *     (referência informativa do X target QMoor original).
+   *   - Anotação "AHV target X" perto da linha.
+   *   - Banner via cor: tom amarelo sutil destacando cenário temporário.
+   */
+  ahvInstall?: {
+    bollard_pull: number
+    target_horz_distance?: number | null
+    deck_level_above_swl?: number | null
+  } | null
 }
 
 /**
@@ -349,6 +362,7 @@ export function CatenaryPlot({
   segments = [],
   startpointType = 'semisub',
   vessel = null,
+  ahvInstall = null,
 }: CatenaryPlotProps) {
   const fillContainer = height == null
   const plotStyle: React.CSSProperties = fillContainer
@@ -580,6 +594,36 @@ export function CatenaryPlot({
       hoverinfo: 'skip',
       showlegend: false,
     })
+
+    // ── AHV Install: linha vertical em target_horz_distance ──
+    // Sprint 2 / Commit 28. Quando ahv_install está populado e tem
+    // target_horz_distance, desenha referência visual informativa do
+    // X target original do QMoor (cenário Hookup/Backing Down/Load
+    // Transfer). X resultante (anchor real) depende do bollard_pull
+    // aplicado — a linha pontilhada amarela mostra onde o user QMoor
+    // queria o anchor estar operacionalmente.
+    if (
+      ahvInstall
+      && ahvInstall.target_horz_distance != null
+      && ahvInstall.target_horz_distance > 0
+    ) {
+      const targetX = ahvInstall.target_horz_distance
+      pushTrace({
+        type: 'scatter',
+        mode: 'lines',
+        x: [targetX, targetX],
+        y: [ranges.yRange[0], ranges.yRange[1]],
+        line: { color: '#F59E0B', width: 1.2, dash: 'dot' },
+        name: 'AHV target X',
+        hovertemplate:
+          `<b>AHV target X</b><br>`
+          + `Bollard pull = ${(ahvInstall.bollard_pull / 1000).toFixed(1)} kN<br>`
+          + `Target X (QMoor) = ${targetX.toFixed(1)} m<br>`
+          + `<i>X resultante depende do bollard pull aplicado.</i>`
+          + `<extra></extra>`,
+        showlegend: false,
+      })
+    }
 
     // ── Casco do vessel (Sprint 2 / Commit 14) ──
     // Quando o caso tem vessel com LOA + draft, desenha um retângulo
