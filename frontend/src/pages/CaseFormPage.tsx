@@ -1416,10 +1416,10 @@ function MetricsColumn({
 
   if (!previewReady || !result) {
     return (
-      <div className="flex w-[240px] shrink-0 flex-col gap-1.5 overflow-y-auto xl:w-[260px]">
+      <div className="flex h-full w-[240px] shrink-0 flex-col gap-1.5 xl:w-[260px]">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="shrink-0 bg-muted/10">
-            <CardContent className="flex h-[120px] flex-col justify-center gap-1 p-2.5">
+          <Card key={i} className="flex-1 bg-muted/10">
+            <CardContent className="flex h-full flex-col justify-center gap-1 p-2.5">
               <div className="h-2.5 w-16 rounded bg-muted/40" />
               <div className="h-5 w-24 rounded bg-muted/30" />
               <div className="h-2 w-20 rounded bg-muted/30" />
@@ -1455,7 +1455,7 @@ function MetricsColumn({
   }
 
   return (
-    <div className="flex w-[240px] shrink-0 flex-col gap-1.5 overflow-y-auto pr-1 xl:w-[260px]">
+    <div className="flex h-full w-[240px] shrink-0 flex-col gap-1.5 pr-1 xl:w-[260px]">
       {/* Tração — primário com gauge */}
       <MetricCard
         label="Tração no fairlead"
@@ -1547,8 +1547,8 @@ function MetricCard({
   footer?: string
 }) {
   return (
-    <Card className="shrink-0">
-      <CardContent className="flex min-h-[120px] flex-col gap-1 p-2.5">
+    <Card className="flex-1">
+      <CardContent className="flex h-full min-h-[120px] flex-col gap-1 p-2.5">
         <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {label}
         </p>
