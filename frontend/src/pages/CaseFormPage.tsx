@@ -688,7 +688,7 @@ export function CaseFormPage() {
                         {...register('boundary.startpoint_depth', {
                           valueAsNumber: true,
                         })}
-                        className="h-7 font-mono"
+                        className="h-7 max-w-[120px] font-mono text-[11px]"
                       />
                     </InlineField>
                     <InlineField
@@ -703,7 +703,7 @@ export function CaseFormPage() {
                             value={(field.value as string | undefined) ?? 'semisub'}
                             onValueChange={field.onChange}
                           >
-                            <SelectTrigger className="h-7 text-[11px]">
+                            <SelectTrigger className="h-7 max-w-[180px] text-[11px]">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -727,7 +727,7 @@ export function CaseFormPage() {
                         {...register('boundary.startpoint_offset_horz', {
                           valueAsNumber: true,
                         })}
-                        className="h-7 font-mono"
+                        className="h-7 max-w-[120px] font-mono text-[11px]"
                       />
                     </InlineField>
                     <InlineField
@@ -741,7 +741,7 @@ export function CaseFormPage() {
                         {...register('boundary.startpoint_offset_vert', {
                           valueAsNumber: true,
                         })}
-                        className="h-7 font-mono"
+                        className="h-7 max-w-[120px] font-mono text-[11px]"
                       />
                     </InlineField>
                   </div>
@@ -823,7 +823,7 @@ export function CaseFormPage() {
                                       Number.isFinite(v) && v > 0 ? v : null,
                                     )
                                   }}
-                                  className="h-7 font-mono"
+                                  className="h-7 max-w-[120px] font-mono text-[11px]"
                                 />
                               </InlineField>
                             )}
@@ -849,7 +849,7 @@ export function CaseFormPage() {
                         step="0.05"
                         min="0"
                         {...register('seabed.mu', { valueAsNumber: true })}
-                        className="h-7 font-mono"
+                        className="h-7 max-w-[100px] font-mono text-[11px]"
                       />
                     </InlineField>
                     {/* Modo avançado — slope direto */}
@@ -886,7 +886,7 @@ export function CaseFormPage() {
                                       : 0,
                                   )
                                 }}
-                                className="h-7 w-full rounded-md border border-input bg-background px-2 font-mono text-xs tabular-nums"
+                                className="h-7 w-[100px] rounded-md border border-input bg-background px-2 font-mono text-[11px] tabular-nums"
                               />
                             )}
                           />
