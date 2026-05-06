@@ -47,7 +47,7 @@ import {
   DiagnosticsProvider,
   TabValidationCounter,
 } from '@/components/common/FieldValidation'
-import { SegmentEditor } from '@/components/common/SegmentEditor'
+import { SegmentsTable } from '@/components/common/SegmentsTable'
 import {
   SEVERITY_STYLES,
   SolverDiagnosticsCard,
@@ -576,75 +576,23 @@ export function CaseFormPage() {
                 <LineSummaryPanel segments={values.segments ?? []} />
               </div>
               {/*
-               * Layout horizontal v1.0.4: cards em row scroll horizontal,
-               * começando da ESQUERDA. Ordem visual: fairlead → âncora
-               * (espelha leitura do plot). Implementação: ordem natural
-               * do DOM (sem flex-row-reverse) iterando o array em ordem
-               * REVERSA. Botão "+ Adicionar" fica no FINAL do DOM, ou
-               * seja, à direita visualmente (depois de todos os cards).
+               * Layout tabular v1.0.5 (estilo QMoor):
+               *   - linhas = propriedades (Catálogo, Comprimento, Diâmetro,
+               *     Peso submerso, Peso seco)
+               *   - colunas = segmentos individuais
+               *   - Avançado (EA, MBL, Módulo, EA source, μ override,
+               *     Categoria) abre em modal (não expande inline)
+               * Ordem visual fairlead → âncora preservada via reverse
+               * interno em SegmentsTable. Card de altura compacta
+               * (~150-180px), nunca empurra o gráfico abaixo.
                */}
-              <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
-                {segmentsArray.fields
-                  .slice()
-                  .reverse()
-                  .map((field) => {
-                    // mapeia field renderizado → realIdx no array data
-                    const realIdx = segmentsArray.fields.findIndex(
-                      (f) => f.id === field.id,
-                    )
-                    return (
-                      <div
-                        key={field.id}
-                        className="w-[280px] shrink-0"
-                      >
-                        <SegmentEditor
-                          index={realIdx}
-                          total={segmentsArray.fields.length}
-                          control={control}
-                          register={register}
-                          watch={watch}
-                          setValue={setValue}
-                          onMoveUp={
-                            realIdx > 0
-                              ? () =>
-                                  segmentsArray.move(realIdx, realIdx - 1)
-                              : undefined
-                          }
-                          onMoveDown={
-                            realIdx < segmentsArray.fields.length - 1
-                              ? () =>
-                                  segmentsArray.move(realIdx, realIdx + 1)
-                              : undefined
-                          }
-                          onRemove={
-                            segmentsArray.fields.length > 1
-                              ? () => segmentsArray.remove(realIdx)
-                              : undefined
-                          }
-                        />
-                      </div>
-                    )
-                  })}
-                {segmentsArray.fields.length < 10 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-auto w-[200px] shrink-0 gap-1.5 border-dashed text-[11px]"
-                    onClick={() => {
-                      // Adiciona no início do array (idx 0 = âncora side),
-                      // que aparece visualmente à direita pelo render
-                      // reverse acima. Coerente com a label do botão.
-                      const first = segmentsArray.fields[
-                        0
-                      ] as unknown as CaseFormValues['segments'][number]
-                      segmentsArray.prepend({ ...first, length: 100 })
-                    }}
-                  >
-                    + Adicionar (próximo da âncora)
-                  </Button>
-                )}
-              </div>
+              <SegmentsTable
+                control={control}
+                register={register}
+                watch={watch}
+                setValue={setValue}
+                segmentsArray={segmentsArray}
+              />
             </TabsContent>
 
               {/* ───────── Aba Boias ───────── */}
