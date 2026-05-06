@@ -428,6 +428,10 @@ export function CatenaryPlot({
         // demais marcadores e cores de segmento (multi-segmento usa
         // paleta cíclica que pode incluir amarelo/laranja).
         touchdown: '#EF4444',
+        // Cor do casco do vessel host — distinto do surfaceFill (água)
+        // para o trapezoide ficar visível sobre o bloco de água.
+        vesselHull: '#475569',
+        vesselHullFill: 'rgba(71, 85, 105, 0.55)',
       }
     }
     return {
@@ -449,6 +453,8 @@ export function CatenaryPlot({
       buoyIconColor: '#0EA5E9',
       clumpIconColor: '#D97706',
       touchdown: '#DC2626',
+      vesselHull: '#334155',
+      vesselHullFill: 'rgba(51, 65, 85, 0.45)',
     }
   }, [theme])
 
@@ -605,8 +611,8 @@ export function CatenaryPlot({
         x: [xLeft, xRight, xRightBot, xLeftBot, xLeft],
         y: [0, 0, -draft, -draft, 0],
         fill: 'toself',
-        fillcolor: palette.surfaceFill,
-        line: { color: palette.surface, width: 1.2 },
+        fillcolor: palette.vesselHullFill,
+        line: { color: palette.vesselHull, width: 1.5 },
         name: vessel.name,
         hovertemplate:
           `<b>${vessel.name}</b><br>`
@@ -618,6 +624,18 @@ export function CatenaryPlot({
               : '')
           + `Largura aparente (proj) = ${apparent.toFixed(1)} m<extra></extra>`,
         showlegend: false,
+      })
+      // Anotação com nome do vessel logo acima do casco
+      pushTrace({
+        type: 'scatter',
+        mode: 'text',
+        x: [0],
+        y: [Math.max(draft * 0.15, 5)],
+        text: [vessel.name],
+        textfont: { size: 10, color: palette.vesselHull, family: 'Inter' },
+        textposition: 'top center',
+        showlegend: false,
+        hoverinfo: 'skip',
       })
     }
 
@@ -916,6 +934,13 @@ export function CatenaryPlot({
       const clumpX: number[] = []
       const clumpY: number[] = []
       const clumpText: string[] = []
+      // Sprint 2 / Commit 19 — AHVs: navio na superfície (y=0) deslocado
+      // horizontalmente pelo work line. Coletamos posições aqui e
+      // empurramos como layout images logo abaixo (junto com os ícones
+      // de fairlead/âncora).
+      const ahvShipPositions: Array<{
+        x: number; y: number; label: string
+      }> = []
       for (let i = 0; i < attachments.length; i += 1) {
         const att = attachments[i]!
         let idxPlot: number | null = null
@@ -942,6 +967,97 @@ export function CatenaryPlot({
         const px = curve.plotX[idxPlot]
         const py = curve.plotY[idxPlot]
         if (px == null || py == null) continue
+
+        // ── AHV (Anchor Handler Vessel) — Sprint 2 / Commit 19 ──
+        if (att.kind === 'ahv') {
+          const pendSegs =
+            (att as {
+              pendant_segments?: Array<{
+                length: number
+                category?: string | null
+                line_type?: string | null
+              }> | null
+            }).pendant_segments ?? null
+          let workLineLen = 0
+          if (pendSegs && pendSegs.length > 0) {
+            workLineLen = pendSegs.reduce((s, p) => s + p.length, 0)
+          } else {
+            workLineLen =
+              (att as { tether_length?: number | null }).tether_length ?? 0
+          }
+
+          // Posição do navio: superfície (y=0). Horizontal: √(L²−py²).
+          // Direção: cos(heading_deg). heading=0° = +x (away from fairlead).
+          const headingDeg =
+            (att as { ahv_heading_deg?: number | null }).ahv_heading_deg ?? 0
+          const dirSign = Math.cos((headingDeg * Math.PI) / 180) >= 0 ? 1 : -1
+          const verticalDrop = Math.abs(py)
+          const hOffset =
+            workLineLen > verticalDrop
+              ? Math.sqrt(workLineLen ** 2 - verticalDrop ** 2)
+              : 0
+          const shipX = px + dirSign * hOffset
+          const shipY = 0
+
+          const bollardKn =
+            ((att as { ahv_bollard_pull?: number | null }).ahv_bollard_pull
+              ?? 0) / 1000
+          const ahvLabel = att.name
+            ? `AHV ${att.name} (${bollardKn.toFixed(0)} kN @ ${headingDeg.toFixed(0)}°)`
+            : `AHV (${bollardKn.toFixed(0)} kN @ ${headingDeg.toFixed(0)}°)`
+          ahvShipPositions.push({ x: shipX, y: shipY, label: ahvLabel })
+
+          // Work line: multi-trecho colorido se pendant_segments existe,
+          // senão linha única pontilhada.
+          if (workLineLen > 0) {
+            if (pendSegs && pendSegs.length > 0) {
+              const totalL = workLineLen
+              let xCursor = px
+              let yCursor = py
+              for (let k = 0; k < pendSegs.length; k += 1) {
+                const seg = pendSegs[k]!
+                const frac = seg.length / totalL
+                const xNext = xCursor + (shipX - px) * frac
+                const yNext = yCursor + (shipY - py) * frac
+                const cat = seg.category as
+                  | 'Wire' | 'StuddedChain' | 'StudlessChain' | 'Polyester'
+                  | undefined | null
+                const style = cat ? CATEGORY_STYLE[cat] : undefined
+                pushTrace({
+                  type: 'scatter',
+                  mode: 'lines',
+                  x: [xCursor, xNext],
+                  y: [yCursor, yNext],
+                  line: {
+                    color: palette.iconColor,
+                    width: style?.width ? style.width * 0.5 : 1.5,
+                    dash: style?.dash ?? 'dot',
+                  },
+                  name: seg.line_type
+                    ? `${seg.line_type} (${seg.length.toFixed(1)} m)`
+                    : `Trecho ${k + 1} (${seg.length.toFixed(1)} m)`,
+                  showlegend: false,
+                  hoverinfo: 'name',
+                })
+                xCursor = xNext
+                yCursor = yNext
+              }
+            } else {
+              pushTrace({
+                type: 'scatter',
+                mode: 'lines',
+                x: [px, shipX],
+                y: [py, shipY],
+                line: { color: palette.iconColor, width: 1.5, dash: 'dot' },
+                name: ahvLabel,
+                showlegend: false,
+                hoverinfo: 'name',
+              })
+            }
+          }
+          continue
+        }
+
         // F5.6.7 — Tether (pendant): boia fica deslocada PARA CIMA
         // da linha pelo comprimento do pendant; clump fica DESCIDO.
         // Hover marker fica na posição do CORPO (não do ponto de
@@ -1066,6 +1182,20 @@ export function CatenaryPlot({
           hovertemplate: '%{text}<br>x = %{x:.2f} m<br>y = %{y:.2f} m<extra></extra>',
         })
       }
+      // AHV: hover marker invisível na posição do navio (Sprint 2 / Commit 19)
+      if (ahvShipPositions.length > 0) {
+        pushTrace({
+          type: 'scatter',
+          mode: 'markers',
+          x: ahvShipPositions.map((p) => p.x),
+          y: ahvShipPositions.map((p) => p.y),
+          marker: { size: 30, color: 'rgba(0,0,0,0)' },
+          name: 'AHV',
+          text: ahvShipPositions.map((p) => p.label),
+          showlegend: false,
+          hovertemplate: '%{text}<br>x = %{x:.2f} m<br>y = %{y:.2f} m<extra></extra>',
+        })
+      }
     }
 
     // ── Markers de touchdown (todos os pontos de transição) ──
@@ -1164,10 +1294,15 @@ export function CatenaryPlot({
     const ayData = (attTargetPx / plotH) * ySpan
 
     const startpointSvg = getStartpointSvg(startpointType, palette.iconColor)
+    // Sprint 2 / Commit 19 — quando há vessel host completo (LOA+draft),
+    // o trapezoide do casco substitui visualmente o ícone SVG no
+    // fairlead. Suprimir o ícone evita sobreposição/duplicação.
+    const hasFullVessel =
+      vessel != null
+      && vessel.loa != null && vessel.loa > 0
+      && vessel.draft != null && vessel.draft > 0
     const imgs: Record<string, unknown>[] = []
-    // Fase 3 / D7: ícone do startpoint só é desenhado quando o tipo
-    // selecionado tem SVG associado. 'none' omite a layout image.
-    if (startpointSvg != null) {
+    if (startpointSvg != null && !hasFullVessel) {
       imgs.push({
         source: svgDataUri(startpointSvg),
         xref: 'x',
@@ -1218,6 +1353,41 @@ export function CatenaryPlot({
         const px = curve.plotX[idxPlot]
         const py = curve.plotY[idxPlot]
         if (px == null || py == null) continue
+
+        // ── AHV: ícone do navio na superfície (Sprint 2 / Commit 19) ──
+        if (att.kind === 'ahv') {
+          const pendSegs =
+            (att as {
+              pendant_segments?: Array<{ length: number }> | null
+            }).pendant_segments ?? null
+          const workLineLen =
+            pendSegs && pendSegs.length > 0
+              ? pendSegs.reduce((s, p) => s + p.length, 0)
+              : ((att as { tether_length?: number | null }).tether_length ?? 0)
+          const headingDeg =
+            (att as { ahv_heading_deg?: number | null }).ahv_heading_deg ?? 0
+          const dirSign = Math.cos((headingDeg * Math.PI) / 180) >= 0 ? 1 : -1
+          const verticalDrop = Math.abs(py)
+          const hOffset =
+            workLineLen > verticalDrop
+              ? Math.sqrt(workLineLen ** 2 - verticalDrop ** 2)
+              : 0
+          const shipX = px + dirSign * hOffset
+          imgs.push({
+            source: svgDataUri(ahvSvg(palette.iconColor)),
+            xref: 'x',
+            yref: 'y',
+            x: shipX,
+            y: 0,
+            sizex: axData * 1.2,
+            sizey: ayData * 1.2,
+            xanchor: 'center',
+            yanchor: 'middle',
+            layer: 'above',
+          })
+          continue
+        }
+
         // F5.6.7 — Tether (pendant) opcional. Quando informado,
         // desloca o ícone do corpo VERTICALMENTE pelo comprimento
         // do pendant: boia sobe (em direção à superfície), clump
