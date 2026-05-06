@@ -234,7 +234,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
             type="number"
             step="1"
             {...register(p('length'), { valueAsNumber: true })}
-            className="h-8 font-mono"
+            className="h-7 font-mono"
           />
         </InlineLabeled>
         <InlineLabeled label="Diâmetro" unit="m">
@@ -243,7 +243,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
             step="0.001"
             min="0"
             {...register(p('diameter'), { valueAsNumber: true })}
-            className="h-8 font-mono"
+            className="h-7 font-mono"
           />
         </InlineLabeled>
         <InlineLabeled label="Categoria" className="col-span-2">
@@ -255,7 +255,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
                 value={(field.value as string | undefined) ?? undefined}
                 onValueChange={field.onChange}
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger className="h-7 text-[11px]">
                   <SelectValue placeholder="—" />
                 </SelectTrigger>
                 <SelectContent>
@@ -278,7 +278,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
                 onChange={field.onChange}
                 quantity="force_per_m"
                 digits={2}
-                className="h-8"
+                className="h-7"
               />
             )}
           />
@@ -293,7 +293,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
                 onChange={field.onChange}
                 quantity="force_per_m"
                 digits={2}
-                className="h-8"
+                className="h-7"
               />
             )}
           />
@@ -308,7 +308,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
                 onChange={field.onChange}
                 quantity="force"
                 digits={2}
-                className="h-8"
+                className="h-7"
               />
             )}
           />
@@ -323,7 +323,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
                 onChange={field.onChange}
                 quantity="force"
                 digits={2}
-                className="h-8"
+                className="h-7"
               />
             )}
           />
@@ -333,14 +333,11 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
             type="number"
             step="1e9"
             {...register(p('modulus'), { valueAsNumber: true })}
-            className="h-8 font-mono"
+            className="h-7 font-mono"
           />
         </InlineLabeled>
-        {/* ─── Fase 1: EA source + atrito per-segmento ─────────────── */}
-        <InlineLabeled
-          label="EA source"
-          className="col-span-2"
-        >
+        {/* ─── Fase 1: EA source + atrito per-segmento (lado a lado) ─ */}
+        <InlineLabeled label="EA source">
           <Controller
             control={control}
             name={p('ea_source')}
@@ -349,7 +346,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
                 value={(field.value as string | undefined) ?? 'qmoor'}
                 onValueChange={field.onChange}
               >
-                <SelectTrigger className="h-8" title="EA estático (QMoor) ou dinâmico (GMoor — modelo NREL/MoorPy). Default QMoor.">
+                <SelectTrigger className="h-7 text-[11px]" title="EA estático (QMoor) ou dinâmico (GMoor — modelo NREL/MoorPy). Default QMoor.">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -360,11 +357,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
             )}
           />
         </InlineLabeled>
-        <InlineLabeled
-          label="μ override"
-          unit=""
-          className="col-span-2"
-        >
+        <InlineLabeled label="μ override" unit="">
           <Input
             type="number"
             step="0.05"
@@ -379,7 +372,7 @@ export function SegmentEditor<T extends FieldValues = CaseFormValues>({
               setValueAs: (v) =>
                 v === '' || v == null ? null : Number(v),
             })}
-            className="h-8 font-mono"
+            className="h-7 font-mono"
           />
         </InlineLabeled>
       </div>
