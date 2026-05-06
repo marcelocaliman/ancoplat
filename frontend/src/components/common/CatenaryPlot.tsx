@@ -1915,7 +1915,12 @@ export function CatenaryPlot({
   return (
     <div ref={plotContainerRef} className="relative h-full w-full">
       {/* Fase 3 / D9: toggles do plot no canto superior direito. */}
-      <div className="pointer-events-none absolute right-1 top-1 z-20 flex gap-1">
+      {/* Controlbar dos toggles do plot. Posicionado em `top-1` à
+          esquerda do modebar Plotly (que fica fixo em `top-1 right-1`
+          com ícone de câmera/download). Container com fundo discreto
+          + gap-1.5 para visual de "barra de ferramentas" coerente
+          em vez de botões soltos. */}
+      <div className="pointer-events-none absolute right-12 top-1 z-20 flex gap-1.5 rounded-md border border-border/40 bg-background/60 p-0.5 backdrop-blur-sm">
         <PlotToggleButton
           icon={<Maximize2 className="h-3 w-3" />}
           active={equalAspectLocal}
@@ -2080,11 +2085,10 @@ function PlotToggleButton({
       onClick={onToggle}
       title={tooltip}
       className={cn(
-        'pointer-events-auto flex h-6 w-6 items-center justify-center rounded',
-        'border border-border/40 backdrop-blur-sm transition-colors',
+        'pointer-events-auto flex h-6 w-6 items-center justify-center rounded transition-colors',
         active
-          ? 'bg-foreground/15 text-foreground'
-          : 'bg-background/60 text-muted-foreground hover:bg-foreground/10',
+          ? 'bg-primary/20 text-primary ring-1 ring-primary/40'
+          : 'text-muted-foreground hover:bg-foreground/10 hover:text-foreground',
       )}
     >
       {icon}
