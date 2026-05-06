@@ -564,7 +564,7 @@ export function CaseFormPage() {
              * scroll interno se conteúdo exceder — garante que plot
              * abaixo SEMPRE tem ≥ 60% da altura da viewport.
              */}
-            <div className="grid max-h-[300px] overflow-y-auto">
+            <div className="grid max-h-[340px] overflow-y-auto">
               {/* ───────── Aba Linha: agregados + segmentos ───────── */}
               <TabsContent
                 forceMount
@@ -575,11 +575,20 @@ export function CaseFormPage() {
               <div className="mb-2">
                 <LineSummaryPanel segments={values.segments ?? []} />
               </div>
-              <div className="flex flex-wrap gap-2">
+              {/*
+               * Layout horizontal: cards em row scroll horizontal.
+               * Decisão UX (2026-05-05 / D7): ordem visual de
+               * fairlead → âncora (esquerda → direita), espelhando
+               * a leitura natural do plot que tem fairlead à esquerda.
+               * Implementado via flex-row-reverse — DOM mantém ordem
+               * natural [seg0=anchor, ..., segN=fairlead, addBtn] mas
+               * visual fica [addBtn, segN=fairlead, ..., seg0=anchor].
+               */}
+              <div className="flex flex-row-reverse flex-nowrap gap-2 overflow-x-auto pb-1">
                 {segmentsArray.fields.map((field, idx) => (
                   <div
                     key={field.id}
-                    className="min-w-[280px] max-w-[360px] flex-1"
+                    className="w-[300px] shrink-0"
                   >
                     <SegmentEditor
                       index={idx}
@@ -611,7 +620,7 @@ export function CaseFormPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-auto min-h-[44px] min-w-[280px] max-w-[360px] flex-1 gap-1.5 border-dashed text-[11px]"
+                    className="h-auto w-[200px] shrink-0 gap-1.5 border-dashed text-[11px]"
                     onClick={() => {
                       const last = segmentsArray.fields[
                         segmentsArray.fields.length - 1
@@ -619,7 +628,7 @@ export function CaseFormPage() {
                       segmentsArray.append({ ...last, length: 100 })
                     }}
                   >
-                    + Adicionar segmento (próximo do fairlead)
+                    + Adicionar (próximo do fairlead)
                   </Button>
                 )}
               </div>
