@@ -455,7 +455,7 @@ export function CaseFormPage() {
               <Input
                 {...register('name')}
                 placeholder="ex.: BC-01 catenária suspensa"
-                className="h-8"
+                className="h-7"
               />
             </InlineField>
             <Button
@@ -463,7 +463,7 @@ export function CaseFormPage() {
               variant="outline"
               size="sm"
               onClick={() => setNotesOpen((v) => !v)}
-              className="h-8 gap-1.5 text-[11px]"
+              className="h-7 gap-1.5 text-[11px]"
               title={hasNotes ? 'Notas preenchidas' : 'Adicionar notas'}
             >
               <FileText
@@ -503,8 +503,8 @@ export function CaseFormPage() {
         {/* ───── Coluna 1: Tabs com inputs físicos (scroll interno) ───── */}
         <Card className="flex w-[420px] shrink-0 flex-col overflow-hidden xl:w-[480px]">
           <Tabs defaultValue="linha" className="flex min-h-0 flex-1 flex-col">
-            <TabsList className="mx-3 mt-2 w-fit">
-              <TabsTrigger value="linha" className="gap-1.5">
+            <TabsList className="mx-2 mt-1.5 h-auto w-fit p-0.5">
+              <TabsTrigger value="linha" className="h-6 gap-1 px-2 text-[11px]">
                 <Wrench className="h-3.5 w-3.5" />
                 Linha
                 {segmentsArray.fields.length > 1 && (
@@ -517,7 +517,7 @@ export function CaseFormPage() {
                 )}
                 <TabValidationCounter prefix="segments[" />
               </TabsTrigger>
-              <TabsTrigger value="boias" className="gap-1.5">
+              <TabsTrigger value="boias" className="h-6 gap-1 px-2 text-[11px]">
                 <Waves className="h-3.5 w-3.5" />
                 Boias
                 {buoyCount > 0 && (
@@ -530,7 +530,7 @@ export function CaseFormPage() {
                 )}
                 <TabValidationCounter prefix="attachments[" />
               </TabsTrigger>
-              <TabsTrigger value="clumps" className="gap-1.5">
+              <TabsTrigger value="clumps" className="h-6 gap-1 px-2 text-[11px]">
                 <Anchor className="h-3.5 w-3.5" />
                 Clumps
                 {clumpCount > 0 && (
@@ -542,13 +542,13 @@ export function CaseFormPage() {
                   </Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="ambiente" className="gap-1.5">
+              <TabsTrigger value="ambiente" className="h-6 gap-1 px-2 text-[11px]">
                 <Mountain className="h-3.5 w-3.5" />
                 Ambiente
                 <TabValidationCounter prefix="boundary." />
                 <TabValidationCounter prefix="seabed." />
               </TabsTrigger>
-              <TabsTrigger value="analise" className="gap-1.5">
+              <TabsTrigger value="analise" className="h-6 gap-1 px-2 text-[11px]">
                 <Sigma className="h-3.5 w-3.5" />
                 Análise
               </TabsTrigger>
