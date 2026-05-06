@@ -59,6 +59,7 @@ from backend.api.services.moor_service import (
 )
 from backend.solver.types import (
     AHVInstall,
+    WorkWireSpec,
     BoundaryConditions,
     CriteriaProfile,
     CurrentLayer,
@@ -941,11 +942,78 @@ def _parse_boundary(
                 stern_angle = float(sa)
         except (ValueError, TypeError):
             stern_angle = 0.0
+        # Sprint 4 / Commit 38: detecta Work Wire opcional no JSON QMoor.
+        # Chaves canônicas esperadas: `bd.workWire` (dict completo) ou
+        # `bd.workWireType` + `bd.workWireLength`. Se ausentes, work_wire
+        # fica None (retro-compat Sprint 2). User pode habilitar Tier C
+        # manualmente via UI (WorkWireEditor — Commit 39).
+        work_wire_spec: Optional[WorkWireSpec] = None
+        ww_data = bd.get("workWire")
+        if isinstance(ww_data, dict):
+            ww_length = _parse_q(ww_data.get("length"), "length", unit_system)
+            ww_ea = _parse_q(ww_data.get("EA") or ww_data.get("ea"),
+                             "force", unit_system)
+            ww_w = _parse_q(ww_data.get("wetWeight") or ww_data.get("w"),
+                            "weight_per_length", unit_system)
+            ww_mbl = _parse_q(ww_data.get("MBL") or ww_data.get("mbl"),
+                              "force", unit_system)
+            ww_type_name = _get_str(ww_data, "lineType") or _get_str(
+                ww_data, "name"
+            )
+            ww_diameter = _parse_q(ww_data.get("diameter"), "length",
+                                   unit_system)
+            # WorkWireSpec exige target_horz_distance set no AHVInstall
+            # (validator Pydantic). Se ausente, ignoramos work_wire.
+            if (
+                ww_length and ww_ea and ww_w is not None and ww_mbl
+                and horz_distance_qmoor is not None
+            ):
+                try:
+                    work_wire_spec = WorkWireSpec(
+                        length=ww_length,
+                        EA=ww_ea,
+                        w=ww_w,
+                        MBL=ww_mbl,
+                        line_type=ww_type_name,
+                        diameter=ww_diameter,
+                    )
+                    log.append({
+                        "field": (
+                            f"profiles[{line_idx}.{prof_idx}]"
+                            ".boundary.workWire"
+                        ),
+                        "old": None,
+                        "new": (
+                            f"WorkWireSpec(L={ww_length:.1f}m, "
+                            f"EA={ww_ea/1e6:.0f} MN, "
+                            f"w={ww_w:.1f} N/m, MBL={ww_mbl/1e6:.1f} MN)"
+                        ),
+                        "reason": (
+                            "D023: Work Wire detectado no JSON QMoor 0.8.0 "
+                            "— Tier C físico ativado. Solver modela cabo "
+                            "elástico real entre AHV deck e ponto de pega."
+                        ),
+                    })
+                except Exception as e:  # noqa: BLE001
+                    log.append({
+                        "field": (
+                            f"profiles[{line_idx}.{prof_idx}]"
+                            ".boundary.workWire"
+                        ),
+                        "old": str(ww_data),
+                        "new": "ignorado",
+                        "reason": (
+                            f"D023b: WorkWireSpec inválido ({type(e).__name__}: "
+                            f"{e}) — fallback Sprint 2 (sem work_wire)."
+                        ),
+                    })
+
         ahv_install = AHVInstall(
             bollard_pull=bollard_pull,
             deck_level_above_swl=deck_level,
             stern_angle_deg=stern_angle,
             target_horz_distance=horz_distance_qmoor,
+            work_wire=work_wire_spec,
         )
         # D021 — diagnóstico informativo para o user
         log.append({

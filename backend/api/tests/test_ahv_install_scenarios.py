@@ -235,3 +235,103 @@ def test_fairleadTension_explicito_tem_precedencia() -> None:
     assert case.boundary.ahv_install.bollard_pull == pytest.approx(
         100.0 * 9806.65, rel=1e-3,
     )
+
+
+# ──────────────────────────────────────────────────────────────────
+# Sprint 4 / Commit 38 — parser detecta Work Wire (Tier C)
+# ──────────────────────────────────────────────────────────────────
+
+
+def _payload_with_work_wire(
+    *,
+    ww_length: str | None = "200.0 m",
+    ww_ea: str | None = "55000.0 te",
+    ww_w: str | None = "17.34 kgf / m",
+    ww_mbl: str | None = "660 te",
+    horz_distance: str | None = "1828.8 m",
+) -> dict:
+    """Constrói payload AHV com work_wire opcional no boundary."""
+    payload = _payload(
+        "Hookup Profiles", "ML3", startpoint_type="AHV",
+        fairlead_tension="100.0 te",
+        horz_distance=horz_distance or "1828.8 m",
+        input_param="Tension",
+    )
+    if any([ww_length, ww_ea, ww_w, ww_mbl]):
+        ww = {}
+        if ww_length:
+            ww["length"] = ww_length
+        if ww_ea:
+            ww["EA"] = ww_ea
+        if ww_w:
+            ww["wetWeight"] = ww_w
+        if ww_mbl:
+            ww["MBL"] = ww_mbl
+        ww["lineType"] = "IWRCEIPS_76mm"
+        ww["diameter"] = "76 mm"
+        payload["mooringLines"][0]["profiles"][0]["boundary"]["workWire"] = ww
+    return payload
+
+
+def test_parser_popula_work_wire_quando_json_traz_workWire() -> None:
+    """JSON QMoor 0.8.0 com `boundary.workWire` → WorkWireSpec popula AHVInstall.work_wire."""
+    payload = _payload_with_work_wire()
+    cases, log = parse_qmoor_v0_8(payload)
+    case = cases[0]
+    assert case.boundary.ahv_install is not None
+    ww = case.boundary.ahv_install.work_wire
+    assert ww is not None, "WorkWireSpec não foi populado"
+    assert ww.length == pytest.approx(200.0, rel=1e-9)
+    # 55000 te × 9806.65 = 5.39e8 N (próximo de 5.5e8)
+    assert ww.EA > 5.0e8
+    assert ww.MBL > 6.0e6
+    assert ww.line_type == "IWRCEIPS_76mm"
+    assert ww.diameter == pytest.approx(0.076, rel=1e-3)
+    # D023 emitido
+    assert any("D023" in e.get("reason", "") for e in log)
+
+
+def test_parser_ignora_work_wire_invalido() -> None:
+    """workWire incompleto (length ausente) → ignorado, sem D023."""
+    payload = _payload_with_work_wire(ww_length=None)  # length ausente
+    cases, log = parse_qmoor_v0_8(payload)
+    case = cases[0]
+    assert case.boundary.ahv_install is not None
+    assert case.boundary.ahv_install.work_wire is None
+    assert not any("D023:" in e.get("reason", "") for e in log)
+
+
+def test_parser_sem_workWire_preserva_sprint2() -> None:
+    """Retro-compat: sem `workWire` no JSON, ahv_install.work_wire é None."""
+    payload = _payload(
+        "Hookup Profiles", "ML3", startpoint_type="AHV",
+        fairlead_tension="100.0 te", input_param="Tension",
+    )
+    cases, log = parse_qmoor_v0_8(payload)
+    case = cases[0]
+    assert case.boundary.ahv_install is not None
+    assert case.boundary.ahv_install.work_wire is None
+    # Sem D023 emitido (não há work_wire para detectar).
+    assert not any("D023" in e.get("reason", "") for e in log)
+
+
+def test_parser_work_wire_sem_target_horz_distance_e_ignorado() -> None:
+    """work_wire requer target_horz_distance — sem horz_distance, ignora."""
+    # Constrói payload sem horz_distance (forçando target_horz_distance=None).
+    payload = _payload(
+        "Hookup Profiles", "ML3", startpoint_type="AHV",
+        fairlead_tension="100.0 te", input_param="Tension",
+    )
+    # Remove horzDistance e adiciona workWire
+    bd = payload["mooringLines"][0]["profiles"][0]["boundary"]
+    bd.pop("horzDistance", None)
+    bd["workWire"] = {
+        "length": "200.0 m", "EA": "55000.0 te",
+        "wetWeight": "17.34 kgf / m", "MBL": "660 te",
+        "lineType": "IWRCEIPS_76mm",
+    }
+    cases, _ = parse_qmoor_v0_8(payload)
+    case = cases[0]
+    assert case.boundary.ahv_install is not None
+    # work_wire ignorado porque target_horz_distance é None
+    assert case.boundary.ahv_install.work_wire is None
