@@ -408,7 +408,7 @@ export function CaseFormPage() {
   return (
     <DiagnosticsProvider diagnostics={allDiagnostics}>
       <Topbar breadcrumbs={breadcrumbs} actions={actions} />
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3">
         {/* F9 / Q2 — banner explicativo quando sample preview foi
             carregado via /samples (state.templateId aponta para um
             template com requirePhase). Solver vai retornar erro
@@ -492,9 +492,17 @@ export function CaseFormPage() {
           )}
         </Card>
 
-        {/* ───── Linha 2: tabs com inputs físicos do problema ───── */}
-        <Card className="shrink-0 overflow-hidden">
-          <Tabs defaultValue="linha" className="flex flex-col">
+        {/* ═════════════════════════════════════════════════════════════
+            Layout 3-pane profissional (padrão CAD/FEA/OrcaFlex):
+              Coluna 1 (esquerda) — Tabs + forms (largura fixa, scroll interno)
+              Coluna 2 (centro)   — Plot dominante (flex-1, ocupa todo espaço)
+              Coluna 3 (direita)  — KPIs/metrics (largura fixa)
+            Em viewport < 1280px, KPIs colapsam horizontalmente abaixo do plot.
+        ═════════════════════════════════════════════════════════════ */}
+        <div className="flex min-h-0 flex-1 gap-2">
+        {/* ───── Coluna 1: Tabs com inputs físicos (scroll interno) ───── */}
+        <Card className="flex w-[420px] shrink-0 flex-col overflow-hidden xl:w-[480px]">
+          <Tabs defaultValue="linha" className="flex min-h-0 flex-1 flex-col">
             <TabsList className="mx-3 mt-2 w-fit">
               <TabsTrigger value="linha" className="gap-1.5">
                 <Wrench className="h-3.5 w-3.5" />
@@ -548,12 +556,12 @@ export function CaseFormPage() {
 
             {/*
              * Stack das abas: todos os <TabsContent> são forceMount + grid
-             * stacked (col/row-start-1) para que o card sempre tome a altura
-             * do maior conteúdo (Linha). Inativas ficam invisíveis e sem
-             * pointer events, mas continuam contribuindo p/ o layout. Isso
-             * mantém a posição do gráfico estável ao trocar de aba.
+             * stacked (col/row-start-1) para preservar estado do form ao
+             * trocar de aba. Wrapper agora tem scroll interno (min-h-0 +
+             * overflow-y-auto) — altura é controlada pelo Card pai
+             * (3-pane shell), não pelo conteúdo, evitando esmagar o plot.
              */}
-            <div className="grid">
+            <div className="grid min-h-0 flex-1 overflow-y-auto">
               {/* ───────── Aba Linha: agregados + segmentos ───────── */}
               <TabsContent
                 forceMount
@@ -1042,8 +1050,7 @@ export function CaseFormPage() {
           </Tabs>
         </Card>
 
-        {/* ───── Middle: gráfico (esquerda) + métricas empilhadas (direita) ───── */}
-        <div className="flex min-h-0 flex-1 gap-3">
+        {/* ───── Coluna 2: Plot dominante (centro, ocupa todo espaço livre) ───── */}
           <Card className="min-h-0 flex-1 overflow-hidden">
             <CardContent className="h-full p-1">
               <PlotArea
@@ -1076,6 +1083,7 @@ export function CaseFormPage() {
               />
             </CardContent>
           </Card>
+        {/* ───── Coluna 3: KPIs/metrics (largura fixa, scroll interno) ───── */}
           <MetricsColumn
             result={previewQuery.data}
             previewReady={previewReady}
