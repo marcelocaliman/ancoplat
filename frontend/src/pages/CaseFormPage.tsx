@@ -10,6 +10,7 @@ import {
   Loader2,
   Mountain,
   Save,
+  Ship,
   Sigma,
   Waves,
   Wrench,
@@ -55,6 +56,7 @@ import {
   type SolverDiagnostic,
 } from '@/components/common/SolverDiagnosticsCard'
 import { TemplatePicker } from '@/components/common/TemplatePicker'
+import { VesselEditor } from '@/components/common/VesselEditor'
 import { getTemplate, type CaseTemplate } from '@/lib/caseTemplates'
 import { UnitInput } from '@/components/common/UnitInput'
 import { ValidationLogCard } from '@/components/common/ValidationLogCard'
@@ -557,6 +559,19 @@ export function CaseFormPage() {
                 <TabValidationCounter prefix="boundary." />
                 <TabValidationCounter prefix="seabed." />
               </TabsTrigger>
+              <TabsTrigger value="vessel" className="h-6 gap-1 px-2 text-[11px]">
+                <Ship className="h-3.5 w-3.5" />
+                Vessel
+                {values.vessel != null && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-0.5 h-4 px-1 text-[10px]"
+                  >
+                    1
+                  </Badge>
+                )}
+                <TabValidationCounter prefix="vessel." />
+              </TabsTrigger>
               <TabsTrigger value="analise" className="h-6 gap-1 px-2 text-[11px]">
                 <Sigma className="h-3.5 w-3.5" />
                 Análise
@@ -849,6 +864,21 @@ export function CaseFormPage() {
                 </EnvCard>
               </div>
             </TabsContent>
+
+              {/* ───────── Aba Vessel (Sprint 2 / Commit 15) ───────── */}
+              <TabsContent
+                forceMount
+                value="vessel"
+                className="col-start-1 row-start-1 m-0 px-3 pb-3 pt-2 data-[state=inactive]:invisible data-[state=inactive]:pointer-events-none"
+              >
+                <div className="max-w-3xl">
+                  <VesselEditor
+                    control={control}
+                    setValue={setValue}
+                    vessel={values.vessel ?? null}
+                  />
+                </div>
+              </TabsContent>
 
               {/* ───────── Aba Análise: modo + input + critério ───────── */}
               <TabsContent

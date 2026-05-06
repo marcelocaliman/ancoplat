@@ -211,6 +211,38 @@ export const caseInputSchema = z
       .max(20, 'Até 20 attachments por linha.')
       .optional()
       .default([]),
+    // Sprint 1 — Vessel (host platform): metadado puro, solver ignora.
+    // Editor manual via VesselEditor; QMoor import popula automaticamente.
+    vessel: z
+      .object({
+        name: z.string().trim().min(1, 'Nome do vessel obrigatório').max(120),
+        vessel_type: z.string().trim().max(80).nullable().optional(),
+        displacement: z.number().positive().nullable().optional(),
+        loa: z.number().positive().nullable().optional(),
+        breadth: z.number().positive().nullable().optional(),
+        draft: z.number().positive().nullable().optional(),
+        heading_deg: z.number().min(0).lt(360).nullable().optional(),
+        operator: z.string().trim().max(120).nullable().optional(),
+      })
+      .nullable()
+      .optional(),
+    // Metadata operacional + perfil de corrente (Sprint 1) — ainda sem
+    // editor inline; preservados via .moor JSON ou import QMoor 0.8.0.
+    metadata: z.record(z.string(), z.string()).nullable().optional(),
+    current_profile: z
+      .object({
+        layers: z.array(
+          z.object({
+            depth: z.number().min(0),
+            speed: z.number().min(0),
+            heading_deg: z.number().min(0).lt(360).optional(),
+          }),
+        ),
+        drag_coefficient: z.number().positive().nullable().optional(),
+        water_density: z.number().positive().nullable().optional(),
+      })
+      .nullable()
+      .optional(),
   })
   .refine(
     (v) =>
@@ -269,4 +301,7 @@ export const EMPTY_CASE: CaseFormValues = {
   criteria_profile: 'MVP_Preliminary',
   user_defined_limits: null,
   attachments: [],
+  vessel: null,
+  metadata: null,
+  current_profile: null,
 }
