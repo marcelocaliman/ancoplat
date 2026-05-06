@@ -182,7 +182,7 @@ function AttachmentCard({
   return (
     <EnvCard
       title={`${labelKind} ${displayIdx + 1}`}
-      className="w-[260px]"
+      className="w-[300px]"
       trailing={
         <div className="flex items-center">
           <Button
@@ -262,7 +262,7 @@ function AttachmentCard({
               value={(field.value as number | null) ?? 0}
               onChange={(e) => field.onChange(parseFloat(e.target.value || '0'))}
               placeholder="0"
-              className="h-7 w-[80px] font-mono text-[11px]"
+              className="h-7 w-[110px] font-mono text-[11px]"
             />
           )}
         />
@@ -362,7 +362,7 @@ function ForceField({
               }}
               quantity="force"
               digits={2}
-              className="h-7 w-[80px]"
+              className="h-7 w-[110px]"
               inputClassName="text-[11px] py-0.5"
             />
           )}
@@ -476,7 +476,7 @@ function PositionField({
                         : newSfl
                     field.onChange(newSanc)
                   }}
-                  className="h-7 w-[80px] font-mono text-[11px]"
+                  className="h-7 w-[110px] font-mono text-[11px]"
                 />
               )
             }}
@@ -495,7 +495,7 @@ function PositionField({
                 onChange={(e) =>
                   field.onChange(parseInt(e.target.value || '0', 10))
                 }
-                className="h-7 w-[80px] font-mono text-[11px]"
+                className="h-7 w-[110px] font-mono text-[11px]"
                 title={`Junção ${field.value} de ${maxJunction}`}
               />
             )}

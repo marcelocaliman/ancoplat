@@ -686,7 +686,7 @@ export function CaseFormPage() {
                       {...register('boundary.startpoint_depth', {
                         valueAsNumber: true,
                       })}
-                      className="h-7 w-[80px] font-mono text-[11px]"
+                      className="h-7 w-[110px] font-mono text-[11px]"
                     />
                   </EnvField>
                   <EnvField label="Tipo">
@@ -698,7 +698,7 @@ export function CaseFormPage() {
                           value={(field.value as string | undefined) ?? 'semisub'}
                           onValueChange={field.onChange}
                         >
-                          <SelectTrigger className="h-7 w-[80px] text-[11px]">
+                          <SelectTrigger className="h-7 w-[110px] text-[11px]">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -718,7 +718,7 @@ export function CaseFormPage() {
                       {...register('boundary.startpoint_offset_horz', {
                         valueAsNumber: true,
                       })}
-                      className="h-7 w-[80px] font-mono text-[11px]"
+                      className="h-7 w-[110px] font-mono text-[11px]"
                     />
                   </EnvField>
                   <EnvField label="Offset vertical" unit="m">
@@ -728,7 +728,7 @@ export function CaseFormPage() {
                       {...register('boundary.startpoint_offset_vert', {
                         valueAsNumber: true,
                       })}
-                      className="h-7 w-[80px] font-mono text-[11px]"
+                      className="h-7 w-[110px] font-mono text-[11px]"
                     />
                   </EnvField>
                 </EnvCard>
@@ -792,7 +792,7 @@ export function CaseFormPage() {
                                       Number.isFinite(v) && v > 0 ? v : null,
                                     )
                                   }}
-                                  className="h-7 w-[80px] font-mono text-[11px]"
+                                  className="h-7 w-[110px] font-mono text-[11px]"
                                 />
                               </EnvField>
                             )}
@@ -811,7 +811,7 @@ export function CaseFormPage() {
                       step="0.05"
                       min="0"
                       {...register('seabed.mu', { valueAsNumber: true })}
-                      className="h-7 w-[80px] font-mono text-[11px]"
+                      className="h-7 w-[110px] font-mono text-[11px]"
                     />
                   </EnvField>
                   {/* Slope direto: sempre visível em vez de collapsible —
@@ -838,7 +838,7 @@ export function CaseFormPage() {
                               Number.isFinite(deg) ? (deg * Math.PI) / 180 : 0,
                             )
                           }}
-                          className="h-7 w-[80px] font-mono text-[11px]"
+                          className="h-7 w-[110px] font-mono text-[11px]"
                         />
                       </EnvField>
                     )}

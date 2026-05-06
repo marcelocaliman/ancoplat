@@ -24,7 +24,7 @@ export function EnvCard({ title, trailing, className, children }: EnvCardProps) 
     <Card
       className={cn(
         'shrink-0 border-primary/20 bg-primary/[0.04] shadow-sm',
-        'w-[260px]',
+        'w-[300px]',
         className,
       )}
     >
