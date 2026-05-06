@@ -5,6 +5,7 @@ import {
   type Path,
   type UseFormSetValue,
 } from 'react-hook-form'
+import { LineTypePicker } from '@/components/common/LineTypePicker'
 import { UnitInput } from '@/components/common/UnitInput'
 import {
   Dialog,
@@ -195,7 +196,55 @@ export function AttachmentAdvancedDialog({
             </>
           )}
 
-          <Field label="Pendant — material">
+          <Field label="Pendant — cabo (catálogo)" className="col-span-2">
+            <Controller
+              control={control}
+              name={p('pendant_line_type')}
+              render={({ field: fieldType }) => (
+                <Controller
+                  control={control}
+                  name={p('pendant_diameter')}
+                  render={({ field: fieldDiam }) => (
+                    <LineTypePicker
+                      // Constrói LineTypeOutput sintético a partir dos
+                      // 2 campos persistidos (line_type + diameter).
+                      // Quando o usuário seleciona, autopreenche ambos;
+                      // quando limpa, zera ambos.
+                      value={
+                        fieldType.value
+                          ? ({
+                              id: -1,
+                              line_type: String(fieldType.value),
+                              category: 'Wire',
+                              diameter:
+                                (fieldDiam.value as number | null) ?? 0,
+                              break_strength: 0,
+                              wet_weight: 0,
+                              dry_weight: 0,
+                              modulus: 0,
+                              seabed_friction_cf: 0,
+                              data_source: 'manual',
+                            } as never)
+                          : null
+                      }
+                      onChange={(lt) => {
+                        if (lt == null) {
+                          fieldType.onChange(null)
+                          fieldDiam.onChange(null)
+                          return
+                        }
+                        fieldType.onChange(lt.line_type)
+                        fieldDiam.onChange(lt.diameter)
+                      }}
+                      className="h-7"
+                    />
+                  )}
+                />
+              )}
+            />
+          </Field>
+
+          <Field label="Pendant — material (manual)">
             <Controller
               control={control}
               name={p('pendant_line_type')}
@@ -204,7 +253,7 @@ export function AttachmentAdvancedDialog({
                   type="text"
                   value={(field.value as string | null) ?? ''}
                   onChange={(e) => field.onChange(e.target.value || null)}
-                  placeholder="ex: IWRCEIPS"
+                  placeholder="ou texto livre"
                   className="h-7 text-[11px]"
                   maxLength={80}
                 />

@@ -38,6 +38,26 @@ export const lineAttachmentSchema = z
     buoy_weight_in_air: z.number().min(0).nullable().optional(),
     pendant_line_type: z.string().trim().max(80).nullable().optional(),
     pendant_diameter: z.number().positive().nullable().optional(),
+    // Sprint 1 / Commit 2 — pendant multi-trecho (até 5). Quando
+    // não-vazio, é a representação autoritativa do pendant; campos
+    // pendant_line_type/pendant_diameter ficam como cache do trecho 0.
+    pendant_segments: z
+      .array(
+        z.object({
+          length: z.number().positive(),
+          line_type: z.string().trim().max(80).nullable().optional(),
+          category: z.string().nullable().optional(),
+          diameter: z.number().positive().nullable().optional(),
+          w: z.number().positive().nullable().optional(),
+          dry_weight: z.number().positive().nullable().optional(),
+          EA: z.number().positive().nullable().optional(),
+          MBL: z.number().positive().nullable().optional(),
+          material_label: z.string().trim().max(120).nullable().optional(),
+        }),
+      )
+      .max(5, 'Máximo 5 trechos no pendant.')
+      .nullable()
+      .optional(),
     // F6 / Q4 — rastreabilidade ao catálogo de boias. Não-autoritativo
     // em runtime: solver ignora; serve apenas para auditoria.
     buoy_catalog_id: z.number().int().min(1).nullable().optional(),
