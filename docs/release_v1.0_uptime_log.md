@@ -254,18 +254,78 @@ prometida.
 
 ---
 
-## Gate 9 — Tag v1.0.0 ⏳ EXECUTANDO
+## Gate 9 — Tag v1.0.0 ✅
 
-**Status:** sendo executado mediante override explícito do Gate 8.
+**Timestamp:** 2026-05-06T01:38:00Z (aprox.)
 
-Tag `v1.0.0` annotated apontando para `6d86021` (commit exato em
-produção). Comando que será executado:
-```bash
-git tag -a v1.0.0 6d86021 -m "AncoPlat v1.0.0 — primeiro release público estável"
-git push origin v1.0.0
+**Tag annotated** apontando para commit `6d86021` (estado de produção).
+
+**Evidências de validação:**
+
+```
+$ git tag -l v1.0.0
+v1.0.0
+
+$ git rev-list -n 1 v1.0.0
+6d8602108da43eaa28601c3e8f73c2223438c746
+
+$ git ls-remote --tags origin | grep "v1.0.0$\|v1.0.0\^"
+ff827adadb737811b2fc4241718e382b43bd46f8  refs/tags/v1.0.0
+6d8602108da43eaa28601c3e8f73c2223438c746  refs/tags/v1.0.0^{}
 ```
 
-Evidências registradas após execução abaixo.
+✅ Tag annotated no remote, apontando para o commit exato em
+produção (`6d86021`). Mensagem do tag inclui referência ao override
+do Gate 8 para auditoria.
+
+---
+
+## Gate 10 — GitHub release ✅
+
+**Timestamp:** 2026-05-06T01:39:00Z (aprox.)
+
+**URL:** https://github.com/marcelocaliman/ancoplat/releases/tag/v1.0.0
+
+**Conteúdo do release:**
+- Title: "AncoPlat v1.0.0 — Primeiro release público estável"
+- Tag: `v1.0.0` (annotated, →`6d86021`)
+- Marcado como **"Latest release"** (`--latest`)
+- Body completo com:
+  - Sumário do release + paridade total com QMoor 0.8.5
+  - Seção ⚠ Mudanças numéricas com hashes + tags de origem
+  - Features novas em v1.0
+  - Performance v1.0 (números reais)
+  - Decisões de escopo fechadas (i18n, F12 etc.)
+  - Migração v0.x → v1.0
+  - 14 pendências v1.1 não-bloqueantes
+  - Links para docs canônicas
+  - Notas operacionais (URL produção, tag âncora, backup, snapshot)
+  - **Honestidade:** seção "Validação executada" registra
+    explicitamente o override do Gate 8 com link para este log.
+
+✅ GitHub release público, latest, com transparência sobre o que
+foi e o que não foi validado.
+
+---
+
+## Estado final consolidado
+
+| Gate | Status | Evidência permanente |
+|------|--------|----------------------|
+| 1 — Tag âncora | ✅ | `v0.10.0-pre-release` → `4d9e81d` |
+| 2 — Backup SQLite | ✅ | SHA-256 `d4003e4b...` |
+| 3 — Snapshot DO | ✅ | `ancoplat-pre-v1.0-2026-05-05` (NYC1) |
+| 4 — Deploy | ✅ | Commit `6d86021` em produção |
+| 5 — Smoke prod | ✅ | 7/7 via HTTPS público |
+| 6 — UI automatizado | ✅ | 4/4 (substituiu checklist manual) |
+| 7 — Início 48h | ✅ | `2026-05-06T01:14:33Z` |
+| 8 — Encerramento 48h | ⚠ | **OVERRIDE explícito do usuário** |
+| 9 — Tag v1.0.0 | ✅ | `v1.0.0` → `6d86021` no remote |
+| 10 — GitHub release | ✅ | https://github.com/marcelocaliman/ancoplat/releases/tag/v1.0.0 |
+
+**Suite final:** 698 backend + 5 skipped + 6 xfailed + 181 frontend verdes.
+
+**Pronto:** AncoPlat v1.0.0 publicado. 🎉
 
 ---
 
