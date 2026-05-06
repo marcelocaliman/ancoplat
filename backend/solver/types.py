@@ -1080,6 +1080,71 @@ class MooringSystemResult(BaseModel):
 # ───────────────────────────────────────────────────────────────────────
 
 
+class Vessel(BaseModel):
+    """
+    Vessel/plataforma associada ao caso (Sprint 1 / v1.1.0).
+
+    Representa o corpo flutuante ao qual a linha de ancoragem está
+    conectada via fairlead — FPSO, semisubmersível, FSO, AHV, etc.
+
+    **METADADO PURO**: solver NÃO consome este modelo. O ponto onde
+    a linha está fixada no fairlead continua sendo `boundary.startpoint_*`
+    (depth, type, mode, input_value); o ícone do plot vem de
+    `boundary.startpoint_type`. `Vessel` enriquece o caso com info do
+    hull (nome do navio/plataforma, dimensões, calado, heading) para
+    rastreabilidade do modelo QMoor importado e Memorial PDF.
+
+    Quando o usuário não informa `Vessel`, o caso continua válido — é
+    o equivalente a "ancoragem genérica sem plataforma identificada".
+
+    Convenção de heading: 0° = direção +X global do caso, anti-horário
+    positivo (mesmo referencial de `EnvironmentalLoad` e `LineAttachment.
+    ahv_heading_deg`). Range [0°, 360°).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(
+        ..., min_length=1, max_length=120,
+        description="Nome do vessel/plataforma (ex.: 'P-77', 'FPSO Cidade XYZ').",
+    )
+    vessel_type: Optional[str] = Field(
+        default=None, max_length=80,
+        description=(
+            "Categoria do hull: 'FPSO', 'Semisubmersible', 'FSO', "
+            "'Spar', 'TLP', 'AHV', 'Drillship', 'MODU', etc. Texto livre."
+        ),
+    )
+    displacement: Optional[float] = Field(
+        default=None, gt=0,
+        description="Deslocamento (kg) — metadado.",
+    )
+    loa: Optional[float] = Field(
+        default=None, gt=0,
+        description="Length Overall (m) — metadado.",
+    )
+    breadth: Optional[float] = Field(
+        default=None, gt=0,
+        description="Boca/largura (m) — metadado.",
+    )
+    draft: Optional[float] = Field(
+        default=None, gt=0,
+        description="Calado de operação (m) — metadado.",
+    )
+    heading_deg: Optional[float] = Field(
+        default=None, ge=0.0, lt=360.0,
+        description=(
+            "Heading do vessel no plano horizontal (graus). 0° = +X "
+            "global, anti-horário positivo. Mesmo referencial de "
+            "`EnvironmentalLoad` e `ahv_heading_deg`."
+        ),
+    )
+    operator: Optional[str] = Field(
+        default=None, max_length=120,
+        description="Empresa operadora do vessel — metadado.",
+    )
+
+
 class EnvironmentalLoad(BaseModel):
     """
     Carga ambiental sobre a plataforma (F5.5).
@@ -1244,6 +1309,7 @@ __all__ = [
     "SolverConfig",
     "SolverResult",
     "UtilizationLimits",
+    "Vessel",
     "WatchcirclePoint",
     "WatchcircleResult",
     "classify_utilization",

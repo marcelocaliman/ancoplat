@@ -20,6 +20,7 @@ from backend.solver.types import (
     SeabedConfig,
     SolverResult,
     UtilizationLimits,
+    Vessel,
 )
 
 
@@ -109,6 +110,16 @@ class CaseInput(BaseModel):
             "number, source_version). Não afeta o cálculo do solver — "
             "é exibido no Memorial PDF e na UI de detalhes do caso. "
             "Limite de 20 chaves para evitar abuso."
+        ),
+    )
+    vessel: Optional[Vessel] = Field(
+        default=None,
+        description=(
+            "Vessel/plataforma do caso (Sprint 1 / v1.1.0). Metadado "
+            "puro: solver não consome — preserva info do hull "
+            "(nome, tipo, dimensões, calado, heading) para Memorial "
+            "PDF e UI. Quando ausente, o caso é interpretado como "
+            "ancoragem genérica sem plataforma identificada."
         ),
     )
 
