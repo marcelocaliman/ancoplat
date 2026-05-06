@@ -407,7 +407,8 @@ function ForceCell({
               }}
               quantity="force"
               digits={2}
-              className="h-6 flex-1 text-[11px]"
+              className="h-6 flex-1"
+              inputClassName="text-[11px] py-0.5"
             />
           )}
         />

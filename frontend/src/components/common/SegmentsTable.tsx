@@ -306,7 +306,8 @@ export function SegmentsTable({
                       onChange={f.onChange}
                       quantity="force_per_m"
                       digits={2}
-                      className="h-6 text-[11px]"
+                      className="h-6"
+                      inputClassName="text-[11px] py-0.5"
                     />
                   )}
                 />
@@ -331,7 +332,8 @@ export function SegmentsTable({
                       onChange={f.onChange}
                       quantity="force_per_m"
                       digits={2}
-                      className="h-6 text-[11px]"
+                      className="h-6"
+                      inputClassName="text-[11px] py-0.5"
                     />
                   )}
                 />
