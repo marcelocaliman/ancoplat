@@ -56,7 +56,8 @@ export interface IterationOptions {
 
 const DEFAULT_TOLERANCE = 0.5 // m
 const DEFAULT_MAX_ITERS = 12
-const BRACKET_EXPANSION_LIMIT = 5 // máximo expansões de bracket adaptativo
+const BRACKET_EXPANSION_LIMIT = 8 // máximo expansões de bracket adaptativo
+                                  // 8 dobras: bollard varia em 256× (ex.: 70te → 0.27 a 17920 te)
 
 /** Cache de avaliações já feitas, ordenado por bollard. */
 interface EvalRecord {

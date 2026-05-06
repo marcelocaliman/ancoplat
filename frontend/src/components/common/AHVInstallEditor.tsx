@@ -105,10 +105,19 @@ export function AHVInstallEditor({
             `(X = ${result.xResultFinal?.toFixed(1)} m, erro ${result.errorFinal?.toFixed(2)} m)`,
         )
       } else {
+        // Não convergiu na tolerância — mostra resultado mas NÃO aplica.
+        // User pode clicar "Aplicar mesmo assim" no botão da tabela
+        // de progresso (handleApplyBestFound).
+        const errStr = result.errorFinal?.toFixed(1) ?? '—'
+        const errPct =
+          result.errorFinal != null && targetX > 0
+            ? ((result.errorFinal / targetX) * 100).toFixed(1)
+            : null
         toast.warning(
-          `Não convergiu (${result.stopReason}). Melhor encontrado: ` +
-            `bollard ${(result.bollardPullFinal / 9806.65).toFixed(1)} te, ` +
-            `erro ${result.errorFinal?.toFixed(1) ?? '—'} m. Aplique manualmente se quiser.`,
+          `Não convergiu (${result.stopReason}). Melhor: ` +
+            `${(result.bollardPullFinal / 9806.65).toFixed(1)} te, ` +
+            `erro ${errStr} m${errPct ? ` (${errPct}%)` : ''}. ` +
+            'Veja tabela e aplique se OK.',
         )
       }
     } catch (err) {
@@ -247,6 +256,19 @@ export function AHVInstallEditor({
                     result={iterResult}
                     targetX={ahvInstall.target_horz_distance}
                     running={iterRunning}
+                    onApplyAnyway={() => {
+                      if (iterResult && iterResult.bollardPullFinal > 0) {
+                        setValue(
+                          'boundary.ahv_install.bollard_pull',
+                          iterResult.bollardPullFinal,
+                          { shouldDirty: true },
+                        )
+                        toast.info(
+                          `Aplicado: ${(iterResult.bollardPullFinal / 9806.65).toFixed(1)} te ` +
+                            `(erro ${iterResult.errorFinal?.toFixed(1) ?? '—'} m)`,
+                        )
+                      }
+                    }}
                   />
                 )}
               </div>
@@ -291,11 +313,13 @@ function IterationProgress({
   result,
   targetX,
   running,
+  onApplyAnyway,
 }: {
   steps: IterationStep[]
   result: IterationResult | null
   targetX: number
   running: boolean
+  onApplyAnyway?: () => void
 }) {
   const bestErr = steps
     .filter((s) => s.error != null)
@@ -368,22 +392,47 @@ function IterationProgress({
         </table>
       </div>
       {result && !running && (
-        <p className="mt-1.5 text-[10px] text-muted-foreground">
+        <div className="mt-1.5">
           {result.converged ? (
-            <>
+            <p className="text-[10px] text-muted-foreground">
               ✓ Convergiu em {steps.length} avaliações.{' '}
-              <strong>Bollard final = {(result.bollardPullFinal / 9806.65).toFixed(1)} te</strong>
-              {' '}(aplicado ao form). X = {result.xResultFinal?.toFixed(1)} m,
+              <strong>
+                Bollard final = {(result.bollardPullFinal / 9806.65).toFixed(1)} te
+              </strong>{' '}
+              (aplicado ao form). X = {result.xResultFinal?.toFixed(1)} m,
               erro = {result.errorFinal?.toFixed(2)} m.
-            </>
+            </p>
           ) : (
-            <>
-              Não convergiu ({result.stopReason}). Melhor:{' '}
-              {(result.bollardPullFinal / 9806.65).toFixed(1)} te com erro{' '}
-              {result.errorFinal?.toFixed(2) ?? '—'} m.
-            </>
+            <div className="flex items-center justify-between gap-2">
+              <p className="flex-1 text-[10px] text-muted-foreground">
+                Não convergiu na tolerância 0.5m ({result.stopReason}).{' '}
+                <strong>
+                  Melhor: {(result.bollardPullFinal / 9806.65).toFixed(1)} te
+                </strong>
+                {result.errorFinal != null && (
+                  <>
+                    {' '}— erro {result.errorFinal.toFixed(1)} m
+                    {targetX > 0 && (
+                      <>{' '}({((result.errorFinal / targetX) * 100).toFixed(1)}%)</>
+                    )}
+                  </>
+                )}
+                .
+              </p>
+              {onApplyAnyway && result.bollardPullFinal > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-6 shrink-0 gap-1 text-[10px]"
+                  onClick={onApplyAnyway}
+                >
+                  <CheckCircle2 className="h-3 w-3" /> Aplicar mesmo assim
+                </Button>
+              )}
+            </div>
           )}
-        </p>
+        </div>
       )}
     </div>
   )
