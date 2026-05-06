@@ -507,6 +507,11 @@ export function CaseDetailPage() {
                           | 'semisub' | 'ahv' | 'barge' | 'none' | undefined)
                           ?? 'semisub'
                       }
+                      vessel={
+                        (caseInput as unknown as {
+                          vessel?: VesselDisplay | null
+                        }).vessel ?? null
+                      }
                     />
                   </CardContent>
                 </Card>

@@ -303,6 +303,24 @@ export interface CatenaryPlotProps {
    * Default 'semisub' preserva o ícone que aparecia antes da Fase 3.
    */
   startpointType?: 'semisub' | 'ahv' | 'barge' | 'none'
+  /**
+   * Vessel/plataforma do caso (Sprint 1 / v1.1.0). Quando informado,
+   * desenha o casco como retângulo centrado no fairlead, escalado
+   * por LOA × draft. **Projeção 2D**: heading_deg gira o casco no
+   * plano horizontal — o plot mostra a projeção apparent_width =
+   * LOA·|cos(θ)| + breadth·|sin(θ)|. Top do casco em y=0 (superfície);
+   * fundo em y=-draft. Nome aparece como anotação acima.
+   *
+   * Quando vessel é null/undefined, comportamento legado preservado
+   * (apenas o ícone SVG do startpointType).
+   */
+  vessel?: {
+    name: string
+    loa?: number | null
+    breadth?: number | null
+    draft?: number | null
+    heading_deg?: number | null
+  } | null
 }
 
 /**
@@ -330,6 +348,7 @@ export function CatenaryPlot({
   seabedSlopeRad = 0,
   segments = [],
   startpointType = 'semisub',
+  vessel = null,
 }: CatenaryPlotProps) {
   const fillContainer = height == null
   const plotStyle: React.CSSProperties = fillContainer
@@ -555,6 +574,52 @@ export function CatenaryPlot({
       hoverinfo: 'skip',
       showlegend: false,
     })
+
+    // ── Casco do vessel (Sprint 2 / Commit 14) ──
+    // Quando o caso tem vessel com LOA + draft, desenha um retângulo
+    // centrado no fairlead representando o casco subaquático.
+    // Heading é projetado no plano 2D: apparent_width = |LOA·cos|+|breadth·sin|.
+    if (
+      vessel
+      && vessel.loa != null && vessel.loa > 0
+      && vessel.draft != null && vessel.draft > 0
+    ) {
+      const loa = vessel.loa
+      const breadth = vessel.breadth ?? loa * 0.4 // estimativa quando ausente
+      const draft = vessel.draft
+      const headingRad = ((vessel.heading_deg ?? 0) * Math.PI) / 180
+      const apparent =
+        loa * Math.abs(Math.cos(headingRad))
+        + breadth * Math.abs(Math.sin(headingRad))
+      const halfW = apparent / 2
+      // Casco: top em y=0 (superfície), fundo em y=-draft.
+      // Trapezoide com ponta levemente afilada na frente (visual).
+      const noseFrac = 0.15  // 15% da meia-largura no topo
+      const xLeft = -halfW
+      const xRight = +halfW
+      const xLeftBot = -halfW * (1 - noseFrac)
+      const xRightBot = +halfW * (1 - noseFrac)
+      pushTrace({
+        type: 'scatter',
+        mode: 'lines',
+        x: [xLeft, xRight, xRightBot, xLeftBot, xLeft],
+        y: [0, 0, -draft, -draft, 0],
+        fill: 'toself',
+        fillcolor: palette.surfaceFill,
+        line: { color: palette.surface, width: 1.2 },
+        name: vessel.name,
+        hovertemplate:
+          `<b>${vessel.name}</b><br>`
+          + `LOA = ${loa.toFixed(1)} m<br>`
+          + `Breadth = ${breadth.toFixed(1)} m<br>`
+          + `Draft = ${draft.toFixed(1)} m<br>`
+          + (vessel.heading_deg != null
+              ? `Heading = ${vessel.heading_deg.toFixed(0)}°<br>`
+              : '')
+          + `Largura aparente (proj) = ${apparent.toFixed(1)} m<extra></extra>`,
+        showlegend: false,
+      })
+    }
 
     // ── Seabed: linha (horizontal ou inclinada conforme slope) + faixa abaixo ──
     // No frame surface-relative do plot, anchor está em (Xtotal, -water_depth).
