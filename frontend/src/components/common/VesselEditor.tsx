@@ -1,5 +1,6 @@
-import { Anchor, Plus, Trash2 } from 'lucide-react'
-import { Controller, type Control, type Path, type UseFormSetValue } from 'react-hook-form'
+import { AlertTriangle, Anchor, Check, Plus, Trash2 } from 'lucide-react'
+import { Controller, type Control, type Path, type UseFormSetValue, useWatch } from 'react-hook-form'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,6 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { VesselPicker } from '@/components/common/VesselPicker'
+import type { VesselOutput } from '@/api/types'
 import type { CaseFormValues } from '@/lib/caseSchema'
 
 type T = CaseFormValues
@@ -63,6 +66,39 @@ export function VesselEditor({ control, setValue, vessel }: VesselEditorProps) {
   const p = (suffix: keyof NonNullable<CaseFormValues['vessel']>) =>
     `vessel.${suffix}` as Path<T>
 
+  // Sprint 6 / Q7 — rastreabilidade ao catálogo. catalog_id é
+  // populado quando user escolhe via VesselPicker; qualquer override
+  // manual em campo físico (loa/breadth/draft/displacement) zera o
+  // catalog_id para null (modo "manual").
+  const catalogId = useWatch({
+    control,
+    name: 'vessel.catalog_id' as Path<T>,
+  }) as number | null | undefined
+
+  function applyVesselFromCatalog(v: VesselOutput) {
+    setValue(p('catalog_id'), v.id as never, { shouldDirty: true })
+    setValue(p('name'), v.name as never, { shouldDirty: true })
+    setValue(p('vessel_type'), v.vessel_type as never, { shouldDirty: true })
+    setValue(p('loa'), v.loa as never, { shouldDirty: true })
+    setValue(p('breadth'), v.breadth as never, { shouldDirty: true })
+    setValue(p('draft'), v.draft as never, { shouldDirty: true })
+    if (v.displacement != null) {
+      setValue(p('displacement'), v.displacement as never, { shouldDirty: true })
+    }
+    setValue(p('heading_deg'), v.default_heading_deg as never, {
+      shouldDirty: true,
+    })
+    if (v.operator) {
+      setValue(p('operator'), v.operator as never, { shouldDirty: true })
+    }
+  }
+
+  function clearCatalogLink() {
+    if (catalogId != null) {
+      setValue(p('catalog_id'), null as never, { shouldDirty: true })
+    }
+  }
+
   return (
     <Card className="border-primary/15 bg-primary/[0.02]">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -108,7 +144,41 @@ export function VesselEditor({ control, setValue, vessel }: VesselEditorProps) {
             Memorial PDF.
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-4">
+          <div className="space-y-3">
+            {/* Sprint 6 — Picker do catálogo + badge manual/catálogo */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Vessel do catálogo
+                </Label>
+                <VesselPicker
+                  selectedId={catalogId ?? null}
+                  onPick={applyVesselFromCatalog}
+                  onClear={() => clearCatalogLink()}
+                  className="h-8"
+                />
+              </div>
+              {catalogId != null ? (
+                <Badge
+                  variant="outline"
+                  className="mt-4 h-5 gap-1 border-primary/40 bg-primary/10 px-1.5 text-[9px] text-primary"
+                  title={`Linkado ao catálogo (id=${catalogId})`}
+                >
+                  <Check className="h-2.5 w-2.5" />
+                  do catálogo
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="mt-4 h-5 gap-1 border-warning/40 bg-warning/10 px-1.5 text-[9px] text-warning"
+                  title="Vessel customizado / modificado do catálogo"
+                >
+                  <AlertTriangle className="h-2.5 w-2.5" />
+                  manual
+                </Badge>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-4">
             <Field label="Nome *">
               <Controller
                 control={control}
@@ -189,6 +259,7 @@ export function VesselEditor({ control, setValue, vessel }: VesselEditorProps) {
                 )}
               />
             </Field>
+            </div>
           </div>
         )}
       </CardContent>

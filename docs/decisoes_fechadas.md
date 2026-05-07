@@ -661,3 +661,27 @@ Fallback automático para F8 puro com **D025** quando catenária ww inviável OU
 **Referência canônica:** Sprint 5 / Commits 42-49.
 
 **Link:** [`relatorio_sprint5_ahv_operational.md`](relatorio_sprint5_ahv_operational.md).
+
+
+---
+
+## Decisão #20 — Catálogo `vessel_types` padronizado (Sprint 6)
+
+**Decisão:** Catálogo `vessel_types` no SQLite com 9 vessels canônicos (P-77, FPSO Suezmax, Atlanta, Semisub genérico, Spar, AHV 200 te, AHV 100 te, Drillship, Barge MODU). Vessel no editor é selecionado via `VesselPicker` (dropdown com busca) — análogo às boias (F6) e line_types (F1a).
+
+**Razão:** usuário identificou que vessel como input livre era inconsistente com o resto do app (boias/segments usam catálogo). Catálogo padronizado garante:
+- Dimensões físicas validadas (não input arbitrário)
+- Rastreabilidade via `catalog_id` (Q7 pattern)
+- Override manual sinalizado por badge "manual"
+- Live preview no plot durante edição
+
+**Implementação:** 8 commits, 5 endpoints REST, VesselPicker reusando padrão BuoyPicker, 5 SVGs dedicados no plot (semisub, fpso, spar, ahv, barge).
+
+**Decisões implementadas:**
+- IMMUTABLE_SOURCES = {legacy_qmoor, generic_offshore} (mesmo padrão F6).
+- AHV deck (Sprint 5) refinado para SVG image em vez de marker square.
+- vessel_type prioriza sobre startpoint_type legacy (Fase 3).
+
+**Referência canônica:** Sprint 6 / Commits 50-58.
+
+**Link:** [`relatorio_sprint6_vessel_catalog.md`](relatorio_sprint6_vessel_catalog.md).

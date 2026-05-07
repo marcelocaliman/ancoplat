@@ -15,6 +15,32 @@ e o projeto adere a [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Sprint 6 (2026-05-07) — Vessel padronizado + polish visual
+
+- **feat(db):** tabela `vessel_types` no SQLite + `VesselTypeRecord`
+  SQLAlchemy + seed com 9 vessels canônicos (P-77, FPSO Suezmax, Atlanta,
+  Semisub genérico, Spar, AHV 200 te, AHV 100 te, Drillship, Barge MODU).
+- **feat(api):** schemas Pydantic VesselCreate/Update/Output + 5
+  endpoints REST `/api/v1/vessel-types` (GET list/id, POST, PUT, DELETE)
+  com 403 para entradas seed canônicas (mesmo padrão F6).
+- **feat(frontend):** `VesselPicker` componente + `VesselEditor`
+  refatorado com dropdown do catálogo + badge "do catálogo"/"manual"
+  (override sinalizado).
+- **fix(plot):** vessel passado para CatenaryPlot do CaseFormPage
+  preview live (estava ausente — bug reportado).
+- **feat(plot):** 3 SVGs novos (semisubSvg, fpsoSvg, sparSvg) + dispatcher
+  `getVesselSvg(vessel_type)` com mapeamento por tipo.
+- **feat(plot):** AHV deck mid-line (Sprint 5) refinado para SVG image
+  ahvSvg laranja (substitui marker square).
+- **docs:** Decisão fechada **#20** — catálogo padronizado análogo a
+  boias/line_types. Pendências v1.4+: vessels comerciais reais (Damen,
+  ULSTEIN), 3D, auto-orientação, multi-vessel.
+
+⚠ **Sem mudanças numéricas em cases salvos:** vessel é metadado (solver
+ignora). Cases legacy abrem inalterados.
+
+Suite: 954 → 971 backend (+17) + 207 frontend (preservado).
+
 ### Sprint 5 (2026-05-07) — AHV Tier D Operacional Mid-Line
 
 - **feat(schema):** `LineAttachment` (kind="ahv") ganha campos

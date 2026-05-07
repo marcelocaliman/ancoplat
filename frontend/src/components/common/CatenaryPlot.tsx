@@ -105,6 +105,84 @@ function bargeSvg(color: string): string {
   </svg>`
 }
 
+// ─── Sprint 6 — SVGs por vessel_type ────────────────────────────────────
+
+function semisubSvg(color: string): string {
+  // Semisubmersible: 4 colunas verticais + deck superior + heliponto.
+  // Silhueta clássica de plataforma de exploração offshore.
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+    <rect x="6" y="14" width="52" height="14" rx="2" fill="${color}" opacity="0.85"/>
+    <rect x="22" y="6" width="20" height="8" rx="1" fill="${color}"/>
+    <circle cx="32" cy="10" r="2" fill="#FFFFFF" opacity="0.6"/>
+    <rect x="10" y="28" width="6" height="20" fill="${color}" opacity="0.7"/>
+    <rect x="22" y="28" width="6" height="20" fill="${color}" opacity="0.7"/>
+    <rect x="36" y="28" width="6" height="20" fill="${color}" opacity="0.7"/>
+    <rect x="48" y="28" width="6" height="20" fill="${color}" opacity="0.7"/>
+    <rect x="6" y="48" width="52" height="6" rx="1" fill="${color}" opacity="0.85"/>
+  </svg>`
+}
+
+function fpsoSvg(color: string): string {
+  // FPSO: casco navio com proa pontuda + torre de carga (turret) +
+  // helideck à proa. Silhueta longa e baixa típica de Suezmax.
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+    <path d="M 2 32 L 6 24 L 56 24 L 62 32 L 56 40 L 6 40 Z" fill="${color}" opacity="0.85"/>
+    <rect x="14" y="14" width="36" height="10" rx="1" fill="${color}"/>
+    <circle cx="20" cy="19" r="3" fill="#FFFFFF" opacity="0.5"/>
+    <rect x="44" y="6" width="10" height="8" fill="${color}"/>
+    <line x1="32" y1="14" x2="32" y2="6" stroke="${color}" stroke-width="2"/>
+    <circle cx="32" cy="4" r="2" fill="${color}"/>
+  </svg>`
+}
+
+function sparSvg(color: string): string {
+  // Spar: cilindro vertical longo com deck no topo. Característica
+  // distintiva: muito mais alto que largo (ratio ~6:1 no real).
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+    <rect x="14" y="6" width="36" height="10" rx="1" fill="${color}"/>
+    <rect x="26" y="16" width="12" height="42" fill="${color}" opacity="0.85"/>
+    <line x1="32" y1="20" x2="32" y2="58" stroke="#FFFFFF" stroke-width="1" opacity="0.4"/>
+    <rect x="22" y="56" width="20" height="4" fill="${color}" opacity="0.7"/>
+  </svg>`
+}
+
+/**
+ * Sprint 6 / Commit 56 — Dispatcher de SVG por vessel_type.
+ *
+ * Retorna o SVG mais adequado para cada tipo da plataforma. Tipos
+ * sem SVG dedicado mapeiam para o mais próximo:
+ *   - FSO → fpso (mesmo casco, sem produção)
+ *   - TLP → semisub (visualmente similar)
+ *   - Drillship → fpso
+ *   - MODU → barge
+ *
+ * Se vessel_type não bate com nenhum case, retorna fairleadSvg como
+ * fallback genérico.
+ */
+function getVesselSvg(
+  vessel_type: string | null | undefined,
+  color: string,
+): string {
+  switch (vessel_type) {
+    case 'Semisubmersible':
+    case 'TLP':
+      return semisubSvg(color)
+    case 'FPSO':
+    case 'FSO':
+    case 'Drillship':
+      return fpsoSvg(color)
+    case 'Spar':
+      return sparSvg(color)
+    case 'AHV':
+      return ahvSvg(color)
+    case 'MODU':
+    case 'Barge':
+      return bargeSvg(color)
+    default:
+      return fairleadSvg(color)
+  }
+}
+
 /**
  * Dispatcher de SVG do startpoint conforme tipo selecionado pelo usuário
  * (campo cosmético `boundary.startpoint_type`, Fase 3 / A2.5+D7).
@@ -320,6 +398,7 @@ export interface CatenaryPlotProps {
    */
   vessel?: {
     name: string
+    vessel_type?: string | null
     loa?: number | null
     breadth?: number | null
     draft?: number | null
@@ -1398,8 +1477,10 @@ export function CatenaryPlot({
               + `AHV deck: (${ahvX.toFixed(0)}, ${ahvY.toFixed(0)})<extra></extra>`,
             showlegend: true,
           })
-          // Marker do AHV deck — círculo (ícone SVG via images vem em
-          // outro caminho mais complexo; usamos marker por simplicidade).
+          // Sprint 6 / Commit 57 — AHV deck agora renderizado como SVG
+          // de embarcação (ahvSvg laranja) via array `images` do layout
+          // (em vez de marker square). Aqui só pushamos um marker
+          // invisível para hover funcionar — o ícone vem de `images`.
           if (showImages) {
             pushTrace({
               type: 'scatter',
@@ -1407,10 +1488,8 @@ export function CatenaryPlot({
               x: [ahvX],
               y: [ahvY],
               marker: {
-                symbol: 'square',
-                size: 14,
-                color: '#F97316',
-                line: { color: '#FFFFFF', width: 1.5 },
+                size: 24,
+                opacity: 0,  // invisível — ícone real é SVG image
               },
               name: 'AHV deck',
               hovertemplate:
@@ -1475,7 +1554,16 @@ export function CatenaryPlot({
     const axData = (attTargetPx / plotW) * xSpan
     const ayData = (attTargetPx / plotH) * ySpan
 
-    const startpointSvg = getStartpointSvg(startpointType, palette.iconColor)
+    // Sprint 6 / Commit 56 — Dispatcher prioriza vessel_type sobre
+    // startpoint_type. Se vessel.vessel_type está set, usa SVG dedicado
+    // do tipo (FPSO/Semisub/Spar/AHV/Barge); senão cai no SVG legacy
+    // do startpoint_type (Fase 3).
+    const vesselTypeSvg =
+      vessel?.vessel_type != null
+        ? getVesselSvg(vessel.vessel_type, palette.iconColor)
+        : null
+    const startpointSvg =
+      vesselTypeSvg ?? getStartpointSvg(startpointType, palette.iconColor)
     // Sprint 2 / Commit 19 — quando há vessel host completo (LOA+draft),
     // o trapezoide do casco substitui visualmente o ícone SVG no
     // fairlead. Suprimir o ícone evita sobreposição/duplicação.
@@ -1600,6 +1688,47 @@ export function CatenaryPlot({
         })
       }
     }
+    // Sprint 6 / Commit 57 — AHV operacional Tier D ganha SVG de
+    // embarcação (ahvSvg) em vez do marker square laranja da Sprint 5.
+    // Cor laranja para destacar do vessel host (que usa palette.iconColor).
+    if (attachments && attachments.length > 0) {
+      const arcCum: number[] = [0]
+      const xsR = result.coords_x ?? []
+      const ysR = result.coords_y ?? []
+      if (xsR.length >= 2) {
+        for (let k = 1; k < xsR.length; k += 1) {
+          const dx = (xsR[k] ?? 0) - (xsR[k - 1] ?? 0)
+          const dy = (ysR[k] ?? 0) - (ysR[k - 1] ?? 0)
+          arcCum.push(arcCum[k - 1]! + Math.hypot(dx, dy))
+        }
+        for (const att of attachments) {
+          const attTyped = att as unknown as {
+            kind?: string
+            ahv_work_wire?: unknown
+            ahv_deck_x?: number | null
+            ahv_deck_level?: number | null
+          }
+          if (attTyped.kind !== 'ahv' || attTyped.ahv_work_wire == null)
+            continue
+          if (attTyped.ahv_deck_x == null) continue
+          const ahvX = attTyped.ahv_deck_x
+          const ahvY = attTyped.ahv_deck_level ?? 0
+          imgs.push({
+            source: svgDataUri(ahvSvg('#F97316')),
+            xref: 'x',
+            yref: 'y',
+            x: ahvX,
+            y: ahvY,
+            sizex: fxData,
+            sizey: fyData,
+            xanchor: 'center',
+            yanchor: 'middle',
+            sizing: 'contain',
+            layer: 'above',
+          })
+        }
+      }
+    }
     return imgs
   }, [
     ranges,
@@ -1610,6 +1739,8 @@ export function CatenaryPlot({
     attachments,
     curve,
     result.segment_boundaries,
+    result.coords_x,
+    result.coords_y,
     plotPx,
   ])
 

@@ -313,12 +313,73 @@ class BuoyRecord(Base):
     )
 
 
+class VesselTypeRecord(Base):
+    """
+    Catálogo de Vessels / plataformas (Sprint 6 / Commit 50).
+
+    Análogo a `BuoyRecord` (F6) e `LineTypeRecord` (F1a): legacy_id
+    rastreável, data_source documentado, todas as grandezas em SI.
+
+    Convenção de imutabilidade: entradas com `data_source` começando
+    com `legacy_qmoor`, `generic_offshore`, ou `manufacturer_*` são
+    imutáveis (PUT/DELETE retornam 403). Apenas `user_input` aceita
+    edição/remoção.
+
+    Campos físicos:
+      - vessel_type: classe ('FPSO', 'Semisubmersible', 'Spar', 'TLP',
+                     'Drillship', 'MODU', 'AHV', 'Barge', 'FSO')
+      - loa, breadth, draft: dimensões geométricas (m)
+      - displacement: deslocamento em N (peso, não massa)
+      - default_heading_deg: heading default no plano horizontal global
+      - operator: identificação opcional (ex.: "Petrobras")
+    """
+
+    __tablename__ = "vessel_types"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    legacy_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    vessel_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    base_unit_system: Mapped[str] = mapped_column(Text, nullable=False)
+    loa: Mapped[float] = mapped_column(Float, nullable=False)
+    breadth: Mapped[float] = mapped_column(Float, nullable=False)
+    draft: Mapped[float] = mapped_column(Float, nullable=False)
+    displacement: Mapped[float | None] = mapped_column(Float, nullable=True)
+    default_heading_deg: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0,
+    )
+    data_source: Mapped[str] = mapped_column(Text, nullable=False)
+    operator: Mapped[str | None] = mapped_column(Text, nullable=True)
+    manufacturer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    serial_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    comments: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.current_timestamp(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.current_timestamp(),
+        onupdate=func.current_timestamp(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint("length(name) >= 1", name="ck_vessel_types_name_nonempty"),
+        CheckConstraint("loa > 0", name="ck_vessel_types_loa_positive"),
+        CheckConstraint("breadth > 0", name="ck_vessel_types_breadth_positive"),
+        CheckConstraint("draft > 0", name="ck_vessel_types_draft_positive"),
+        Index("idx_vessel_types_name", "name"),
+        Index("idx_vessel_types_type", "vessel_type"),
+    )
+
+
 __all__ = [
     "AppConfigRecord",
     "BuoyRecord",
     "CaseRecord",
     "ExecutionRecord",
     "LineTypeRecord",
+    "VesselTypeRecord",
     "MooringSystemExecutionRecord",
     "MooringSystemRecord",
 ]

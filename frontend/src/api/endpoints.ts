@@ -22,8 +22,12 @@ import type {
   PaginatedResponse_CaseSummary_,
   PaginatedResponse_LineTypeOutput_,
   PaginatedResponse_MooringSystemSummary_,
+  PaginatedResponse_VesselOutput_,
   PlatformEquilibriumResult,
   VersionResponse,
+  VesselCreate,
+  VesselOutput,
+  VesselUpdate,
   WatchcircleResult,
 } from './types'
 
@@ -155,6 +159,40 @@ export const updateBuoy = (id: number, input: BuoyUpdate) =>
 
 export const deleteBuoy = (id: number) =>
   apiClient.delete(`/buoys/${id}`).then((r) => r.data)
+
+// ─────────────────────────── vessels (Sprint 6) ────────────────────────
+export interface ListVesselsParams {
+  page?: number
+  page_size?: number
+  vessel_type?:
+    | 'FPSO'
+    | 'Semisubmersible'
+    | 'FSO'
+    | 'Spar'
+    | 'TLP'
+    | 'AHV'
+    | 'Drillship'
+    | 'MODU'
+    | 'Barge'
+  search?: string
+}
+
+export const listVessels = (params?: ListVesselsParams) =>
+  apiClient
+    .get<PaginatedResponse_VesselOutput_>('/vessel-types', { params })
+    .then((r) => r.data)
+
+export const getVessel = (id: number) =>
+  apiClient.get<VesselOutput>(`/vessel-types/${id}`).then((r) => r.data)
+
+export const createVessel = (input: VesselCreate) =>
+  apiClient.post<VesselOutput>('/vessel-types', input).then((r) => r.data)
+
+export const updateVessel = (id: number, input: VesselUpdate) =>
+  apiClient.put<VesselOutput>(`/vessel-types/${id}`, input).then((r) => r.data)
+
+export const deleteVessel = (id: number) =>
+  apiClient.delete(`/vessel-types/${id}`).then((r) => r.data)
 
 // ─────────────────────────────── mooring systems (F5.4) ───────────────────
 export interface ListMooringSystemsParams {

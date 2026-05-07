@@ -298,6 +298,10 @@ export const caseInputSchema = z
         draft: z.number().positive().nullable().optional(),
         heading_deg: z.number().min(0).lt(360).nullable().optional(),
         operator: z.string().trim().max(120).nullable().optional(),
+        // Sprint 6 — rastreabilidade ao catálogo vessel_types.
+        // Não-autoritativo em runtime: solver ignora; serve apenas para
+        // auditoria. Override em qualquer campo físico zera para null.
+        catalog_id: z.number().int().min(1).nullable().optional(),
       })
       .nullable()
       .optional(),
