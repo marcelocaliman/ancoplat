@@ -1060,6 +1060,7 @@ export function CaseFormPage() {
                 startpointType={
                   debouncedValues.boundary?.startpoint_type ?? 'semisub'
                 }
+                vessel={debouncedValues.vessel ?? null}
                 preSolveDiagnostics={preSolveDiagnostics}
                 worstSeverity={diagWorst}
                 lastValidValues={lastValidValues}
@@ -1234,6 +1235,7 @@ function PlotArea({
   seabedSlopeRad,
   segments,
   startpointType = 'semisub',
+  vessel,
   preSolveDiagnostics,
   worstSeverity: worstSev,
   lastValidValues,
@@ -1253,6 +1255,7 @@ function PlotArea({
     diameter?: number | null
   }>
   startpointType?: 'semisub' | 'ahv' | 'barge' | 'none'
+  vessel?: CaseFormValues['vessel']
   preSolveDiagnostics?: SolverDiagnostic[]
   worstSeverity?: DiagnosticSeverity | null
   lastValidValues?: CaseFormValues | null
@@ -1373,6 +1376,7 @@ function PlotArea({
           seabedSlopeRad={seabedSlopeRad}
           segments={segments}
           startpointType={startpointType}
+          vessel={vessel}
         />
       </div>
     </div>

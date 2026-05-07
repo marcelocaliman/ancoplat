@@ -31,6 +31,64 @@ export type PaginatedResponse_BuoyOutput_ = S['PaginatedResponse_BuoyOutput_']
 export type BuoyEndType = BuoyOutput['end_type']
 export type BuoyType = BuoyOutput['buoy_type']
 
+// Catálogo de vessels (Sprint 6 / Commit 51-52). Tipos inline porque
+// openapi.ts ainda não foi regenerado — quando regenerar, substituir
+// por S['VesselOutput'] etc (mesmo padrão dos outros catálogos).
+export type VesselType =
+  | 'FPSO'
+  | 'Semisubmersible'
+  | 'FSO'
+  | 'Spar'
+  | 'TLP'
+  | 'AHV'
+  | 'Drillship'
+  | 'MODU'
+  | 'Barge'
+
+export interface VesselOutput {
+  id: number
+  legacy_id: number | null
+  name: string
+  vessel_type: VesselType
+  base_unit_system: 'imperial' | 'metric'
+  loa: number
+  breadth: number
+  draft: number
+  displacement: number | null
+  default_heading_deg: number
+  data_source: 'legacy_qmoor' | 'generic_offshore' | 'manufacturer' | 'user_input'
+  operator: string | null
+  manufacturer: string | null
+  serial_number: string | null
+  comments: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface VesselCreate {
+  name: string
+  vessel_type: VesselType
+  base_unit_system?: 'imperial' | 'metric'
+  loa: number
+  breadth: number
+  draft: number
+  displacement?: number | null
+  default_heading_deg?: number
+  operator?: string | null
+  manufacturer?: string | null
+  serial_number?: string | null
+  comments?: string | null
+}
+
+export type VesselUpdate = VesselCreate
+
+export interface PaginatedResponse_VesselOutput_ {
+  items: VesselOutput[]
+  total: number
+  page: number
+  page_size: number
+}
+
 export type SolutionMode = S['SolutionMode']
 export type ConvergenceStatus = S['ConvergenceStatus']
 export type AlertLevel = S['AlertLevel']

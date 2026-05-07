@@ -13,22 +13,27 @@
 import { describe, it, expect } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useForm } from 'react-hook-form'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { VesselEditor } from '@/components/common/VesselEditor'
 import { EMPTY_CASE, type CaseFormValues } from '@/lib/caseSchema'
 
 function Harness({ initial }: { initial?: CaseFormValues['vessel'] }) {
-  // Smoke test não exercita validação Zod (resolver omitido para evitar
-  // mismatch entre inferência ZodInput/ZodOutput em `default()`).
   const form = useForm<CaseFormValues>({
     defaultValues: { ...EMPTY_CASE, vessel: initial ?? null },
   })
   const vessel = form.watch('vessel')
+  // Sprint 6 — QueryClient necessário pelo VesselPicker integrado.
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  })
   return (
-    <VesselEditor
-      control={form.control}
-      setValue={form.setValue}
-      vessel={vessel}
-    />
+    <QueryClientProvider client={qc}>
+      <VesselEditor
+        control={form.control}
+        setValue={form.setValue}
+        vessel={vessel}
+      />
+    </QueryClientProvider>
   )
 }
 
