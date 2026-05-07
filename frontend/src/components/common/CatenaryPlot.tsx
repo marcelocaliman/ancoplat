@@ -384,9 +384,10 @@ export function CatenaryPlot({
   const [showImages, setShowImages] = useState(true)
   // Sprint 4.1 — toggle "Detalhes inline": quando ON, gera labels
   // permanentes sobre cada segmento + boia + clump + AHV + Work Wire,
-  // permitindo visualização imediata do sistema sem hover. Default OFF
-  // para preservar plot limpo no estado padrão.
-  const [showInlineLabels, setShowInlineLabels] = useState(false)
+  // permitindo visualização imediata do sistema sem hover. Default
+  // ON para entregar leitura imediata; user pode desligar pelo toggle
+  // do controlbar quando quiser plot limpo.
+  const [showInlineLabels, setShowInlineLabels] = useState(true)
   // Quando a prop equalAspect muda externamente (ex.: pai reseta),
   // sincroniza o estado local.
   useEffect(() => {
@@ -1560,45 +1561,67 @@ export function CatenaryPlot({
     if (!showInlineLabels) return []
     const xs = result.coords_x ?? []
     const ys = result.coords_y ?? []
-    if (xs.length === 0) return []
+    if (xs.length < 2) return []
     const xTotal = Math.max(Xtotal, 1)
     const minLen = Math.max(30, xTotal * 0.08)
-    // Frame solver: anchor em (0, 0). Frame plot: fairlead em (0, 0),
-    // anchor em (Xtotal, -endpointDepth). Transformação aplicada
-    // ponto-a-ponto para anchorar as annotations no plot.
+
+    // Pré-calcula arc length acumulado ao longo de coords_x/y (frame
+    // anchor-first do solver). arcCum[k] = comprimento físico do anchor
+    // até o ponto k. Usamos isso para localizar o "meio físico" de cada
+    // user-segment independente de boundaries (que podem ser splittadas
+    // pelo solver em casos com attachments mid-segment).
+    const arcCum: number[] = [0]
+    for (let k = 1; k < xs.length; k += 1) {
+      const dx = (xs[k] ?? 0) - (xs[k - 1] ?? 0)
+      const dy = (ys[k] ?? 0) - (ys[k - 1] ?? 0)
+      arcCum.push(arcCum[k - 1]! + Math.hypot(dx, dy))
+    }
+    const indexAtArc = (target: number): number => {
+      let lo = 0, hi = arcCum.length - 1
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1
+        if ((arcCum[mid] ?? 0) < target) lo = mid + 1
+        else hi = mid
+      }
+      return lo
+    }
+
+    // Frame solver → frame plot.
     const toPlotX = (sx: number) => Xtotal - sx
     const toPlotY = (sy: number) => sy - endpointDepth
     const labelStyle = {
-      showarrow: false,
+      showarrow: true,
+      arrowhead: 0,        // sem ponta de seta — só leader-line
+      arrowsize: 1,
+      arrowwidth: 1,
+      arrowcolor: palette.hoverBorder,
       xref: 'x' as const,
       yref: 'y' as const,
       xanchor: 'center' as const,
       yanchor: 'middle' as const,
       bgcolor:
-        theme === 'dark' ? 'rgba(15,23,42,0.85)' : 'rgba(255,255,255,0.88)',
+        theme === 'dark' ? 'rgba(15,23,42,0.92)' : 'rgba(255,255,255,0.95)',
       bordercolor: palette.hoverBorder,
       borderwidth: 1,
-      borderpad: 3,
-      font: { size: 9, color: palette.text, family: 'Inter' },
+      borderpad: 4,
+      font: { size: 10, color: palette.text, family: 'Inter' },
     }
     const out: Array<Record<string, unknown>> = []
 
-    // ── Segmentos ──
-    const segBounds = result.segment_boundaries ?? []
-    if (segBounds.length >= 2 && segments.length > 0) {
-      // Multi-segmento: cada par (segBounds[i], segBounds[i+1]) marca os
-      // índices de coords_x/y que pertencem ao segmento i.
-      const N = Math.min(segBounds.length - 1, segments.length)
-      for (let i = 0; i < N; i += 1) {
+    // ── Segmentos (mapping por arc length acumulado, robusto a splits
+    //    internos do solver em casos com attachments mid-segment) ──
+    if (segments.length > 0) {
+      const cumLen: number[] = [0]
+      for (const s of segments) cumLen.push(cumLen[cumLen.length - 1]! + (s.length ?? 0))
+      for (let i = 0; i < segments.length; i += 1) {
         const meta = segments[i]
         if (!meta) continue
         const length = meta.length ?? 0
-        if (length < minLen) continue  // auto-skip segmento curto
-        const i0 = segBounds[i] ?? 0
-        const i1 = segBounds[i + 1] ?? xs.length - 1
-        const iMid = Math.floor((i0 + i1) / 2)
-        const sx = xs[iMid]
-        const sy = ys[iMid]
+        if (length < minLen) continue
+        const arcMid = (cumLen[i]! + cumLen[i + 1]!) / 2
+        const k = indexAtArc(arcMid)
+        const sx = xs[k]
+        const sy = ys[k]
         if (sx == null || sy == null) continue
         const x = toPlotX(sx)
         const y = toPlotY(sy)
@@ -1607,53 +1630,40 @@ export function CatenaryPlot({
           ? ` ${(meta.diameter * 1000).toFixed(0)}mm`
           : ''
         const text = `${ltLabel}${dStr} · ${length.toFixed(0)}m`
+        // Alterna acima/abaixo da curva para reduzir overlap entre vizinhos.
+        const goesUp = i % 2 === 0
         out.push({
           ...labelStyle,
           x,
           y,
           text,
-          yshift: -14, // pino logo abaixo da curva
+          ax: 0,
+          ay: goesUp ? -38 : 38,
+          ayref: 'pixel' as const,
+          axref: 'pixel' as const,
         })
-      }
-    } else if (segments.length === 1) {
-      // Single-segmento: posiciona no meio do array de coords.
-      const meta = segments[0]
-      if (meta) {
-        const length = meta.length ?? 0
-        if (length >= minLen) {
-          const iMid = Math.floor(xs.length / 2)
-          const sx = xs[iMid]
-          const sy = ys[iMid]
-          if (sx != null && sy != null) {
-            const x = toPlotX(sx)
-            const y = toPlotY(sy)
-            const ltLabel = meta.line_type || meta.category || 'Seg 1'
-            const dStr = meta.diameter
-              ? ` ${(meta.diameter * 1000).toFixed(0)}mm`
-              : ''
-            out.push({
-              ...labelStyle,
-              x,
-              y,
-              text: `${ltLabel}${dStr} · ${length.toFixed(0)}m`,
-              yshift: -14,
-            })
-          }
-        }
       }
     }
 
     // ── Attachments (boias, clumps, AHV pontual) ──
-    if (segBounds.length >= 2 && attachments) {
+    if (attachments && attachments.length > 0 && segments.length > 0) {
+      const cumLen: number[] = [0]
+      for (const s of segments) cumLen.push(cumLen[cumLen.length - 1]! + (s.length ?? 0))
       for (let idx = 0; idx < attachments.length; idx += 1) {
         const att = attachments[idx]
         if (!att) continue
-        const posIdx = att.position_index
-        if (posIdx == null) continue
-        const coordIdx = segBounds[posIdx + 1]
-        if (coordIdx == null) continue
-        const sx = xs[coordIdx]
-        const sy = ys[coordIdx]
+        const sFromAnchor = (att as unknown as { position_s_from_anchor?: number | null })
+          .position_s_from_anchor
+        let arcAtt: number | null = null
+        if (sFromAnchor != null) {
+          arcAtt = sFromAnchor
+        } else if (att.position_index != null) {
+          arcAtt = cumLen[att.position_index + 1] ?? null
+        }
+        if (arcAtt == null) continue
+        const k = indexAtArc(arcAtt)
+        const sx = xs[k]
+        const sy = ys[k]
         if (sx == null || sy == null) continue
         const x = toPlotX(sx)
         const y = toPlotY(sy)
@@ -1662,7 +1672,6 @@ export function CatenaryPlot({
           const force = (att.submerged_force ?? 0) / 1000
           text = `${att.name || `Boia ${idx + 1}`} · ${force.toFixed(1)} kN`
         } else if (att.kind === 'clump_weight') {
-          // Clump: força negativa (peso). Mostra magnitude.
           const force = Math.abs(att.submerged_force ?? 0) / 1000
           text = `${att.name || 'Clump'} · ${force.toFixed(1)} kN`
         } else if (att.kind === 'ahv') {
@@ -1676,7 +1685,10 @@ export function CatenaryPlot({
           x,
           y,
           text,
-          yshift: 18, // acima do ícone
+          ax: 0,
+          ay: -42,
+          ayref: 'pixel' as const,
+          axref: 'pixel' as const,
         })
       }
     }
@@ -1699,7 +1711,11 @@ export function CatenaryPlot({
           text: 'Work Wire (Tier C)',
           font: { ...labelStyle.font, color: '#F97316' },
           bordercolor: '#F97316',
-          yshift: -14,
+          arrowcolor: '#F97316',
+          ax: 0,
+          ay: -38,
+          ayref: 'pixel' as const,
+          axref: 'pixel' as const,
         })
       }
     }
