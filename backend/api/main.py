@@ -39,6 +39,7 @@ from backend.api.routers import (
     mooring_systems,
     reports,
     solve,
+    vessels,
 )
 from backend.api.schemas.errors import ErrorDetail, ErrorResponse
 
@@ -63,6 +64,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     created = run_migrations(db_session.engine)
     if created:
         logger.info("Tabelas criadas no startup: %s", created)
+    # Sprint 6 / Commit 50 — auto-seed do catálogo de vessels.
+    # Idempotente (não duplica se já populado).
+    try:
+        from backend.data.seed_vessels import seed_vessels
+        with db_session.SessionLocal() as db:
+            n_v = seed_vessels(db)
+            if n_v > 0:
+                logger.info("Seed vessels: +%d novas entradas.", n_v)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Seed vessels falhou (não-bloqueante): %s", e)
     yield
     logger.debug("Shutdown da API.")
 
@@ -170,6 +181,7 @@ def _register_routers(app: FastAPI) -> None:
     app.include_router(solve.router, prefix="/api/v1")
     app.include_router(line_types.router, prefix="/api/v1")
     app.include_router(buoys.router, prefix="/api/v1")
+    app.include_router(vessels.router, prefix="/api/v1")
     app.include_router(moor_io.router, prefix="/api/v1")
     app.include_router(reports.router, prefix="/api/v1")
     app.include_router(mooring_systems.router, prefix="/api/v1")
