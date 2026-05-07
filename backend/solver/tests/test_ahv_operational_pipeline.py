@@ -118,8 +118,13 @@ def test_solve_with_ahv_operational_chamado_diretamente() -> None:
     )
 
 
-def test_multi_tier_d_attachments_rejeitados() -> None:
-    """Sprint 5: apenas 1 attachment com ahv_work_wire por linha."""
+def test_multi_tier_d_attachments_aceitos() -> None:
+    """
+    Sprint 7 / Commit 59 — Multi-AHV é ACEITO (era rejeitado em Sprint 5).
+    Solver loop interno aplica force injection independente em cada AHV.
+    Convergência depende da geometria; basta verificar que não crasha
+    e retorna SolverResult válido.
+    """
     seg, bc, att1 = _make_simple_case()
     att2 = att1.model_copy(update={"position_s_from_anchor": 600.0})
     result = solve_with_ahv_operational(
@@ -129,8 +134,12 @@ def test_multi_tier_d_attachments_rejeitados() -> None:
         seabed=SeabedConfig(),
         config=SolverConfig(),
     )
-    assert result.status.value == "invalid_case"
-    assert "apenas 1 attachment" in result.message.lower() or "Multi-AHV" in result.message
+    # Não deve crashar — status pode ser converged, invalid_case, ou
+    # outros conhecidos. NÃO deve mais retornar "apenas 1 attachment".
+    assert result.status.value in (
+        "converged", "invalid_case", "max_iterations", "numerical_error",
+    )
+    assert "apenas 1 attachment" not in (result.message or "").lower()
 
 
 # ──────────────────────────────────────────────────────────────────

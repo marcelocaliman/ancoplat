@@ -225,6 +225,14 @@ export const boundarySchema = z
       })
       .nullable()
       .optional(),
+    // Sprint 7 / Commit 61 — Snap loads tabelados (DAF).
+    // null/1.0 = estático puro (default); 1.5-3.0 escala tabela DNV.
+    snap_load_daf: z
+      .number()
+      .min(1.0, 'DAF deve ser ≥ 1.0 (1.0 = estático puro)')
+      .max(5.0, 'DAF > 5.0 fora da faixa DNV-RP-H103 §5.5')
+      .nullable()
+      .optional(),
   })
   .refine(
     (b) =>

@@ -880,6 +880,58 @@ export function CaseFormPage() {
                     Sobrescreve o slope derivado da Geometria.
                   </p>
                 </EnvCard>
+
+                {/* Sprint 7 / Commit 64 — Snap loads via DAF DNV-RP-H103 */}
+                <EnvCard title="Snap loads (DAF)">
+                  <Controller
+                    control={control}
+                    name="boundary.snap_load_daf"
+                    render={({ field }) => (
+                      <div className="space-y-1">
+                        <select
+                          value={
+                            field.value == null
+                              ? ''
+                              : String(field.value)
+                          }
+                          onChange={(e) => {
+                            const v = e.target.value
+                            field.onChange(v === '' ? null : parseFloat(v))
+                          }}
+                          className="h-7 w-full rounded-md border border-input bg-background px-2 text-[11px]"
+                        >
+                          <option value="">Estático puro (sem DAF)</option>
+                          <option value="1.5">Calma — Hs &lt; 1m (DAF 1.5)</option>
+                          <option value="2.0">Médio — Hs 1-2m (DAF 2.0)</option>
+                          <option value="2.5">Severo — Hs &gt; 2m (DAF 2.5)</option>
+                          <option value="3.0">Extremo — instalação severa (DAF 3.0)</option>
+                        </select>
+                        <input
+                          type="number"
+                          step={0.1}
+                          min={1.0}
+                          max={5.0}
+                          value={(field.value as number | null) ?? ''}
+                          onChange={(e) => {
+                            const v = parseFloat(e.target.value || '')
+                            field.onChange(
+                              Number.isFinite(v) && v >= 1.0 && v <= 5.0
+                                ? v
+                                : null,
+                            )
+                          }}
+                          placeholder="ou DAF custom (1.0 - 5.0)"
+                          className="h-6 w-full rounded-md border border-input bg-background px-2 font-mono text-[10px]"
+                        />
+                        <p className="text-[9px] leading-tight text-muted-foreground">
+                          Multiplica T_fairlead/T_anchor por DAF (envelope
+                          de pico). DNV-RP-H103 §5.5. Não substitui
+                          análise dinâmica real. D028 informa quando ativo.
+                        </p>
+                      </div>
+                    )}
+                  />
+                </EnvCard>
               </div>
             </TabsContent>
 

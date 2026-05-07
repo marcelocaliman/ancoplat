@@ -267,24 +267,14 @@ def solve_with_ahv_operational(
     if config is None:
         config = SolverConfig()
 
-    # Localiza o attachment Tier D.
-    tier_d_idx: Optional[int] = None
-    for i, att in enumerate(attachments):
-        if att.kind == "ahv" and att.ahv_work_wire is not None:
-            if tier_d_idx is not None:
-                return SolverResult(
-                    status=ConvergenceStatus.INVALID_CASE,
-                    message=(
-                        "Tier D: apenas 1 attachment com ahv_work_wire é "
-                        "suportado por linha. Multi-AHV operacional fica "
-                        "para v1.3+."
-                    ),
-                    water_depth=boundary.h,
-                    startpoint_depth=boundary.startpoint_depth,
-                    solver_version=SOLVER_VERSION,
-                )
-            tier_d_idx = i
-    if tier_d_idx is None:
+    # Sprint 7 / Commit 59 — Localiza TODOS os attachments Tier D
+    # (multi-AHV simultâneos). Loop sobre cada um na iteração outer,
+    # cada um calcula sua própria força ww e injeta independentemente.
+    tier_d_indices: list[int] = [
+        i for i, att in enumerate(attachments)
+        if att.kind == "ahv" and att.ahv_work_wire is not None
+    ]
+    if not tier_d_indices:
         # Não tem Tier D — não deveria ter sido chamado, mas executar
         # facade normal por safety.
         return facade_solve(
@@ -297,22 +287,24 @@ def solve_with_ahv_operational(
             attachments=attachments,
         )
 
-    tier_d_att = attachments[tier_d_idx]
+    # Originais (com ww populado) usados para computar força ww em cada pass.
+    original_atts: dict[int, LineAttachment] = {
+        i: attachments[i] for i in tier_d_indices
+    }
 
-    # Limpa ahv_work_wire/ahv_deck_x na cópia que vai pro facade
-    # solve() — evita recursão infinita do dispatcher Tier D.
-    # `tier_d_att` original é mantido para computar a força do ww.
-    clean_att = tier_d_att.model_copy(update={
-        "ahv_work_wire": None, "ahv_deck_x": None,
-    })
-
-    # Iteração outer: passa 1 (F8 puro com bollard/heading originais),
-    # ler pega, computar ww, re-pass até convergência da posição.
-    prev_x: Optional[float] = None
-    prev_z: Optional[float] = None
+    # Iteração outer: pass 1 todos AHVs como F8 puro; pass 2+ cada um
+    # com força ww atualizada. Convergência: max de |ΔX| + |ΔZ| de
+    # TODOS os pegas < tolerância.
+    prev_pegas: dict[int, tuple[float, float]] = {}
     current_attachments: list[LineAttachment] = list(attachments)
-    current_attachments[tier_d_idx] = clean_att
+    # Limpa ww/deck_x em todos os Tier D para o pass 1 (sem recursão).
+    for i in tier_d_indices:
+        current_attachments[i] = original_atts[i].model_copy(update={
+            "ahv_work_wire": None, "ahv_deck_x": None,
+        })
     last_result: Optional[SolverResult] = None
+    last_ww_data: dict[int, dict] = {}
+    last_pegas: dict[int, tuple[float, float]] = {}
     fallback_reason: Optional[str] = None
 
     for outer in range(MAX_OUTER_ITERS):
@@ -333,66 +325,76 @@ def solve_with_ahv_operational(
             )
             break
 
-        # Localiza pega no array. Coordenadas em frame solver
-        # (anchor em (0,0), fairlead em (X_total, h_drop)).
-        pega_idx = _find_pega_indices(result, tier_d_att, line_segments)
-        if pega_idx is None:
-            fallback_reason = "não foi possível localizar pega no array coords"
-            break
-
+        # Para CADA AHV Tier D: localiza pega + computa ww_data.
         coords_x = result.coords_x or []
         coords_y = result.coords_y or []
-        sx_pega = coords_x[pega_idx]
-        sy_pega = coords_y[pega_idx]
-
-        # Posição global da pega (frame plot — mesma referência que
-        # ahv_deck_x/level). Frame solver: anchor (0,0), fairlead
-        # (X_total, h_drop). Frame plot do user (X=0 fairlead, X=X_total
-        # anchor). Para consistência com ahv_deck_x (que o user define
-        # no frame do plot), convertemos: pega_x_global = X_total - sx.
         X_total = result.total_horz_distance
         endpoint_depth = result.endpoint_depth or boundary.h
-        pega_x_global = X_total - sx_pega
-        pega_z_global = sy_pega - endpoint_depth
 
-        # Resolve ww
-        ww_data = _compute_ww_force_at_pega(
-            tier_d_att, pega_x_global, pega_z_global, config,
-        )
-        if ww_data is None:
-            fallback_reason = (
-                f"catenária do Work Wire não converge para chord "
-                f"({tier_d_att.ahv_deck_x - pega_x_global:.1f}, "
-                f"{(tier_d_att.ahv_deck_level or 0.0) - pega_z_global:.1f}) "
-                f"com L_ww={tier_d_att.ahv_work_wire.length}m"
-            )
-            break
-
-        # Sinal: se AHV está à direita do pega (deck_x > pega_x),
-        # a força do ww puxa o pega pra direita (+X global, que é
-        # -X no frame solver).
-        H_ww_signed = ww_data["H_ww"] * ww_data["sign_x"]
-
-        # Verifica convergência
-        if prev_x is not None and prev_z is not None:
-            if (
-                abs(pega_x_global - prev_x) < PEGA_CONVERGENCE_TOL
-                and abs(pega_z_global - prev_z) < PEGA_CONVERGENCE_TOL
-            ):
-                # Convergiu! Anexa metadados ww no result.
-                return _attach_ww_metadata(
-                    result, tier_d_att, ww_data,
-                    pega_x_global, pega_z_global, outer + 1,
+        new_pegas: dict[int, tuple[float, float]] = {}
+        ww_per_ahv: dict[int, dict] = {}
+        had_failure = False
+        for i in tier_d_indices:
+            tier_d_att = original_atts[i]
+            pega_idx = _find_pega_indices(result, tier_d_att, line_segments)
+            if pega_idx is None:
+                fallback_reason = (
+                    f"não foi possível localizar pega do AHV idx={i}"
                 )
+                had_failure = True
+                break
+            sx_pega = coords_x[pega_idx]
+            sy_pega = coords_y[pega_idx]
+            pega_x_global = X_total - sx_pega
+            pega_z_global = sy_pega - endpoint_depth
+            ww_data = _compute_ww_force_at_pega(
+                tier_d_att, pega_x_global, pega_z_global, config,
+            )
+            if ww_data is None:
+                fallback_reason = (
+                    f"catenária ww (AHV idx={i}) não converge: chord "
+                    f"({tier_d_att.ahv_deck_x - pega_x_global:.1f}, "
+                    f"{(tier_d_att.ahv_deck_level or 0.0) - pega_z_global:.1f}) "
+                    f"L_ww={tier_d_att.ahv_work_wire.length}m"
+                )
+                had_failure = True
+                break
+            new_pegas[i] = (pega_x_global, pega_z_global)
+            ww_per_ahv[i] = ww_data
+        if had_failure:
+            break
+        last_pegas = new_pegas
+        last_ww_data = ww_per_ahv
 
-        prev_x = pega_x_global
-        prev_z = pega_z_global
+        # Verifica convergência (todos os pegas) — só após 1ª iter.
+        if prev_pegas:
+            max_dx = max(
+                abs(new_pegas[i][0] - prev_pegas[i][0]) for i in tier_d_indices
+            )
+            max_dz = max(
+                abs(new_pegas[i][1] - prev_pegas[i][1]) for i in tier_d_indices
+            )
+            if max_dx < PEGA_CONVERGENCE_TOL and max_dz < PEGA_CONVERGENCE_TOL:
+                # Convergiu! Anexa metadados de TODOS os AHVs.
+                # Para retro-compat, _attach_ww_metadata recebe o
+                # primeiro como representativo + lista completa.
+                primary_idx = tier_d_indices[0]
+                return _attach_ww_metadata_multi(
+                    result, original_atts, ww_per_ahv,
+                    new_pegas, outer + 1,
+                )
+        prev_pegas = new_pegas
 
-        # Substitui force no attachment (já sem work_wire — não recursiva)
-        current_attachments[tier_d_idx] = _att_with_replaced_force(
-            clean_att, H_ww_signed, ww_data["V_ww_at_pega"],
-        )
-
+        # Aplica força resultante em CADA AHV.
+        for i in tier_d_indices:
+            ww_data = ww_per_ahv[i]
+            H_ww_signed = ww_data["H_ww"] * ww_data["sign_x"]
+            base_clean = original_atts[i].model_copy(update={
+                "ahv_work_wire": None, "ahv_deck_x": None,
+            })
+            current_attachments[i] = _att_with_replaced_force(
+                base_clean, H_ww_signed, ww_data["V_ww_at_pega"],
+            )
     # Se chegou aqui, não convergiu em MAX_OUTER_ITERS — fallback F8.
     if fallback_reason is None:
         fallback_reason = (
@@ -402,6 +404,64 @@ def solve_with_ahv_operational(
         line_segments, boundary, attachments, seabed, config,
         criteria_profile, user_limits, fallback_reason,
     )
+
+
+def _attach_ww_metadata_multi(
+    result: SolverResult,
+    original_atts: dict[int, LineAttachment],
+    ww_per_ahv: dict[int, dict],
+    pegas: dict[int, tuple[float, float]],
+    iters: int,
+) -> SolverResult:
+    """
+    Sprint 7 / Commit 59 — versão multi-AHV.
+
+    Anexa info de TODOS os AHVs Tier D ao SolverResult. Para cada
+    AHV, cita seu T_AHV e ângulo do ww. Adiciona D018 (sempre,
+    com tier_d_active=True) + D026 (se algum ww raso).
+    """
+    n = len(ww_per_ahv)
+    parts = []
+    for i, ww_data in ww_per_ahv.items():
+        pega_x, pega_z = pegas[i]
+        parts.append(
+            f"AHV idx={i}: pega=({pega_x:.1f}, {pega_z:.1f}), "
+            f"T_AHV={ww_data['T_AHV']/1e3:.1f} kN, "
+            f"H_ww={ww_data['H_ww']/1e3:.1f} kN, "
+            f"angle={ww_data.get('angle_deg', 0):.1f}°"
+        )
+    msg_extra = (
+        f" | Tier D operacional ({n} AHV{'s' if n > 1 else ''}) "
+        f"convergiu em {iters} pass(es). " + " | ".join(parts) + "."
+    )
+    msg = (result.message or "") + msg_extra
+    r_dict = result.model_dump()
+    r_dict["message"] = msg
+    r_dict["solver_version"] = SOLVER_VERSION
+
+    diags = list(r_dict.get("diagnostics") or [])
+
+    # Sprint 5/7 — D018 com tier_d_active=True (sempre dispara em Tier D).
+    from .diagnostics import (
+        D018_ahv_static_idealization,
+        D026_work_wire_too_horizontal,
+    )
+    diags.append(
+        D018_ahv_static_idealization(
+            n_ahv=n, tier_d_active=True,
+        ).model_dump()
+    )
+
+    # D026 para cada AHV com ww raso.
+    for i, ww_data in ww_per_ahv.items():
+        angle_deg = ww_data.get("angle_deg", 90.0)
+        if angle_deg < 10.0:
+            diags.append(
+                D026_work_wire_too_horizontal(angle_deg=angle_deg).model_dump()
+            )
+
+    r_dict["diagnostics"] = diags
+    return SolverResult(**r_dict)
 
 
 def _attach_ww_metadata(

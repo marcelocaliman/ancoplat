@@ -817,6 +817,29 @@ class BoundaryConditions(BaseModel):
         ),
     )
 
+    # ─── Sprint 7 / Commit 61 — Snap loads tabelados (DAF) ────────────
+    # Multiplicador estático aplicado a T_fairlead, T_anchor e T_AHV
+    # no SolverResult para estimar envelope de pico em condições
+    # dinâmicas. Tabela de referência DNV-RP-H103 §5.5:
+    #   - DAF = 1.0  → análise estática pura (default)
+    #   - DAF = 1.5  → operação calma / mar < 1m Hs
+    #   - DAF = 2.0  → operação média / mar 1-2m Hs
+    #   - DAF = 2.5-3.0 → instalação severa / mar > 2m Hs
+    # NÃO substitui análise dinâmica real (Orcaflex/SIMA). D028 dispara
+    # sempre que DAF > 1.0 alertando o engenheiro.
+    snap_load_daf: Optional[float] = Field(
+        default=None,
+        ge=1.0,
+        le=5.0,
+        description=(
+            "Sprint 7 — Multiplicador estático para snap loads (DAF). "
+            "Tabela DNV-RP-H103 §5.5: 1.0 estático puro / 1.5 calma / "
+            "2.0 médio / 2.5-3.0 severo. None equivale a 1.0 "
+            "(retro-compat). Aplicado a T_fairlead/T_anchor/T_AHV no "
+            "SolverResult. NÃO substitui análise dinâmica real."
+        ),
+    )
+
     @field_validator("h", "input_value")
     @classmethod
     def _must_be_positive(cls, v: float) -> float:

@@ -15,6 +15,35 @@ e o projeto adere a [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Sprint 7 (2026-05-07) — Multi-AHV + Snap loads (DAF) + Tier D uplift xfail
+
+- **feat(solver):** Multi-AHV Tier D simultâneos. Solver
+  `solve_with_ahv_operational` aceita N attachments com
+  `ahv_work_wire` (era 1 em Sprint 5). Loop interno calcula força
+  ww de cada AHV independente, todos atualizados no mesmo pass.
+  Convergência: max(|ΔX|+|ΔZ|) de todos os pegas < 0.5m.
+- **feat(solver):** Mensagem de erro do path `uplift+attachments`
+  cita Tier D + F7.x.y especificamente. 2 testes xfail
+  (strict=True) registram contrato esperado para v1.5+.
+- **feat(schema):** novo campo opt-in `BoundaryConditions.snap_load_daf`
+  (range 1.0-5.0) para análise pseudo-dinâmica via DAF tabelado
+  DNV-RP-H103 §5.5.
+- **feat(solver):** hook ao final do facade `solve()` multiplica
+  T_fairlead/T_anchor/tension_magnitude por DAF quando > 1.0.
+  Recalcula utilization e alert_level. **D028** (warning, medium)
+  dispara sempre que ativo, citando regime
+  ('calma'/'média'/'severa'/'extremo').
+- **feat(frontend):** EnvCard "Snap loads (DAF)" na aba Ambiente
+  com 5 presets DNV + override numérico.
+- **docs:** Decisão fechada **#21** documenta multi-AHV + DAF +
+  pendência F7.x.y para Tier D + uplift.
+
+⚠ **Sem mudanças numéricas em cases salvos:** snap_load_daf é
+opt-in (default `None` = estático puro). Cases legacy abrem
+inalterados.
+
+Suite: 972 → 989 backend (+17) + 207 frontend.
+
 ### Sprint 6 (2026-05-07) — Vessel padronizado + polish visual
 
 - **feat(db):** tabela `vessel_types` no SQLite + `VesselTypeRecord`

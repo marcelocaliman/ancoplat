@@ -358,13 +358,27 @@ def solve(
             if resolved_attachments:
                 # Fase 8: mensagem cobre AHV explicitamente (Q5: AHV +
                 # uplift bloqueado em v1.0).
+                # Sprint 7 / Commit 60: mensagem ATUALIZADA para citar
+                # caminhos específicos. Tier D + uplift = F7.x.y (v1.5+).
                 kinds_present = {att.kind for att in resolved_attachments}
                 kinds_str = ", ".join(sorted(kinds_present))
+                tier_d_count = sum(
+                    1 for a in resolved_attachments
+                    if a.kind == "ahv" and a.ahv_work_wire is not None
+                )
+                tier_d_note = ""
+                if tier_d_count > 0:
+                    tier_d_note = (
+                        f" Caso inclui {tier_d_count} attachment(s) Tier D "
+                        "(ahv_work_wire set) — combinação Tier D + uplift "
+                        "requer F7.x.y (extensão de suspended_endpoint para "
+                        "aceitar force injection mid-line). Pendência v1.5+."
+                    )
                 raise NotImplementedError(
                     f"Anchor uplift (endpoint_grounded=False) com "
                     f"attachments ({kinds_str}) ainda não suportado em "
-                    "v1.0. Caso requer modelagem multi-segmento + uplift "
-                    "+ attachments combinados (F7.x/F8.x pós-v1.0). "
+                    "v1.0-1.4. Caso requer modelagem multi-segmento + uplift "
+                    f"+ attachments combinados (F7.x).{tier_d_note} "
                     "Remova attachments ou use endpoint_grounded=True."
                 )
             from .suspended_endpoint import solve_suspended_endpoint
@@ -884,9 +898,39 @@ def solve(
                 D015_rare_profile_type(profile_type=pt.value).model_dump()
             )
 
+        # Sprint 7 / Commit 62 — Aplica DAF (snap loads tabelados).
+        # Multiplica T_fairlead, T_anchor (e tension_magnitude/_x/_y se
+        # presentes) por boundary.snap_load_daf. Útil para envelope de
+        # pico estimado em condições dinâmicas. D028 dispara sempre
+        # que DAF > 1.0 (transparência).
+        result_dict = result.model_dump()
+        daf = boundary.snap_load_daf
+        if daf is not None and daf > 1.0:
+            result_dict["fairlead_tension"] = result.fairlead_tension * daf
+            result_dict["anchor_tension"] = result.anchor_tension * daf
+            if result.tension_magnitude:
+                result_dict["tension_magnitude"] = [
+                    t * daf for t in result.tension_magnitude
+                ]
+            if result.tension_x:
+                result_dict["tension_x"] = [t * daf for t in result.tension_x]
+            if result.tension_y:
+                result_dict["tension_y"] = [t * daf for t in result.tension_y]
+            # Recalcula utilization com tensão escalada.
+            mbl = line_segments[0].MBL if line_segments else 0.0
+            if mbl > 0:
+                result_dict["utilization"] = result_dict["fairlead_tension"] / mbl
+            from .diagnostics import D028_snap_loads_applied
+            existing_diags.append(D028_snap_loads_applied(daf=daf).model_dump())
+            # Re-classifica alert_level com tensão escalada.
+            new_util = result_dict["utilization"]
+            alert = classify_utilization(
+                new_util, criteria_profile, user_limits=user_limits,
+            )
+
         return SolverResult(
             **{
-                **result.model_dump(),
+                **result_dict,
                 "alert_level": alert,
                 "profile_type": pt,
                 "diagnostics": existing_diags,
