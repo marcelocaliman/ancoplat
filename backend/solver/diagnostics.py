@@ -918,6 +918,7 @@ def D018_ahv_static_idealization(
     *,
     n_ahv: int,
     tier_c_active: bool = False,
+    tier_d_active: bool = False,
 ) -> SolverDiagnostic:
     """
     AHV (Anchor Handler Vessel) modelado como análise estática — idealização.
@@ -942,7 +943,20 @@ def D018_ahv_static_idealization(
     Confidence: medium.
     Severity: warning.
     """
-    if tier_c_active:
+    if tier_d_active:
+        title = "AHV Tier D — operacional mid-line com Work Wire elástico"
+        cause = (
+            "Análise estática de AHV operacional (Sprint 5 / Tier D) — "
+            "linha de ancoragem instalada continua íntegra entre "
+            "plataforma e anchor; AHV puxa lateralmente via Work Wire "
+            "conectado num ponto intermediário. Modelagem inclui: "
+            "catenária elástica do mooring (split implícito no pega) + "
+            "Work Wire elástico mid-line. NÃO inclui: movimento dinâmico "
+            "do AHV (heave, pitch, roll), snap loads no Work Wire, "
+            "hidrodinâmica do casco do AHV, fadiga por ciclos, oscilação "
+            "do ângulo do ww durante operação."
+        )
+    elif tier_c_active:
         title = "AHV Tier C — análise estática com Work Wire elástico"
         cause = (
             "Análise estática de AHV (Sprint 4 / Tier C) — não substitui "
@@ -1133,6 +1147,96 @@ def D024_tier_c_fallback_sprint2(
 
 
 # =============================================================================
+# Diagnostics novos da Sprint 5 — D025, D026 (Tier D operacional)
+# =============================================================================
+
+
+def D025_tier_d_fallback_f8(
+    *,
+    fallback_reason: str,
+) -> SolverDiagnostic:
+    """
+    Sprint 5 / Commit 45 — Tier D reduziu para F8 puro (fallback).
+
+    Dispara quando o solver Tier D não converge ou catenária do
+    Work Wire é geometricamente inviável. Resultado equivale ao F8
+    puro (carga pontual via ahv_bollard_pull/heading_deg, sem ww
+    elástico modelado).
+
+    Confidence: high — fato determinístico (solver explicitamente
+    decidiu cair em fallback).
+    Severity: info — apenas informativo, não-bloqueante.
+    """
+    return SolverDiagnostic(
+        code="D025_TIER_D_FALLBACK_F8",
+        severity="info",
+        title="Tier D reduzido a F8 (carga pontual, sem ww modelado)",
+        cause=(
+            f"Solver Tier D detectou {fallback_reason} e usou modelo F8 "
+            "efetivo. Resultado é matematicamente equivalente: bollard "
+            "pull aplicado direto como carga pontual no ponto de pega, "
+            "sem modelar a catenária elástica do Work Wire."
+        ),
+        suggestion=(
+            "Para validar Tier D completo (ww elástico): verifique que "
+            "ahv_deck_x está a uma distância horizontal ≤ ahv_work_wire."
+            "length do ponto de pega, e ahv_deck_level produz chord "
+            "vertical positivo (deck acima da pega)."
+        ),
+        confidence="high",
+        affected_fields=[
+            "attachments[].ahv_work_wire.length",
+            "attachments[].ahv_deck_x",
+            "attachments[].ahv_deck_level",
+        ],
+    )
+
+
+def D026_work_wire_too_horizontal(
+    *,
+    angle_deg: float,
+    threshold_deg: float = 10.0,
+) -> SolverDiagnostic:
+    """
+    Sprint 5 / Commit 45 — Work Wire com ângulo vertical muito raso.
+
+    Dispara quando o ângulo do ww com a horizontal < threshold_deg.
+    Indica que o AHV está muito longe do pega — geometria operacional
+    incomum, possivelmente erro de parametrização.
+
+    Confidence: medium — heurística (10° é threshold operacional).
+    Severity: warning.
+    """
+    return SolverDiagnostic(
+        code="D026_WORK_WIRE_TOO_HORIZONTAL",
+        severity="warning",
+        title=(
+            f"Work Wire muito raso (ângulo {angle_deg:.1f}° "
+            f"< threshold {threshold_deg:.0f}°)"
+        ),
+        cause=(
+            f"O Work Wire conecta o ponto de pega ao convés do AHV "
+            f"com inclinação de apenas {angle_deg:.1f}° em relação à "
+            "horizontal. Em operações reais, ww quase horizontal "
+            "indica que o AHV está muito distante do pega — "
+            "geometria operacional incomum."
+        ),
+        suggestion=(
+            "Reposicione o AHV (ahv_deck_x) mais perto do ponto de "
+            "pega para que o ww fique predominantemente vertical "
+            "(ângulo ≥ 30° tipicamente). Verifique se o caso real "
+            "corresponde a esta geometria — pode indicar erro de "
+            "parametrização."
+        ),
+        confidence="medium",
+        affected_fields=[
+            "attachments[].ahv_deck_x",
+            "attachments[].ahv_deck_level",
+        ],
+    )
+
+
+# =============================================================================
 # Helper para classes de exceção que carregam diagnóstico
 # =============================================================================
 
@@ -1179,6 +1283,8 @@ __all__ = [
     "D019_ahv_force_mostly_out_of_plane",
     "D022_work_wire_near_mbl",
     "D024_tier_c_fallback_sprint2",
+    "D025_tier_d_fallback_f8",
+    "D026_work_wire_too_horizontal",
     "D900_generic_nonconvergence",
     "SolverDiagnostic",
     "SolverDiagnosticError",

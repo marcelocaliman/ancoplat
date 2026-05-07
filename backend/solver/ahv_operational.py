@@ -192,11 +192,15 @@ def _compute_ww_force_at_pega(
     v_sq = T_pega_ww * T_pega_ww - H_ww_mag * H_ww_mag
     V_ww_at_pega = math.sqrt(max(0.0, v_sq))
 
+    # Ângulo do ww com a horizontal — usado por D026.
+    angle_deg = math.degrees(math.atan2(chord_z, abs_chord_x or 0.001))
+
     return {
         "H_ww": H_ww_mag,
         "V_ww_at_pega": V_ww_at_pega,
         "T_AHV": T_AHV,
         "sign_x": sign_x,
+        "angle_deg": angle_deg,
     }
 
 
@@ -408,18 +412,44 @@ def _attach_ww_metadata(
     pega_z: float,
     iters: int,
 ) -> SolverResult:
-    """Anexa info do Work Wire ao SolverResult para downstream."""
+    """
+    Anexa info do Work Wire ao SolverResult para downstream + D026
+    se ww estiver muito horizontal (geometria operacional incomum).
+    """
     msg_extra = (
         f" | Tier D operacional convergiu em {iters} pass(es). "
         f"Pega global=({pega_x:.1f}, {pega_z:.1f}). "
         f"T_AHV={ww_data['T_AHV']/1e3:.1f} kN. "
         f"H_ww={ww_data['H_ww']/1e3:.1f} kN, "
-        f"V_ww_pega={ww_data['V_ww_at_pega']/1e3:.1f} kN."
+        f"V_ww_pega={ww_data['V_ww_at_pega']/1e3:.1f} kN. "
+        f"ww_angle={ww_data.get('angle_deg', 0):.1f}°."
     )
     msg = (result.message or "") + msg_extra
     r_dict = result.model_dump()
     r_dict["message"] = msg
     r_dict["solver_version"] = SOLVER_VERSION
+
+    diags = list(r_dict.get("diagnostics") or [])
+
+    # Sprint 5 / D018 update — tier_d_active=True (sempre dispara em
+    # Tier D, mesmo padrão F8/Tier C). Decisão Q6 da Fase 8 reforçada.
+    from .diagnostics import (
+        D018_ahv_static_idealization,
+        D026_work_wire_too_horizontal,
+    )
+    diags.append(
+        D018_ahv_static_idealization(
+            n_ahv=1, tier_d_active=True,
+        ).model_dump()
+    )
+
+    # Sprint 5 / D026 — ww muito horizontal (< 10° vertical).
+    angle_deg = ww_data.get("angle_deg", 90.0)
+    if angle_deg < 10.0:
+        diags.append(
+            D026_work_wire_too_horizontal(angle_deg=angle_deg).model_dump()
+        )
+    r_dict["diagnostics"] = diags
     return SolverResult(**r_dict)
 
 
@@ -466,24 +496,9 @@ def _build_fallback_f8(
     )
     r_dict["solver_version"] = SOLVER_VERSION
     diags = list(r_dict.get("diagnostics") or [])
-    # D025 (info) — fallback Tier D → F8.
-    diags.append({
-        "code": "D025_TIER_D_FALLBACK_F8",
-        "severity": "info",
-        "confidence": "high",
-        "title": "Tier D reduzido a F8 (fallback)",
-        "cause": (
-            f"Solver Tier D detectou {reason} e usou modelo F8 efetivo "
-            "(carga pontual via ahv_bollard_pull/heading_deg, sem Work "
-            "Wire elástico modelado)."
-        ),
-        "suggestion": (
-            "Para validar Tier D completo, verifique se ahv_deck_x e "
-            "ahv_deck_level produzem chord factível com ahv_work_wire."
-            "length (chord ≤ L_ww com folga ≥ 5%)."
-        ),
-        "affected_fields": [],
-    })
+    # D025 (info, high) — fallback Tier D → F8 (helper canônico).
+    from .diagnostics import D025_tier_d_fallback_f8
+    diags.append(D025_tier_d_fallback_f8(fallback_reason=reason).model_dump())
     r_dict["diagnostics"] = diags
     return SolverResult(**r_dict)
 
