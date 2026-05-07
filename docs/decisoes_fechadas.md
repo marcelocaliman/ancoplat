@@ -637,3 +637,27 @@ inventar matemática nova sem revisão.
 **Referência canônica:** Sprint 4 / Commits 33-41.
 
 **Link:** [`relatorio_sprint4_ahv_tier_c.md`](relatorio_sprint4_ahv_tier_c.md).
+
+
+---
+
+## Decisão #19 — Tier D AHV Operacional Mid-Line (Sprint 5)
+
+**Decisão:** Estender `LineAttachment` (kind="ahv") com campos opcionais `ahv_work_wire` (WorkWireSpec) + `ahv_deck_x` para ativar **Tier D operacional**: linha de ancoragem instalada continua íntegra entre plataforma e anchor; um AHV puxa lateralmente via Work Wire conectado num ponto intermediário. Default `None` preserva F8 puro (carga pontual).
+
+**Razão:** cenário identificado a partir de screenshot QMoor real mostrando "Anchor Handler Vessels" tab com Bollard Pull + Connection Position + Work Line. É o 4º cenário AHV (após Sprint 2 instalação, Sprint 4 Tier C endpoint, Fase 8 carga pontual) — comum em operações reais de manutenção/análise de tensão.
+
+**Implementação:** solver pre-processor 2-pass em `backend/solver/ahv_operational.py` com refinamento iterativo. Pass 1 resolve linha SEM ww (F8 puro); pass 2 substitui (bollard, heading) pela resultante calculada do Work Wire elástico. Convergência quando |ΔX_pega| + |ΔZ_pega| < 0.5m em até 5 iterações outer.
+
+Fallback automático para F8 puro com **D025** quando catenária ww inviável OU iteração não converge.
+
+**Validação:** 6 BC-AHV-OP-01..06 contra MoorPy `System.solveEquilibrium`. Marcados como xfail informativos por divergência conceitual: MoorPy com pega FREE; AncoPlat com pega FIXA via position_s_from_anchor. Validação fina é F-prof.X.
+
+**Decisões implementadas:**
+- D025 (info, high) — Tier D reduziu para F8 (transparente).
+- D026 (warning, medium) — Work Wire com ângulo vertical < 10°.
+- D018 atualizado com `tier_d_active=True` citando snap loads + motion AHV + hidrodinâmica + fadiga + oscilação como NÃO modelados.
+
+**Referência canônica:** Sprint 5 / Commits 42-49.
+
+**Link:** [`relatorio_sprint5_ahv_operational.md`](relatorio_sprint5_ahv_operational.md).
