@@ -1325,6 +1325,104 @@ export function CatenaryPlot({
       })
     }
 
+    // ── Sprint 5 / Commit 48 — AHV Operacional Tier D mid-line ──
+    // Para cada attachment com `ahv_work_wire` set, desenha:
+    //   - Ícone do AHV deck na superfície em (ahv_deck_x, ahv_deck_level)
+    //     [já no frame plot — X=0 fairlead, X=Xtotal anchor]
+    //   - Linha laranja conectando AHV deck → ponto da linha (pega)
+    // Pega no plot é encontrada via attachment.position_s_from_anchor
+    // ou position_index, mapeado ao array coords via arc length.
+    if (attachments && attachments.length > 0) {
+      // Pré-calcula arc length acumulado (mesmo cálculo de inlineAnnotations).
+      const xsR = result.coords_x ?? []
+      const ysR = result.coords_y ?? []
+      if (xsR.length >= 2) {
+        const arcCum: number[] = [0]
+        for (let k = 1; k < xsR.length; k += 1) {
+          const dx = (xsR[k] ?? 0) - (xsR[k - 1] ?? 0)
+          const dy = (ysR[k] ?? 0) - (ysR[k - 1] ?? 0)
+          arcCum.push(arcCum[k - 1]! + Math.hypot(dx, dy))
+        }
+        const indexAtArc = (target: number): number => {
+          let lo = 0, hi = arcCum.length - 1
+          while (lo < hi) {
+            const mid = (lo + hi) >>> 1
+            if ((arcCum[mid] ?? 0) < target) lo = mid + 1
+            else hi = mid
+          }
+          return lo
+        }
+        // cumLen do form (anchor-first).
+        const cumLen: number[] = [0]
+        for (const s of segments ?? []) {
+          cumLen.push(cumLen[cumLen.length - 1]! + ((s as unknown as { length?: number }).length ?? 0))
+        }
+        for (const att of attachments) {
+          const attTyped = att as unknown as {
+            kind?: string
+            ahv_work_wire?: unknown
+            ahv_deck_x?: number | null
+            ahv_deck_level?: number | null
+            position_s_from_anchor?: number | null
+            position_index?: number | null
+          }
+          if (attTyped.kind !== 'ahv' || attTyped.ahv_work_wire == null) continue
+          if (attTyped.ahv_deck_x == null) continue
+          // Localiza pega no array via arc length.
+          let arcAtt: number | null = null
+          if (attTyped.position_s_from_anchor != null) {
+            arcAtt = attTyped.position_s_from_anchor
+          } else if (attTyped.position_index != null) {
+            arcAtt = cumLen[attTyped.position_index + 1] ?? null
+          }
+          if (arcAtt == null) continue
+          const k = indexAtArc(arcAtt)
+          const sx = xsR[k]
+          const sy = ysR[k]
+          if (sx == null || sy == null) continue
+          const pegaX = Xtotal - sx
+          const pegaY = sy - endpointDepth
+          const ahvX = attTyped.ahv_deck_x
+          const ahvY = attTyped.ahv_deck_level ?? 0
+          // Trace da linha do Work Wire (laranja dashdot).
+          pushTrace({
+            type: 'scatter',
+            mode: 'lines',
+            x: [pegaX, ahvX],
+            y: [pegaY, ahvY],
+            line: { color: '#F97316', width: 3, dash: 'dashdot' },
+            name: 'Work Wire (Tier D)',
+            hovertemplate:
+              '<b>Work Wire (Tier D)</b><br>'
+              + `Pega: (${pegaX.toFixed(0)}, ${pegaY.toFixed(0)})<br>`
+              + `AHV deck: (${ahvX.toFixed(0)}, ${ahvY.toFixed(0)})<extra></extra>`,
+            showlegend: true,
+          })
+          // Marker do AHV deck — círculo (ícone SVG via images vem em
+          // outro caminho mais complexo; usamos marker por simplicidade).
+          if (showImages) {
+            pushTrace({
+              type: 'scatter',
+              mode: 'markers',
+              x: [ahvX],
+              y: [ahvY],
+              marker: {
+                symbol: 'square',
+                size: 14,
+                color: '#F97316',
+                line: { color: '#FFFFFF', width: 1.5 },
+              },
+              name: 'AHV deck',
+              hovertemplate:
+                '<b>AHV deck</b><br>'
+                + `x = ${ahvX.toFixed(1)} m<br>y = ${ahvY.toFixed(1)} m<extra></extra>`,
+              showlegend: false,
+            })
+          }
+        }
+      }
+    }
+
     // Persiste o map traceIdx → userIdx pro handler onHover do Plotly.
     // O ref é lido do callback onHover (estável), enquanto o data fica
     // no rendering do Plot (passado por value). Mantemos os dois em sync
