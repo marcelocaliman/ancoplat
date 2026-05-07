@@ -308,6 +308,26 @@ def solve(
         slope = seabed.slope_rad
         slope_is_significant = abs(slope) > 1e-6
 
+        # ─── Sprint 5 — Dispatcher Tier D (AHV operacional mid-line) ──
+        # Quando algum attachment tem `ahv_work_wire` populado, delega
+        # para `solve_with_ahv_operational` (pre-processor 2-pass com
+        # refinamento iterativo). Tier D é PRIORITÁRIO sobre Tier C
+        # (instalação) — ambos usam ww mas em contextos diferentes.
+        from .ahv_operational import (
+            has_tier_d_attachment as _has_tier_d,
+            solve_with_ahv_operational as _solve_tier_d,
+        )
+        if _has_tier_d(resolved_attachments):
+            return _solve_tier_d(
+                line_segments=resolved_segments,
+                boundary=boundary,
+                attachments=resolved_attachments,
+                seabed=seabed,
+                config=config,
+                criteria_profile=criteria_profile,
+                user_limits=user_limits,
+            )
+
         # ─── Sprint 4 — Dispatcher Tier C (AHV + Work Wire físico) ────
         # Quando boundary.ahv_install.work_wire está populado, delega
         # para `solve_with_work_wire` (catenárias acopladas via fsolve).
