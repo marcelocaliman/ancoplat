@@ -70,6 +70,26 @@ export const lineAttachmentSchema = z
     ahv_heading_deg: z.number().min(0).max(359.999).nullable().optional(),
     ahv_stern_angle_deg: z.number().min(-180).max(180).nullable().optional(),
     ahv_deck_level: z.number().min(0).nullable().optional(),
+    // Sprint 5 / Tier D — AHV operacional mid-line. Quando ahv_work_wire
+    // está set, o solver modela o cabo de trabalho como linha extra
+    // entre o ponto da linha e o convés do AHV. Default null preserva
+    // F8 puro (carga pontual).
+    ahv_work_wire: z
+      .object({
+        length: z.number().positive('Comprimento deve ser > 0'),
+        EA: z.number().positive('EA deve ser > 0 N'),
+        w: z.number().min(0, 'Peso submerso ≥ 0'),
+        MBL: z.number().positive('MBL deve ser > 0 N'),
+        category: z.literal('Wire').default('Wire'),
+        n_segs: z.number().int().min(1).max(20).default(1),
+        line_type_id: z.number().int().nullable().optional(),
+        line_type: z.string().nullable().optional(),
+        diameter: z.number().positive().nullable().optional(),
+        dry_weight: z.number().min(0).nullable().optional(),
+      })
+      .nullable()
+      .optional(),
+    ahv_deck_x: z.number().nullable().optional(),
   })
   .refine(
     (a) =>
@@ -102,6 +122,22 @@ export const lineAttachmentSchema = z
       message:
         'Heading do AHV (eixo X global, anti-horário) é obrigatório.',
       path: ['ahv_heading_deg'],
+    },
+  )
+  // Sprint 5 / Tier D — ahv_work_wire requer kind='ahv' + ahv_deck_x set.
+  .refine(
+    (a) => a.ahv_work_wire == null || a.kind === 'ahv',
+    {
+      message: 'ahv_work_wire só é válido em attachment kind="ahv".',
+      path: ['ahv_work_wire'],
+    },
+  )
+  .refine(
+    (a) => a.ahv_work_wire == null || a.ahv_deck_x != null,
+    {
+      message:
+        'Tier D requer ahv_deck_x set (posição horizontal do AHV).',
+      path: ['ahv_deck_x'],
     },
   )
 

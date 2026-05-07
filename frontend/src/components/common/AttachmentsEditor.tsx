@@ -1,4 +1,4 @@
-import { Anchor, AlertTriangle, Check, ChevronDown, ChevronUp, Plus, Trash2, Waves } from 'lucide-react'
+import { Anchor, AlertTriangle, Check, ChevronDown, ChevronUp, Plus, Trash2, Waves, Zap } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
   Controller,
@@ -9,6 +9,7 @@ import {
   type UseFieldArrayReturn,
   type UseFormSetValue,
 } from 'react-hook-form'
+import { Badge } from '@/components/ui/badge'
 import { BuoyPicker } from '@/components/common/BuoyPicker'
 import { LineTypePicker } from '@/components/common/LineTypePicker'
 import { UnitInput } from '@/components/common/UnitInput'
@@ -502,6 +503,17 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
           />
         </div>
         )}
+        {/* Sprint 5 / Commit 47 — Subcard Tier D operacional */}
+        {isAHV && (
+          <div className="col-span-full mt-1">
+            <AHVOperationalSubcard
+              control={control}
+              setValue={setValue}
+              basePath={basePath}
+              realIndex={realIndex}
+            />
+          </div>
+        )}
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center justify-between gap-1">
             <Label className="text-[10px] font-medium text-muted-foreground">
@@ -956,6 +968,361 @@ function AttachmentRow<T extends FieldValues = CaseFormValues>({
               </div>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Sprint 5 / Commit 47 — AHVOperationalSubcard (Tier D operacional).
+// Subcard colapsado dentro do AttachmentRow quando kind='ahv'.
+// Permite habilitar Tier D (work wire elástico mid-line + posição
+// do AHV deck na superfície). Default desativado (F8 puro).
+// ─────────────────────────────────────────────────────────────────
+
+function AHVOperationalSubcard<T extends FieldValues>({
+  control,
+  setValue,
+  basePath,
+  realIndex,
+}: {
+  control: Control<T>
+  setValue: UseFormSetValue<T>
+  basePath: string
+  realIndex: number
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const ww = useWatch({
+    control,
+    name: `${basePath}.${realIndex}.ahv_work_wire` as Path<T>,
+  })
+  const enabled = ww != null
+
+  const DEFAULT_WW = {
+    length: 300.0,
+    EA: 5.5e8,
+    w: 170.0,
+    MBL: 6.5e6,
+    category: 'Wire' as const,
+    n_segs: 1,
+    line_type_id: null,
+    line_type: null,
+    diameter: 0.0762,
+    dry_weight: null,
+  }
+
+  function toggleEnabled() {
+    if (enabled) {
+      setValue(
+        `${basePath}.${realIndex}.ahv_work_wire` as Path<T>,
+        null as never,
+        { shouldDirty: true },
+      )
+      setValue(
+        `${basePath}.${realIndex}.ahv_deck_x` as Path<T>,
+        null as never,
+        { shouldDirty: true },
+      )
+    } else {
+      setValue(
+        `${basePath}.${realIndex}.ahv_work_wire` as Path<T>,
+        { ...DEFAULT_WW } as never,
+        { shouldDirty: true },
+      )
+      // Default: AHV deck a 30m do pega (precisa user editar via UI).
+      setValue(
+        `${basePath}.${realIndex}.ahv_deck_x` as Path<T>,
+        100.0 as never,
+        { shouldDirty: true },
+      )
+      setExpanded(true)
+    }
+  }
+
+  function applyLineType(lt: LineTypeOutput | null) {
+    if (!lt) {
+      setValue(
+        `${basePath}.${realIndex}.ahv_work_wire.line_type_id` as Path<T>,
+        null as never,
+        { shouldDirty: true },
+      )
+      setValue(
+        `${basePath}.${realIndex}.ahv_work_wire.line_type` as Path<T>,
+        null as never,
+        { shouldDirty: true },
+      )
+      return
+    }
+    setValue(
+      `${basePath}.${realIndex}.ahv_work_wire.line_type_id` as Path<T>,
+      lt.id as never,
+      { shouldDirty: true },
+    )
+    setValue(
+      `${basePath}.${realIndex}.ahv_work_wire.line_type` as Path<T>,
+      lt.line_type as never,
+      { shouldDirty: true },
+    )
+    if (lt.diameter != null) {
+      setValue(
+        `${basePath}.${realIndex}.ahv_work_wire.diameter` as Path<T>,
+        lt.diameter as never,
+        { shouldDirty: true },
+      )
+    }
+    if (lt.qmoor_ea != null) {
+      setValue(
+        `${basePath}.${realIndex}.ahv_work_wire.EA` as Path<T>,
+        lt.qmoor_ea as never,
+        { shouldDirty: true },
+      )
+    }
+    setValue(
+      `${basePath}.${realIndex}.ahv_work_wire.w` as Path<T>,
+      lt.wet_weight as never,
+      { shouldDirty: true },
+    )
+    setValue(
+      `${basePath}.${realIndex}.ahv_work_wire.MBL` as Path<T>,
+      lt.break_strength as never,
+      { shouldDirty: true },
+    )
+  }
+
+  const wwTyped = ww as
+    | {
+        line_type?: string | null
+        line_type_id?: number | null
+        diameter?: number | null
+        EA?: number | null
+        w?: number | null
+        MBL?: number | null
+      }
+    | null
+  const lineTypeValue = enabled && wwTyped?.line_type
+    ? ({
+        id: wwTyped.line_type_id ?? 0,
+        line_type: wwTyped.line_type,
+        category: 'Wire',
+        diameter: wwTyped.diameter ?? 0,
+        dry_weight: 0,
+        wet_weight: wwTyped.w ?? 0,
+        break_strength: wwTyped.MBL ?? 0,
+        qmoor_ea: wwTyped.EA ?? 0,
+        data_source: 'legacy_qmoor',
+      } as unknown as LineTypeOutput)
+    : null
+
+  return (
+    <div className="rounded-md border border-warning/20 bg-warning/[0.02]">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-[11px] hover:bg-warning/[0.04]"
+      >
+        {expanded ? (
+          <ChevronUp className="h-3 w-3 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="h-3 w-3 text-muted-foreground" />
+        )}
+        <Zap className="h-3 w-3 text-warning" />
+        <span className="font-medium">
+          AHV Operacional (Tier D) — Work Wire mid-line
+        </span>
+        {enabled ? (
+          <Badge
+            variant="outline"
+            className="ml-auto h-4 border-warning/40 bg-warning/10 px-1.5 text-[9px] text-warning"
+          >
+            ATIVO
+          </Badge>
+        ) : (
+          <span className="ml-auto text-[10px] text-muted-foreground">
+            opcional · clique para habilitar
+          </span>
+        )}
+      </button>
+      {expanded && (
+        <div className="space-y-2 border-t border-warning/20 px-2 py-2">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={enabled ? 'destructive' : 'outline'}
+              size="sm"
+              className="h-6 gap-1 text-[10px]"
+              onClick={toggleEnabled}
+            >
+              {enabled ? (
+                <>
+                  <Trash2 className="h-3 w-3" />
+                  Desativar Tier D
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3 w-3" />
+                  Ativar Tier D (Work Wire mid-line)
+                </>
+              )}
+            </Button>
+            {enabled && (
+              <span className="text-[10px] italic text-muted-foreground">
+                Solver modela ww elástico real conectando AHV ao pega
+              </span>
+            )}
+          </div>
+          {enabled && (
+            <>
+              <p className="text-[10px] text-muted-foreground">
+                Tier D substitui a carga pontual F8 por modelo físico:
+                Work Wire elástico entre o ponto de pega e o convés do
+                AHV. Em regime degenerado, fallback automático para F8
+                (D025 informa). Validado vs MoorPy Subsystem.
+              </p>
+              <div className="space-y-1">
+                <Label className="text-[10px] font-medium text-muted-foreground">
+                  Cabo do Work Wire (catálogo)
+                </Label>
+                <LineTypePicker
+                  value={lineTypeValue}
+                  onChange={applyLineType}
+                  className="h-7"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 lg:grid-cols-4">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">
+                    Comprimento ww (m)
+                  </Label>
+                  <Controller
+                    control={control}
+                    name={`${basePath}.${realIndex}.ahv_work_wire.length` as Path<T>}
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                        step={1}
+                        min={0}
+                        value={(field.value as number | null) ?? 0}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value || '0'))
+                        }
+                        className="h-7 font-mono text-[11px]"
+                      />
+                    )}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">
+                    EA (N)
+                  </Label>
+                  <Controller
+                    control={control}
+                    name={`${basePath}.${realIndex}.ahv_work_wire.EA` as Path<T>}
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                        step={1e7}
+                        min={0}
+                        value={(field.value as number | null) ?? 0}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value || '0'))
+                        }
+                        className="h-7 font-mono text-[11px]"
+                      />
+                    )}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">
+                    Peso (N/m)
+                  </Label>
+                  <Controller
+                    control={control}
+                    name={`${basePath}.${realIndex}.ahv_work_wire.w` as Path<T>}
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                        step={1}
+                        min={0}
+                        value={(field.value as number | null) ?? 0}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value || '0'))
+                        }
+                        className="h-7 font-mono text-[11px]"
+                      />
+                    )}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">
+                    MBL (N)
+                  </Label>
+                  <Controller
+                    control={control}
+                    name={`${basePath}.${realIndex}.ahv_work_wire.MBL` as Path<T>}
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                        step={1e5}
+                        min={0}
+                        value={(field.value as number | null) ?? 0}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value || '0'))
+                        }
+                        className="h-7 font-mono text-[11px]"
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                <div>
+                  <Label
+                    className="text-[10px] text-muted-foreground"
+                    title="Posição horizontal do AHV deck no referencial da linha (X=0 fairlead, X=X_total anchor)."
+                  >
+                    AHV deck x (m)
+                  </Label>
+                  <Controller
+                    control={control}
+                    name={`${basePath}.${realIndex}.ahv_deck_x` as Path<T>}
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                        step={1}
+                        value={(field.value as number | null) ?? 0}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value || '0'))
+                        }
+                        className="h-7 font-mono text-[11px]"
+                      />
+                    )}
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">
+                    AHV deck level (m acima da água)
+                  </Label>
+                  <Controller
+                    control={control}
+                    name={`${basePath}.${realIndex}.ahv_deck_level` as Path<T>}
+                    render={({ field }) => (
+                      <Input
+                        type="number"
+                        step={0.5}
+                        min={0}
+                        value={(field.value as number | null) ?? 0}
+                        onChange={(e) =>
+                          field.onChange(parseFloat(e.target.value || '0'))
+                        }
+                        className="h-7 font-mono text-[11px]"
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

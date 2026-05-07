@@ -1,0 +1,423 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-05-07T00:46:01.390571+00:00",
+  "moorpy_commit": "1fb29f8eca2618543b2df7056adfdfce0265737b",
+  "ancoplat_phase": "Sprint 5 / Tier D Operacional",
+  "comment": "Baseline MoorPy para AHV Operacional Mid-Line. 6 cenários 2D plano vertical (heading 0°/180°). Wire 76mm IWRCEIPS como material único. Referência para validar solver backend/solver/ahv_operational.py com gate rtol < 1e-2.",
+  "cases": [
+    {
+      "id": "BC-AHV-OP-01",
+      "mode": "favorable-symmetric",
+      "description": "Pega centralizada, AHV adiante (X_AHV = X_pega + 30).",
+      "inputs": {
+        "h": 200.0,
+        "X_fairlead": 1700.0,
+        "X_AHV": 880.0,
+        "deck_z": 10.0,
+        "L_lower": 1000.0,
+        "L_upper": 1000.0,
+        "L_ww": 250.0,
+        "wire": {
+          "name": "wire_IWRCEIPS_76mm",
+          "d_nom": 0.0762,
+          "d_vol": 0.0762,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_lower": 0.0,
+        "T_pega_upper": 0.11700522134390111,
+        "T_fairlead": 33991.939911804206,
+        "T_pega_ww": 0.0,
+        "T_AHV": 44861.81404555147,
+        "pega_x": 899.9853171265465,
+        "pega_z": -200.0,
+        "fA_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fA_upper": [
+          0.11700522134390111,
+          0.0,
+          0.0
+        ],
+        "fB_upper": [
+          -0.11700522134390111,
+          0.0,
+          -33991.93991160283
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -44861.81404555147
+        ],
+        "sum_residual_at_pega": 0.11700522134390111
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-OP-02",
+      "mode": "ahv-strong-pull",
+      "description": "AHV mais distante (offset 100m horizontal).",
+      "inputs": {
+        "h": 200.0,
+        "X_fairlead": 1700.0,
+        "X_AHV": 950.0,
+        "deck_z": 10.0,
+        "L_lower": 1000.0,
+        "L_upper": 1000.0,
+        "L_ww": 280.0,
+        "wire": {
+          "name": "wire_IWRCEIPS_76mm",
+          "d_nom": 0.0762,
+          "d_vol": 0.0762,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_lower": 0.0,
+        "T_pega_upper": 0.031609760318471666,
+        "T_fairlead": 33991.85452159778,
+        "T_pega_ww": 0.0,
+        "T_AHV": 44861.81404555147,
+        "pega_x": 899.9912842960499,
+        "pega_z": -200.0,
+        "fA_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fA_upper": [
+          0.031609760318471666,
+          0.0,
+          0.0
+        ],
+        "fB_upper": [
+          -0.031609760318471666,
+          0.0,
+          -33991.85452158308
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -44861.81404555147
+        ],
+        "sum_residual_at_pega": 0.031609760318471666
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-OP-03",
+      "mode": "pega-near-anchor",
+      "description": "Pega 25% do total (próximo anchor).",
+      "inputs": {
+        "h": 300.0,
+        "X_fairlead": 2000.0,
+        "X_AHV": 580.0,
+        "deck_z": 15.0,
+        "L_lower": 800.0,
+        "L_upper": 1900.0,
+        "L_ww": 400.0,
+        "wire": {
+          "name": "wire_IWRCEIPS_76mm",
+          "d_nom": 0.0762,
+          "d_vol": 0.0762,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_lower": 0.0,
+        "T_pega_upper": 0.0,
+        "T_fairlead": 50986.946640977316,
+        "T_pega_ww": 0.0,
+        "T_AHV": 67291.34902096269,
+        "pega_x": 587.3010019247513,
+        "pega_z": -300.0,
+        "fA_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fA_upper": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_upper": [
+          0.0,
+          0.0,
+          -50986.946640977316
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -67291.34902096269
+        ],
+        "sum_residual_at_pega": 0.0
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-OP-04",
+      "mode": "pega-near-fairlead",
+      "description": "Pega 75% do total (próximo fairlead).",
+      "inputs": {
+        "h": 300.0,
+        "X_fairlead": 2000.0,
+        "X_AHV": 1580.0,
+        "deck_z": 15.0,
+        "L_lower": 1900.0,
+        "L_upper": 800.0,
+        "L_ww": 400.0,
+        "wire": {
+          "name": "wire_IWRCEIPS_76mm",
+          "d_nom": 0.0762,
+          "d_vol": 0.0762,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_lower": 0.0,
+        "T_pega_upper": 0.07144477738188612,
+        "T_fairlead": 50987.01807912561,
+        "T_pega_ww": 0.0,
+        "T_AHV": 67291.34902096269,
+        "pega_x": 1499.9805336158456,
+        "pega_z": -300.0,
+        "fA_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fA_upper": [
+          0.07144477738188612,
+          0.0,
+          0.0
+        ],
+        "fB_upper": [
+          -0.07144477738188612,
+          0.0,
+          -50987.018079075555
+        ],
+        "fA_ww": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_ww": [
+          0.0,
+          0.0,
+          -67291.34902096269
+        ],
+        "sum_residual_at_pega": 0.07144477738188612
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-OP-05",
+      "mode": "deepwater",
+      "description": "Águas profundas h=1500m, geometria simétrica.",
+      "inputs": {
+        "h": 1500.0,
+        "X_fairlead": 2500.0,
+        "X_AHV": 1320.0,
+        "deck_z": 20.0,
+        "L_lower": 2400.0,
+        "L_upper": 2400.0,
+        "L_ww": 1500.0,
+        "wire": {
+          "name": "wire_IWRCEIPS_76mm",
+          "d_nom": 0.0762,
+          "d_vol": 0.0762,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_lower": 5102.547340954702,
+        "T_pega_upper": 14146.364250450619,
+        "T_fairlead": 263927.19992131303,
+        "T_pega_ww": 18365.466951785467,
+        "T_AHV": 338911.4197427167,
+        "pega_x": 1445.3551431253456,
+        "pega_z": -1469.9785836729698,
+        "fA_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_lower": [
+          0.0,
+          0.0,
+          -5102.547340954702
+        ],
+        "fA_upper": [
+          9043.900745136956,
+          0.0,
+          -10877.843573913835
+        ],
+        "fB_upper": [
+          -9043.900744735512,
+          0.0,
+          -263772.2023216702
+        ],
+        "fA_ww": [
+          -9044.460483283654,
+          1.107626958086805e-12,
+          15983.99546181882
+        ],
+        "fB_ww": [
+          9044.460483283654,
+          -1.107626958086805e-12,
+          -338790.71440432104
+        ],
+        "sum_residual_at_pega": 3.647748005229898
+      },
+      "status": "converged"
+    },
+    {
+      "id": "BC-AHV-OP-06",
+      "mode": "ultra-deepwater",
+      "description": "Águas ultra-profundas h=2000m, simétrico.",
+      "inputs": {
+        "h": 2000.0,
+        "X_fairlead": 3000.0,
+        "X_AHV": 1580.0,
+        "deck_z": 25.0,
+        "L_lower": 3000.0,
+        "L_upper": 3000.0,
+        "L_ww": 2000.0,
+        "wire": {
+          "name": "wire_IWRCEIPS_76mm",
+          "d_nom": 0.0762,
+          "d_vol": 0.0762,
+          "m": 22.0,
+          "w": 170.0,
+          "EA": 550000000.0,
+          "MBL": 6500000.0,
+          "material": "wire",
+          "cost": 0.0,
+          "input_d": 76.0,
+          "input_type": "wire"
+        }
+      },
+      "moorpy": {
+        "T_anchor": 0.0,
+        "T_pega_lower": 7064.883135243157,
+        "T_pega_upper": 21097.166187032934,
+        "T_fairlead": 353847.54995635134,
+        "T_pega_ww": 26788.47379931904,
+        "T_AHV": 453520.2380428716,
+        "pega_x": 1769.493121746153,
+        "pega_z": -1958.4328841852368,
+        "fA_lower": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "fB_lower": [
+          0.0,
+          0.0,
+          -7064.883135243157
+        ],
+        "fA_upper": [
+          14032.463294146119,
+          0.0,
+          -15753.742254516152
+        ],
+        "fB_upper": [
+          -14032.463289054922,
+          0.0,
+          -353569.19914516574
+        ],
+        "fA_ww": [
+          -14032.565492419699,
+          1.7184936414117387e-12,
+          22819.058573870978
+        ],
+        "fB_ww": [
+          14032.565492419699,
+          -1.7184936414117387e-12,
+          -453303.09222435695
+        ],
+        "sum_residual_at_pega": 0.44507635493846986
+      },
+      "status": "converged"
+    }
+  ]
+}

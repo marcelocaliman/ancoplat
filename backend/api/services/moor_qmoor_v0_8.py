@@ -282,6 +282,12 @@ def _build_case_from_profile(
     attachments += _parse_clumps_as_attachments(
         profile, line_idx, prof_idx, log, unit_system,
     )
+    # Sprint 5 / Tier D — AHV Operacional Mid-Line. JSON QMoor 0.8.0 pode
+    # ter `boundary.anchorHandlerVessels[]` (array de AHVs operacionais).
+    # Cada vessel vira um LineAttachment kind="ahv" com ahv_work_wire.
+    attachments += _parse_ahv_operational_as_attachments(
+        profile, line_idx, prof_idx, log, unit_system,
+    )
     boundary = _parse_boundary(
         profile, line, line_idx, prof_idx, log, unit_system,
     )
@@ -717,6 +723,205 @@ def _parse_clumps_as_attachments(
                 "reason": f"validação falhou: {e}",
             })
     return out
+
+
+def _parse_ahv_operational_as_attachments(
+    profile: dict[str, Any],
+    line_idx: int, prof_idx: int,
+    log: list[dict[str, Any]],
+    unit_system: str,
+) -> list[LineAttachment]:
+    """
+    Sprint 5 / Tier D — Parser de AHV operacional mid-line.
+
+    JSON QMoor 0.8.0 espera `profile.boundary.anchorHandlerVessels[]`
+    (array de AHVs). Cada item:
+
+      {
+        "name": "Vessel 1",
+        "heading": "Away from Fairlead" | número (graus),
+        "sternAngle": 25,
+        "deckLevelAboveSWL": "0.0 m",
+        "bollardPull": {"force": "90 te", "direction": "Away from Fairlead"},
+        "connectionPosition": {"lineDistanceFromFairlead": "1000 m"},
+        "workLine": {"lineType": "IWRCEIPS", "diameter": "76.2 mm",
+                     "length": "300 m", "EA": "...", "wetWeight": "..."}
+      }
+
+    Para cada item, gera LineAttachment kind='ahv' com:
+      - position_s_from_anchor = L_total - lineDistanceFromFairlead
+      - ahv_bollard_pull = bollardPull.force
+      - ahv_heading_deg = heading (interpretado)
+      - ahv_work_wire = WorkWireSpec(...)
+      - ahv_deck_x = X_AHV (se determinável)
+      - ahv_deck_level = deckLevelAboveSWL
+
+    Se essenciais ausentes, item é pulado com log estruturado.
+    """
+    bd = profile.get("boundary") or {}
+    if not isinstance(bd, dict):
+        return []
+    ahvs_raw = bd.get("anchorHandlerVessels") or bd.get("ahvOperational")
+    if not isinstance(ahvs_raw, list) or len(ahvs_raw) == 0:
+        return []
+
+    out: list[LineAttachment] = []
+    L_total = _sum_segment_lengths(profile, unit_system)
+    if L_total is None or L_total <= 0:
+        log.append({
+            "field": f"profiles[{line_idx}.{prof_idx}].boundary."
+                     f"anchorHandlerVessels",
+            "old": str(len(ahvs_raw)),
+            "new": "skipped",
+            "reason": (
+                "D026b: comprimento total da linha desconhecido — não é "
+                "possível derivar position_s_from_anchor. AHVs operacionais "
+                "ignorados."
+            ),
+        })
+        return []
+
+    for i, ahv in enumerate(ahvs_raw):
+        if not isinstance(ahv, dict):
+            continue
+        try:
+            # Connection position (distância do fairlead em arc length)
+            cp = ahv.get("connectionPosition") or {}
+            line_dist_from_fl = _parse_q(
+                cp.get("lineDistanceFromFairlead"), "length", unit_system,
+            )
+            if line_dist_from_fl is None:
+                # Tenta direto no nível raiz
+                line_dist_from_fl = _parse_q(
+                    ahv.get("lineDistanceFromFairlead"),
+                    "length", unit_system,
+                )
+            if line_dist_from_fl is None or line_dist_from_fl <= 0:
+                raise ValueError("lineDistanceFromFairlead ausente/inválido")
+            s_from_anchor = max(L_total - line_dist_from_fl, 1.0)
+
+            # Bollard pull
+            bp = ahv.get("bollardPull") or {}
+            force = _parse_q(bp.get("force"), "force", unit_system)
+            if force is None:
+                force = _parse_q(ahv.get("bollardPull"), "force", unit_system)
+            if force is None or force <= 0:
+                raise ValueError("bollardPull.force ausente/inválido")
+
+            # Heading: pode ser texto ("Away from Fairlead") ou número.
+            heading_raw = bp.get("direction") or ahv.get("heading")
+            heading_deg = _interpret_heading(heading_raw)
+
+            # Stern angle (metadado, em graus — número direto)
+            stern_raw = ahv.get("sternAngle")
+            stern_deg: Optional[float] = None
+            if isinstance(stern_raw, (int, float)):
+                stern_deg = float(stern_raw)
+            elif isinstance(stern_raw, str):
+                # Pode vir como "25" ou "25.0" sem unidade
+                try:
+                    stern_deg = float(stern_raw.strip())
+                except ValueError:
+                    stern_deg = None
+
+            # Deck level
+            deck_level = _parse_q(
+                ahv.get("deckLevelAboveSWL"), "length", unit_system,
+            )
+            deck_level = deck_level if deck_level is not None else 0.0
+
+            # Work line
+            wl = ahv.get("workLine") or ahv.get("workWire") or {}
+            ww_length = _parse_q(wl.get("length"), "length", unit_system)
+            ww_ea = _parse_q(wl.get("EA"), "force", unit_system)
+            ww_w = _parse_q(
+                wl.get("wetWeight") or wl.get("w"),
+                "weight_per_length", unit_system,
+            )
+            ww_mbl = _parse_q(
+                wl.get("MBL") or wl.get("mbl"), "force", unit_system,
+            )
+            ww_diameter = _parse_q(wl.get("diameter"), "length", unit_system)
+            ww_line_type = _get_str(wl, "lineType") or _get_str(wl, "name")
+
+            if not (ww_length and ww_ea and ww_w is not None and ww_mbl):
+                raise ValueError(
+                    "workLine incompleta (length/EA/wetWeight/MBL "
+                    "obrigatórios)"
+                )
+
+            # Posição X do AHV deck no frame da linha. QMoor não expõe
+            # isso explicitamente — estimamos via heading + ww quase
+            # vertical. Default: AHV deck logo acima do pega (offset
+            # horizontal pequeno = 30m).
+            ahv_deck_x_estimate = line_dist_from_fl + (
+                30.0 if heading_deg < 90 else -30.0
+            )
+
+            from backend.solver.types import WorkWireSpec
+            work_wire = WorkWireSpec(
+                length=ww_length, EA=ww_ea, w=ww_w, MBL=ww_mbl,
+                line_type=ww_line_type, diameter=ww_diameter,
+            )
+            att = LineAttachment(
+                kind="ahv",
+                position_s_from_anchor=s_from_anchor,
+                name=_get_str(ahv, "name") or f"AHV #{i + 1}",
+                ahv_bollard_pull=force,
+                ahv_heading_deg=heading_deg,
+                ahv_stern_angle_deg=stern_deg,
+                ahv_deck_level=deck_level,
+                ahv_work_wire=work_wire,
+                ahv_deck_x=ahv_deck_x_estimate,
+            )
+            out.append(att)
+            log.append({
+                "field": f"profiles[{line_idx}.{prof_idx}].boundary."
+                         f"anchorHandlerVessels[{i}]",
+                "old": _get_str(ahv, "name") or f"#{i}",
+                "new": (
+                    f"LineAttachment(kind='ahv', s_from_anchor="
+                    f"{s_from_anchor:.0f}m, bollard={force:.0f} N, "
+                    f"L_ww={ww_length:.0f}m)"
+                ),
+                "reason": (
+                    "D026: AHV Operacional Mid-Line (Tier D) detectado. "
+                    "Solver usa pre-processor 2-pass com Work Wire elástico "
+                    "modelado. ahv_deck_x estimado em "
+                    f"{ahv_deck_x_estimate:.0f}m — refine via UI se necessário."
+                ),
+            })
+        except Exception as e:
+            log.append({
+                "field": f"profiles[{line_idx}.{prof_idx}].boundary."
+                         f"anchorHandlerVessels[{i}]",
+                "old": str(ahv)[:80],
+                "new": "skipped",
+                "reason": f"D026b: AHV operacional inválido — {e}",
+            })
+    return out
+
+
+def _interpret_heading(raw: Any) -> float:
+    """
+    Interpreta heading do QMoor 0.8.0. Pode ser:
+      - número (graus, 0-360)
+      - string "Away from Fairlead" → 0° (puxando da plataforma para fora)
+      - string "Toward Fairlead" / "Toward" → 180° (puxando para a plataforma)
+      - default: 0°
+    """
+    if raw is None:
+        return 0.0
+    if isinstance(raw, (int, float)):
+        v = float(raw)
+        return v % 360.0
+    if isinstance(raw, str):
+        s = raw.strip().lower()
+        if "away" in s:
+            return 0.0
+        if "toward" in s or "para" in s:
+            return 180.0
+    return 0.0
 
 
 def _sum_segment_lengths(

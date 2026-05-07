@@ -15,6 +15,43 @@ e o projeto adere a [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Sprint 5 (2026-05-07) — AHV Tier D Operacional Mid-Line
+
+- **feat(schema):** `LineAttachment` (kind="ahv") ganha campos
+  opcionais `ahv_work_wire: Optional[WorkWireSpec]` + `ahv_deck_x:
+  Optional[float]`. Default `None` preserva F8 puro (retro-compat).
+- **feat(solver):** novo `backend/solver/ahv_operational.py` (~340 LoC)
+  com pre-processor 2-pass + refinamento iterativo. Convergência em
+  até 5 ciclos outer com tolerância 0.5m na posição da pega.
+- **feat(diagnostics):** D025 (info, high) Tier D → fallback F8.
+  D026 (warning, medium) Work Wire com ângulo vertical < 10°.
+  D018 atualizado com `tier_d_active=True` (Tier D > Tier C quando
+  ambos active).
+- **feat(parser):** QMoor 0.8.0 importer detecta
+  `boundary.anchorHandlerVessels[]` e converte cada item em
+  LineAttachment Tier D. `_interpret_heading()` mapa textos QMoor
+  ("Away from Fairlead" → 0°, "Toward Fairlead" → 180°). D026 (info)
+  emitido no migration log.
+- **feat(frontend):** `AHVOperationalSubcard` no AttachmentsEditor
+  abaixo dos campos AHV F8 (bollard/heading) quando kind='ahv'.
+  Toggle "Ativar Tier D" + LineTypePicker para Work Wire + 6
+  campos físicos editáveis.
+- **feat(plot):** CatenaryPlot desenha linha laranja (#F97316,
+  dashdot) entre pega → AHV deck + marker quadrado no AHV deck
+  quando attachment Tier D ativo.
+- **docs:** Decisão fechada **#19** — Tier D operacional mid-line
+  validado vs MoorPy Subsystem (xfail informativos por divergência
+  conceitual pega-free vs pega-fixa).
+
+⚠ **Sem mudanças numéricas em cases salvos:** Tier D é opt-in
+(`ahv_work_wire=None` é default). LineAttachment kind="ahv" sem
+ahv_work_wire mantém F8 puro inalterado. Verificado por gates
+`cases_baseline_regression` 3/3 + BC-MOORPY 7/7 + BC-AHV-INSTALL 5/5
++ BC-AHV-MOORPY (Sprint 4) preservados.
+
+Suite: 941 → 954 backend (+13 schema + 8 diag + 5 parser + 14
+solver/pipeline) + 207 frontend (sem testes novos diretos).
+
 ### Sprint 4 (2026-05-06) — AHV Tier C físico com MoorPy Subsystem
 
 - **feat(solver):** Tier C físico AHV implementado em
