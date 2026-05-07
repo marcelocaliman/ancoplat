@@ -268,48 +268,41 @@ export function SensitivityPanel({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-5 pb-4">
-        {/* Linha 1 — knobs globais (T_fl).
-            μ removido em Sprint 2 / Commit 18 — editar via aba Ambiente. */}
+      <CardContent className="space-y-2.5 pb-3">
+        {/* Linha 1 — Tração no fairlead (knob global). */}
         {baseInput.boundary.mode === 'Tension' && (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <KnobSlider
-              label="Tração no fairlead"
-              valueLabel={fmtForce(tFlActual, system)}
-              baselineLabel={`baseline ${fmtForce(baseTfl, system)}`}
-              mul={knobs.tFlMul}
-              onMulChange={(m) => setKnobs((k) => ({ ...k, tFlMul: m }))}
-            />
-          </div>
+          <KnobSliderRow
+            label="Tração no fairlead"
+            valueLabel={fmtForce(tFlActual, system)}
+            baselineLabel={fmtForce(baseTfl, system)}
+            mul={knobs.tFlMul}
+            onMulChange={(m) => setKnobs((k) => ({ ...k, tFlMul: m }))}
+          />
         )}
 
-        {/* Linha 2 — comprimentos por segmento, cada um em CARD próprio
-            com tom de azul levemente mais claro para distinguir do
-            container pai. */}
-        <div className="space-y-2 border-t border-border/40 pt-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-xs font-semibold text-foreground">
+        {/* Linha 2 — comprimentos por segmento (uma linha por seg). */}
+        <div className="space-y-1 border-t border-border/40 pt-2">
+          <div className="flex items-baseline justify-between gap-2 px-0.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               Comprimento por segmento
               {baseInput.segments.length > 1 && (
-                <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
-                  ({baseInput.segments.length} segmentos)
+                <span className="ml-1.5 text-[10px] font-normal normal-case tracking-normal">
+                  ({baseInput.segments.length} segs)
                 </span>
               )}
             </span>
             <span className="font-mono text-[10px] text-muted-foreground">
-              total:{' '}
+              total{' '}
               <span className="text-foreground">
                 {fmtMeters(totalLengthActual, 1)}
               </span>{' '}
-              · baseline {fmtMeters(baseLength, 1)}
+              · base {fmtMeters(baseLength, 1)}
             </span>
           </div>
           <div
             className={cn(
-              'grid grid-cols-1 gap-2',
-              baseInput.segments.length === 2 && 'md:grid-cols-2',
-              baseInput.segments.length === 3 && 'md:grid-cols-3',
-              baseInput.segments.length >= 4 && 'md:grid-cols-2 xl:grid-cols-4',
+              'grid grid-cols-1 gap-x-3 gap-y-0.5',
+              baseInput.segments.length >= 2 && 'xl:grid-cols-2',
             )}
           >
             {baseInput.segments.map((seg, idx) => {
@@ -317,7 +310,7 @@ export function SensitivityPanel({
               const cur = knobs.segmentLengths[idx] ?? baseL
               const segLabel =
                 baseInput.segments.length === 1
-                  ? 'Comprimento da linha'
+                  ? 'Comprimento'
                   : `Seg ${idx + 1}${
                       seg.line_type
                         ? ` · ${seg.line_type}`
@@ -326,7 +319,7 @@ export function SensitivityPanel({
                           : ''
                     }`
               return (
-                <SegmentLengthSlider
+                <SegmentLengthRow
                   key={idx}
                   label={segLabel}
                   valueM={cur}
@@ -344,14 +337,13 @@ export function SensitivityPanel({
           </div>
         </div>
 
-        {/* Linha 3 — posição de CADA attachment (Sprint 2 / Commit 18).
-            Boias, clumps e AHVs ganham slider individual + input numérico. */}
+        {/* Linha 3 — posição dos attachments (uma linha por item). */}
         {attachments.length > 0 && (
-          <div className="space-y-2 border-t border-border/40 pt-3">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-xs font-semibold text-foreground">
+          <div className="space-y-1 border-t border-border/40 pt-2">
+            <div className="flex items-baseline justify-between gap-2 px-0.5">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Posição dos attachments
-                <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">
+                <span className="ml-1.5 text-[10px] font-normal normal-case tracking-normal">
                   ({attachments.length}{' '}
                   {attachments.length === 1 ? 'item' : 'itens'})
                 </span>
@@ -359,10 +351,8 @@ export function SensitivityPanel({
             </div>
             <div
               className={cn(
-                'grid grid-cols-1 gap-2',
-                attachments.length === 2 && 'md:grid-cols-2',
-                attachments.length === 3 && 'md:grid-cols-3',
-                attachments.length >= 4 && 'md:grid-cols-2 xl:grid-cols-4',
+                'grid grid-cols-1 gap-x-3 gap-y-0.5',
+                attachments.length >= 2 && 'xl:grid-cols-2',
               )}
             >
               {attachments.map((att, idx) => {
@@ -370,7 +360,7 @@ export function SensitivityPanel({
                 if (baseS == null || Number.isNaN(baseS)) return null
                 const cur = knobs.attachmentS[idx] ?? baseS
                 return (
-                  <AttachmentPosSlider
+                  <AttachmentPosRow
                     key={idx}
                     kind={att.kind}
                     name={att.name ?? null}
@@ -412,7 +402,11 @@ export function SensitivityPanel({
 // Sub-components
 // ──────────────────────────────────────────────────────────────────
 
-function KnobSlider({
+/**
+ * Layout inline-row (Sprint UX): label compacta · slider · valor mono · delta,
+ * tudo em UMA linha. Substitui card empilhado com 3 sub-rows do design antigo.
+ */
+function KnobSliderRow({
   label,
   valueLabel,
   baselineLabel,
@@ -425,16 +419,18 @@ function KnobSlider({
   mul: number
   onMulChange: (mul: number) => void
 }) {
-  // Slider opera em 0..100 mapeado para mul ∈ [0.5, 1.5].
   const sliderValue = ((mul - 0.5) / 1.0) * 100
   const pct = ((mul - 1) * 100).toFixed(0)
   const positive = mul > 1
+  const isChanged = Math.abs(mul - 1) >= 1e-3
   return (
-    <div className="space-y-1.5 rounded-md border border-primary/15 bg-primary/[0.06] p-2.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs font-medium text-foreground">{label}</span>
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(160px,2fr)_minmax(0,auto)] items-center gap-3 rounded px-1.5 py-1 hover:bg-primary/5">
+      <div className="min-w-0 flex flex-col">
+        <span className="truncate text-xs font-medium text-foreground">
+          {label}
+        </span>
         <span className="font-mono text-[10px] text-muted-foreground">
-          {baselineLabel}
+          base {baselineLabel}
         </span>
       </div>
       <Slider
@@ -447,20 +443,20 @@ function KnobSlider({
           onMulChange(0.5 + (sv / 100) * 1.0)
         }}
       />
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-baseline gap-2 justify-self-end">
         <span className="font-mono text-sm font-semibold tabular-nums">
           {valueLabel}
         </span>
         <span
-          className={`font-mono text-[10px] tabular-nums ${
-            Math.abs(mul - 1) < 1e-3
+          className={`w-12 text-right font-mono text-[10px] tabular-nums ${
+            !isChanged
               ? 'text-muted-foreground'
               : positive
                 ? 'text-warning'
                 : 'text-success'
           }`}
         >
-          {Math.abs(mul - 1) < 1e-3 ? '—' : `${positive ? '+' : ''}${pct}%`}
+          {!isChanged ? '—' : `${positive ? '+' : ''}${pct}%`}
         </span>
       </div>
     </div>
@@ -468,10 +464,10 @@ function KnobSlider({
 }
 
 /**
- * Slider + input numérico de posição de attachment (boia/clump/AHV).
- * Range: 1%–99% do `totalLength` atual.
+ * Inline-row: label compacta · slider · NumberInput · delta. Range 1%-99%
+ * de `totalLength`.
  */
-function AttachmentPosSlider({
+function AttachmentPosRow({
   kind,
   name,
   fallbackLabel,
@@ -497,13 +493,13 @@ function AttachmentPosSlider({
     kind === 'buoy' ? 'Boia' : kind === 'clump_weight' ? 'Clump' : 'AHV'
   const labelName = name ? `"${name}"` : fallbackLabel
   return (
-    <div className="space-y-1.5 rounded-md border border-primary/15 bg-primary/[0.06] p-2.5">
-      <div className="flex items-baseline justify-between gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(140px,2fr)_minmax(0,auto)] items-center gap-3 rounded px-1.5 py-1 hover:bg-primary/5">
+      <div className="min-w-0 flex flex-col">
         <span className="truncate text-xs font-medium text-foreground">
           {labelKind} {labelName}
         </span>
         <span className="font-mono text-[10px] text-muted-foreground">
-          baseline {baselineS.toFixed(1)} m
+          base {baselineS.toFixed(1)} m
         </span>
       </div>
       <Slider
@@ -513,11 +509,10 @@ function AttachmentPosSlider({
         value={[Math.max(0, Math.min(1000, sliderValue))]}
         onValueChange={(v) => {
           const sv = v[0] ?? 500
-          const s = minS + (sv / 1000) * range
-          onChangeS(s)
+          onChangeS(minS + (sv / 1000) * range)
         }}
       />
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-baseline gap-2 justify-self-end">
         <NumberInput
           value={valueS}
           step={1}
@@ -526,12 +521,12 @@ function AttachmentPosSlider({
           unit="m"
         />
         <span
-          className={`font-mono text-[10px] tabular-nums ${
+          className={`w-14 text-right font-mono text-[10px] tabular-nums ${
             isChanged ? 'text-warning' : 'text-muted-foreground'
           }`}
         >
           {isChanged
-            ? `${valueS > baselineS ? '+' : ''}${(valueS - baselineS).toFixed(1)} m`
+            ? `${valueS > baselineS ? '+' : ''}${(valueS - baselineS).toFixed(1)}m`
             : '—'}
         </span>
       </div>
@@ -540,11 +535,10 @@ function AttachmentPosSlider({
 }
 
 /**
- * Slider + input numérico de comprimento de UM segmento. Range: 0.5×–1.5×
- * baseline. Input numérico aceita valores fora do range do slider
- * (mantém valor digitado, slider trava no extremo visualmente).
+ * Inline-row para comprimento de UM segmento. Range 0.5×–1.5× do baseline.
+ * NumberInput aceita valores fora do range do slider.
  */
-function SegmentLengthSlider({
+function SegmentLengthRow({
   label,
   valueM,
   baselineM,
@@ -563,13 +557,13 @@ function SegmentLengthSlider({
   const pctDelta = baselineM > 0 ? (delta / baselineM) * 100 : 0
   const isChanged = Math.abs(pctDelta) > 0.05
   return (
-    <div className="space-y-1.5 rounded-md border border-primary/15 bg-primary/[0.06] p-2.5">
-      <div className="flex items-baseline justify-between gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)_minmax(140px,2fr)_minmax(0,auto)] items-center gap-3 rounded px-1.5 py-1 hover:bg-primary/5">
+      <div className="min-w-0 flex flex-col">
         <span className="truncate text-xs font-medium text-foreground">
           {label}
         </span>
         <span className="font-mono text-[10px] text-muted-foreground">
-          baseline {baselineM.toFixed(1)} m
+          base {baselineM.toFixed(1)} m
         </span>
       </div>
       <Slider
@@ -582,7 +576,7 @@ function SegmentLengthSlider({
           onChangeM(minM + (sv / 100) * range)
         }}
       />
-      <div className="flex items-baseline justify-between gap-2">
+      <div className="flex items-baseline gap-2 justify-self-end">
         <NumberInput
           value={valueM}
           step={0.5}
@@ -591,7 +585,7 @@ function SegmentLengthSlider({
           unit="m"
         />
         <span
-          className={`font-mono text-[10px] tabular-nums ${
+          className={`w-12 text-right font-mono text-[10px] tabular-nums ${
             !isChanged
               ? 'text-muted-foreground'
               : delta > 0
@@ -637,7 +631,7 @@ function NumberInput({
           const n = parseFloat(e.target.value)
           if (Number.isFinite(n)) onChange(n)
         }}
-        className="h-7 w-24 font-mono text-sm font-semibold tabular-nums"
+        className="h-6 w-16 px-1.5 font-mono text-xs font-semibold tabular-nums"
       />
       {unit && (
         <span className="font-mono text-[10px] text-muted-foreground">

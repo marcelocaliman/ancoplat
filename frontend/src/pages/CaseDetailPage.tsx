@@ -85,6 +85,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
+  cn,
   fmtAngleDeg,
   fmtMeters,
   fmtNumber,
@@ -534,8 +535,8 @@ export function CaseDetailPage() {
                   metadata={caseInput.metadata ?? null}
                   ahvInstall={caseInput.boundary.ahv_install ?? null}
                 />
-                <Card className="mb-4">
-                  <CardContent className="h-[480px] p-2">
+                <Card className="mb-3">
+                  <CardContent className="h-[min(640px,calc(100vh-280px))] min-h-[440px] p-2">
                     {/* Sprint 2 / Commit 17 — quando preview está ativo
                         (liveInput != null), passamos os segments e
                         attachments do INPUT MODIFICADO para o plot. Sem
@@ -567,7 +568,7 @@ export function CaseDetailPage() {
                     />
                   </CardContent>
                 </Card>
-                <div className="mb-4">
+                <div className="mb-3">
                   <SensitivityPanel
                     caseId={caseId}
                     baseInput={caseInput}
@@ -697,29 +698,28 @@ function OverviewCards({
   )
 
   return (
-    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {/* Tração no fairlead — destaque */}
-      <Card className="xl:col-span-1">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+      {/* Tração no fairlead — destaque (col-span 2 em xl para acomodar gauge) */}
+      <Card className="md:col-span-2 xl:col-span-2">
+        <CardHeader className="px-3 pb-1 pt-2">
+          <CardTitle className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Tração no fairlead
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-1.5 px-3 pb-2.5">
           <div className="flex items-baseline gap-2 font-mono tabular-nums leading-none">
-            <span className="text-3xl font-semibold tracking-tight">
+            <span className="text-2xl font-semibold tracking-tight">
               {tFlPair.primary}
             </span>
-            <span className="text-sm text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               ≈ {tFlPair.secondary}
             </span>
           </div>
           <UtilizationGauge
             value={utilPct}
             alertLevel={result.alert_level}
-            className="mt-3"
           />
-          <div className="flex justify-between font-mono text-[11px] tabular-nums text-muted-foreground">
+          <div className="flex justify-between font-mono text-[10.5px] tabular-nums text-muted-foreground">
             <span>T_fl / MBL = {fmtPercent(utilPct, 2)}</span>
             <span>MBL = {fmtForce(segment.MBL, system)}</span>
           </div>
@@ -728,20 +728,20 @@ function OverviewCards({
 
       {/* Geometria principal */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <CardHeader className="px-3 pb-1 pt-2">
+          <CardTitle className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Geometria
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1.5 font-mono text-[12px] tabular-nums">
-          <Row label="X total (fairlead → âncora)" value={fmtMeters(result.total_horz_distance, 2)} />
-          <Row label="Prof. seabed @ âncora" value={fmtMeters(seabedDepths.atAnchor, 1)} />
-          <Row label="Prof. seabed @ fairlead" value={fmtMeters(seabedDepths.atFairlead, 1)} />
-          <Row label="Prof. do fairlead (vessel)" value={fmtMeters(result.startpoint_depth ?? 0, 1)} />
+        <CardContent className="space-y-0.5 px-3 pb-2 font-mono text-[11px] tabular-nums">
+          <Row label="X total (fl → ânc)" value={fmtMeters(result.total_horz_distance, 2)} />
+          <Row label="Prof. seabed @ ânc" value={fmtMeters(seabedDepths.atAnchor, 1)} />
+          <Row label="Prof. seabed @ fl" value={fmtMeters(seabedDepths.atFairlead, 1)} />
+          <Row label="Prof. do fairlead" value={fmtMeters(result.startpoint_depth ?? 0, 1)} />
           <Row label="Drop vertical" value={fmtMeters(drop, 1)} />
           {hasTouchdown && (
             <Row
-              label="Touchdown (do fairlead)"
+              label="Touchdown (do fl)"
               value={fmtMeters(
                 result.total_horz_distance - result.dist_to_first_td!,
                 2,
@@ -753,12 +753,12 @@ function OverviewCards({
 
       {/* Comprimentos */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <CardHeader className="px-3 pb-1 pt-2">
+          <CardTitle className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Comprimentos
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1.5 font-mono text-[12px] tabular-nums">
+        <CardContent className="space-y-0.5 px-3 pb-2 font-mono text-[11px] tabular-nums">
           <Row label="L total (unstretched)" value={fmtMeters(segment.length, 2)} />
           <Row label="L esticado" value={fmtMeters(result.stretched_length, 2)} />
           <Row label="L suspenso" value={fmtMeters(result.total_suspended_length, 2)} />
@@ -776,12 +776,12 @@ function OverviewCards({
 
       {/* Forças */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <CardHeader className="px-3 pb-1 pt-2">
+          <CardTitle className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Forças
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1.5 font-mono text-[12px] tabular-nums">
+        <CardContent className="space-y-0.5 px-3 pb-2 font-mono text-[11px] tabular-nums">
           <Row label="H (horizontal)" value={fmtForce(result.H, system)} />
           <Row label="T_fairlead" value={fmtForce(result.fairlead_tension, system)} />
           <Row label="T_anchor" value={fmtForce(result.anchor_tension, system)} />
@@ -805,26 +805,26 @@ function OverviewCards({
 
       {/* Ângulos */}
       <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <CardHeader className="px-3 pb-1 pt-2">
+          <CardTitle className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Ângulos
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1.5 font-mono text-[12px] tabular-nums">
+        <CardContent className="space-y-0.5 px-3 pb-2 font-mono text-[11px] tabular-nums">
           <Row
-            label="Fairlead (vs horizontal)"
+            label="Fairlead (vs horiz)"
             value={fmtAngleDeg(result.angle_wrt_horz_fairlead, 2)}
           />
           <Row
-            label="Fairlead (vs vertical)"
+            label="Fairlead (vs vert)"
             value={fmtAngleDeg(result.angle_wrt_vert_fairlead, 2)}
           />
           <Row
-            label="Âncora (vs horizontal)"
+            label="Âncora (vs horiz)"
             value={fmtAngleDeg(result.angle_wrt_horz_anchor, 2)}
           />
           <Row
-            label="Âncora (vs vertical)"
+            label="Âncora (vs vert)"
             value={fmtAngleDeg(result.angle_wrt_vert_anchor, 2)}
           />
         </CardContent>
@@ -842,71 +842,77 @@ function OverviewCards({
       )}
 
       {/* Atrito & EA por segmento (Fase 1) */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <Card className="md:col-span-2 xl:col-span-2">
+        <CardHeader className="px-3 pb-1 pt-2">
+          <CardTitle className="text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             Atrito & EA por segmento
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1.5 font-mono text-[11px] tabular-nums">
-          {input.segments.map((seg, i) => {
-            const muEff = resolveMuEffective(seg, input.seabed?.mu ?? 0)
-            const seg_label = `Seg ${i + 1}`
-            const ea_label =
-              (seg.ea_source ?? 'qmoor') === 'gmoor' ? 'GMoor' : 'QMoor'
-            return (
-              <div
-                key={i}
-                className="flex items-center justify-between border-b border-border/40 py-0.5 last:border-0"
-              >
-                <span className="text-muted-foreground">{seg_label}</span>
-                <span className="flex gap-3">
-                  <span title="EA source aplicado">
-                    EA: <strong>{ea_label}</strong>
-                  </span>
-                  <span title={muEff.source}>
-                    μ: <strong>{fmtNumber(muEff.value, 2)}</strong>
-                    <span className="ml-1 text-[9px] text-muted-foreground">
-                      ({muEff.shortLabel})
+        <CardContent className="px-3 pb-2 font-mono text-[10.5px] tabular-nums">
+          <div
+            className={cn(
+              'grid gap-x-3 gap-y-0.5',
+              input.segments.length === 1 && 'grid-cols-1',
+              input.segments.length === 2 && 'grid-cols-2',
+              input.segments.length >= 3 && 'grid-cols-2 xl:grid-cols-3',
+            )}
+          >
+            {input.segments.map((seg, i) => {
+              const muEff = resolveMuEffective(seg, input.seabed?.mu ?? 0)
+              const seg_label = `Seg ${i + 1}`
+              const ea_label =
+                (seg.ea_source ?? 'qmoor') === 'gmoor' ? 'GMoor' : 'QMoor'
+              return (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-2 border-b border-border/30 py-0.5 last:border-0"
+                >
+                  <span className="text-muted-foreground">{seg_label}</span>
+                  <span className="flex gap-2">
+                    <span title="EA source aplicado">
+                      EA <strong>{ea_label}</strong>
+                    </span>
+                    <span title={muEff.source}>
+                      μ <strong>{fmtNumber(muEff.value, 2)}</strong>
+                      <span className="ml-0.5 text-[9px] text-muted-foreground">
+                        ({muEff.shortLabel})
+                      </span>
                     </span>
                   </span>
-                </span>
-              </div>
-            )
-          })}
+                </div>
+              )
+            })}
+          </div>
         </CardContent>
       </Card>
 
       {/* Convergência */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+      <Card className="md:col-span-2 xl:col-span-2">
+        <CardHeader className="px-3 pb-1 pt-2">
+          <CardTitle className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             <Gauge className="h-3 w-3" />
             Convergência
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
+        <CardContent className="space-y-1.5 px-3 pb-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <StatusBadge status={result.status} />
             <AlertBadge level={result.alert_level} />
-          </div>
-          <div className="space-y-1 font-mono text-[12px] tabular-nums text-muted-foreground">
-            <Row
-              label="Iterações"
-              value={String(result.iterations_used)}
-            />
-            {executedAt && (
-              <Row
-                label="Calculado em"
-                value={format(new Date(executedAt), 'dd MMM, HH:mm', {
-                  locale: ptBR,
-                })}
-              />
-            )}
+            <span className="ml-auto font-mono text-[10.5px] tabular-nums text-muted-foreground">
+              {result.iterations_used} iter
+              {executedAt && (
+                <span className="ml-2">
+                  ·{' '}
+                  {format(new Date(executedAt), 'dd MMM, HH:mm', {
+                    locale: ptBR,
+                  })}
+                </span>
+              )}
+            </span>
           </div>
           {result.message && (
             <p
-              className="rounded-md border border-border/60 bg-muted/20 p-2 font-mono text-[10.5px] leading-relaxed text-muted-foreground"
+              className="rounded border border-border/50 bg-muted/20 px-2 py-1 font-mono text-[10px] leading-snug text-muted-foreground"
               title={result.message}
             >
               {result.message}
