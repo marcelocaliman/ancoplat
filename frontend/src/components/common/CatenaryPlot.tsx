@@ -1563,6 +1563,11 @@ export function CatenaryPlot({
     if (xs.length === 0) return []
     const xTotal = Math.max(Xtotal, 1)
     const minLen = Math.max(30, xTotal * 0.08)
+    // Frame solver: anchor em (0, 0). Frame plot: fairlead em (0, 0),
+    // anchor em (Xtotal, -endpointDepth). Transformação aplicada
+    // ponto-a-ponto para anchorar as annotations no plot.
+    const toPlotX = (sx: number) => Xtotal - sx
+    const toPlotY = (sy: number) => sy - endpointDepth
     const labelStyle = {
       showarrow: false,
       xref: 'x' as const,
@@ -1592,9 +1597,11 @@ export function CatenaryPlot({
         const i0 = segBounds[i] ?? 0
         const i1 = segBounds[i + 1] ?? xs.length - 1
         const iMid = Math.floor((i0 + i1) / 2)
-        const x = xs[iMid]
-        const y = ys[iMid]
-        if (x == null || y == null) continue
+        const sx = xs[iMid]
+        const sy = ys[iMid]
+        if (sx == null || sy == null) continue
+        const x = toPlotX(sx)
+        const y = toPlotY(sy)
         const ltLabel = meta.line_type || meta.category || `Seg ${i + 1}`
         const dStr = meta.diameter
           ? ` ${(meta.diameter * 1000).toFixed(0)}mm`
@@ -1615,9 +1622,11 @@ export function CatenaryPlot({
         const length = meta.length ?? 0
         if (length >= minLen) {
           const iMid = Math.floor(xs.length / 2)
-          const x = xs[iMid]
-          const y = ys[iMid]
-          if (x != null && y != null) {
+          const sx = xs[iMid]
+          const sy = ys[iMid]
+          if (sx != null && sy != null) {
+            const x = toPlotX(sx)
+            const y = toPlotY(sy)
             const ltLabel = meta.line_type || meta.category || 'Seg 1'
             const dStr = meta.diameter
               ? ` ${(meta.diameter * 1000).toFixed(0)}mm`
@@ -1643,9 +1652,11 @@ export function CatenaryPlot({
         if (posIdx == null) continue
         const coordIdx = segBounds[posIdx + 1]
         if (coordIdx == null) continue
-        const x = xs[coordIdx]
-        const y = ys[coordIdx]
-        if (x == null || y == null) continue
+        const sx = xs[coordIdx]
+        const sy = ys[coordIdx]
+        if (sx == null || sy == null) continue
+        const x = toPlotX(sx)
+        const y = toPlotY(sy)
         let text = ''
         if (att.kind === 'buoy') {
           const force = (att.submerged_force ?? 0) / 1000
@@ -1676,9 +1687,11 @@ export function CatenaryPlot({
     ).work_wire_start_index
     if (wwStart != null && wwStart > 0 && xs.length > wwStart + 1) {
       const wwMid = Math.floor((wwStart + xs.length - 1) / 2)
-      const x = xs[wwMid]
-      const y = ys[wwMid]
-      if (x != null && y != null) {
+      const sx = xs[wwMid]
+      const sy = ys[wwMid]
+      if (sx != null && sy != null) {
+        const x = toPlotX(sx)
+        const y = toPlotY(sy)
         out.push({
           ...labelStyle,
           x,
@@ -1693,7 +1706,7 @@ export function CatenaryPlot({
 
     return out
   }, [
-    showInlineLabels, result, segments, attachments, Xtotal,
+    showInlineLabels, result, segments, attachments, Xtotal, endpointDepth,
     palette.text, palette.hoverBorder, theme,
   ])
 
@@ -1766,11 +1779,11 @@ export function CatenaryPlot({
     () => ({
       displaylogo: false,
       responsive: true,
-      modeBarButtonsToRemove: [
-        'lasso2d',
-        'select2d',
-        'autoScale2d',
-      ] as Plotly.ModeBarDefaultButtons[],
+      // Sprint 4.1 — desabilita modebar default do Plotly. Nossos toggles
+      // customizados (canto sup. dir.) cobrem aspect/labels/legend/images/
+      // detalhes inline. Download PNG raramente usado; se necessário
+      // re-adicionar via botão dedicado.
+      displayModeBar: false,
     }),
     [],
   )
@@ -1920,7 +1933,7 @@ export function CatenaryPlot({
           com ícone de câmera/download). Container com fundo discreto
           + gap-1.5 para visual de "barra de ferramentas" coerente
           em vez de botões soltos. */}
-      <div className="pointer-events-none absolute right-12 top-1 z-20 flex gap-1.5 rounded-md border border-border/40 bg-background/60 p-0.5 backdrop-blur-sm">
+      <div className="pointer-events-none absolute right-1 top-1 z-20 flex gap-1.5 rounded-md border border-border/40 bg-background/60 p-0.5 backdrop-blur-sm">
         <PlotToggleButton
           icon={<Maximize2 className="h-3 w-3" />}
           active={equalAspectLocal}
