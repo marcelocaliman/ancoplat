@@ -358,13 +358,27 @@ def solve(
             if resolved_attachments:
                 # Fase 8: mensagem cobre AHV explicitamente (Q5: AHV +
                 # uplift bloqueado em v1.0).
+                # Sprint 7 / Commit 60: mensagem ATUALIZADA para citar
+                # caminhos específicos. Tier D + uplift = F7.x.y (v1.5+).
                 kinds_present = {att.kind for att in resolved_attachments}
                 kinds_str = ", ".join(sorted(kinds_present))
+                tier_d_count = sum(
+                    1 for a in resolved_attachments
+                    if a.kind == "ahv" and a.ahv_work_wire is not None
+                )
+                tier_d_note = ""
+                if tier_d_count > 0:
+                    tier_d_note = (
+                        f" Caso inclui {tier_d_count} attachment(s) Tier D "
+                        "(ahv_work_wire set) — combinação Tier D + uplift "
+                        "requer F7.x.y (extensão de suspended_endpoint para "
+                        "aceitar force injection mid-line). Pendência v1.5+."
+                    )
                 raise NotImplementedError(
                     f"Anchor uplift (endpoint_grounded=False) com "
                     f"attachments ({kinds_str}) ainda não suportado em "
-                    "v1.0. Caso requer modelagem multi-segmento + uplift "
-                    "+ attachments combinados (F7.x/F8.x pós-v1.0). "
+                    "v1.0-1.4. Caso requer modelagem multi-segmento + uplift "
+                    f"+ attachments combinados (F7.x).{tier_d_note} "
                     "Remova attachments ou use endpoint_grounded=True."
                 )
             from .suspended_endpoint import solve_suspended_endpoint
