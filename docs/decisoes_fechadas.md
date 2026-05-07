@@ -685,3 +685,26 @@ Fallback automático para F8 puro com **D025** quando catenária ww inviável OU
 **Referência canônica:** Sprint 6 / Commits 50-58.
 
 **Link:** [`relatorio_sprint6_vessel_catalog.md`](relatorio_sprint6_vessel_catalog.md).
+
+
+---
+
+## Decisão #21 — Multi-AHV + DAF + Tier D uplift xfail (Sprint 7)
+
+**Decisão:** 3 mudanças coesas:
+
+1. **Multi-AHV Tier D**: solver aceita N attachments com `ahv_work_wire`. Loop interno calcula força ww de cada AHV independente, todos atualizados no mesmo pass. Era restrição artificial em Sprint 5 (apenas 1 AHV) — removida.
+
+2. **Tier D + uplift = F7.x.y (pendência v1.5+)**: combinar Tier D com `endpoint_grounded=False` exige extensão de `solve_suspended_endpoint` para force injection F8 mid-line. Não implementado nesta sprint — documentado com xfail strict=True que vira PASS automaticamente quando feature existir.
+
+3. **Snap loads via DAF tabelado** (DNV-RP-H103 §5.5): campo opt-in `boundary.snap_load_daf` (1.0-5.0). Solver multiplica T_fairlead/T_anchor/tension_magnitude por DAF antes de retornar. D028 (warning, medium) cita regime ('calma'/'média'/'severa'/'extremo') e explicita "envelope de pico ESTIMADO, NÃO dinâmica real".
+
+**Razão multi-AHV:** validador artificial Sprint 5 limitava operações reais (tandem pull, dual-AHV install). Implementação via loop sobre `tier_d_indices` é mudança contida no `solve_with_ahv_operational`.
+
+**Razão DAF:** análise estática pura é insuficiente para envelope de pico em condições reais. DAF DNV-RP-H103 dá multiplicador conservador para dimensionamento preliminar. Decisão consciente: NÃO substitui Orcaflex/SIMA — D028 reforça isso.
+
+**Razão Tier D + uplift adiado:** combinar 2 features complexas (uplift F7 + force injection F8 mid-line) em 1 commit produziria código não-validado. Mais honesto: deixar bloqueado com mensagem clara + xfail strict=True que vira PASS quando F7.x.y existir.
+
+**Referência canônica:** Sprint 7 / Commits 59-65.
+
+**Link:** [`relatorio_sprint7_multi_ahv_snap_loads.md`](relatorio_sprint7_multi_ahv_snap_loads.md).
