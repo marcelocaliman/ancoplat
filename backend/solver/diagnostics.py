@@ -1192,6 +1192,59 @@ def D025_tier_d_fallback_f8(
     )
 
 
+def D028_snap_loads_applied(
+    *,
+    daf: float,
+) -> SolverDiagnostic:
+    """
+    Sprint 7 / Commit 63 — Snap loads via DAF tabelado.
+
+    Dispara sempre que `boundary.snap_load_daf > 1.0`. Multiplicador
+    aplicado a T_fairlead/T_anchor/T_AHV no SolverResult.
+
+    Tabela de referência DNV-RP-H103 §5.5:
+      - DAF = 1.0  → análise estática pura
+      - DAF = 1.5  → operação calma (mar Hs < 1m)
+      - DAF = 2.0  → operação média (mar Hs 1-2m)
+      - DAF = 2.5-3.0 → instalação severa (mar Hs > 2m)
+
+    Confidence: medium — tabela aproximada, calibrada por experiência
+      operacional, não derivada matematicamente.
+    Severity: warning — engenheiro precisa entender que resultado é
+      ENVELOPE DE PICO ESTIMADO, não dinâmica real.
+    """
+    if daf <= 1.5:
+        regime = "operação calma (mar Hs < 1m)"
+    elif daf <= 2.0:
+        regime = "operação média (mar Hs 1-2m)"
+    elif daf <= 3.0:
+        regime = "instalação severa (mar Hs > 2m)"
+    else:
+        regime = "regime extremo (não-coberto pela tabela DNV)"
+    return SolverDiagnostic(
+        code="D028_SNAP_LOADS_APPLIED",
+        severity="warning",
+        title=f"Snap loads via DAF = {daf:.1f} ({regime})",
+        cause=(
+            f"Multiplicador dinâmico DAF = {daf:.1f} aplicado a "
+            "T_fairlead, T_anchor e T_AHV no resultado. Tabela "
+            "DNV-RP-H103 §5.5 recomenda este valor para o regime "
+            f"'{regime}'. Resultado representa envelope de pico "
+            "ESTIMADO, não simulação dinâmica real."
+        ),
+        suggestion=(
+            "Use este valor como referência conservadora para "
+            "dimensionamento preliminar. Para certificação ou "
+            "operação crítica, valide com software dinâmico "
+            "(Orcaflex, SIMA, RAFT) — análise estática DAF não "
+            "captura: snap loads transitórios, ressonância, "
+            "amortecimento hidrodinâmico, fadiga acumulada."
+        ),
+        confidence="medium",
+        affected_fields=["boundary.snap_load_daf"],
+    )
+
+
 def D026_work_wire_too_horizontal(
     *,
     angle_deg: float,
@@ -1285,6 +1338,7 @@ __all__ = [
     "D024_tier_c_fallback_sprint2",
     "D025_tier_d_fallback_f8",
     "D026_work_wire_too_horizontal",
+    "D028_snap_loads_applied",
     "D900_generic_nonconvergence",
     "SolverDiagnostic",
     "SolverDiagnosticError",
