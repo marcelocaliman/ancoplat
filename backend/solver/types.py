@@ -576,10 +576,63 @@ class LineAttachment(BaseModel):
         default=None, ge=0.0,
         description=(
             "(Opcional) Altura do convés do rebocador acima da linha "
-            "d'água (m). Metadado — não afeta cálculo. Útil em "
-            "relatórios para documentação do hardware."
+            "d'água (m). Metadado — não afeta cálculo (a Fase 8 puro). "
+            "Sprint 5 / Tier D: AUTORITATIVO quando `ahv_work_wire` "
+            "está populado (define Z_AHV_deck do convés no plot)."
         ),
     )
+
+    # ─── Sprint 5 / Tier D — AHV operacional mid-line ─────────────────
+    # Quando `ahv_work_wire` está populado, o solver muda do modelo
+    # F8 (força pontual `_signed_force_2d`) para Tier D (Work Wire
+    # elástico real conectando o ponto da linha ao convés do AHV na
+    # superfície). Todos os campos abaixo só são autoritativos quando
+    # `ahv_work_wire is not None`. Default `None` preserva F8 puro.
+    #
+    # Cenário típico: linha de ancoragem instalada continua íntegra
+    # (plataforma → fairlead → mooring → anchor); um AHV puxa
+    # lateralmente via Work Wire conectado no ponto definido por
+    # `position_index`/`position_s_from_anchor`.
+    ahv_work_wire: Optional["WorkWireSpec"] = Field(
+        default=None,
+        description=(
+            "Sprint 5 / Tier D — Work Wire elástico do AHV operacional. "
+            "Quando set, o solver modela o cabo de trabalho como linha "
+            "extra entre o ponto da linha de ancoragem e o convés do "
+            "AHV na superfície. Validado vs MoorPy Subsystem em "
+            "BC-AHV-OP-01..06. None preserva comportamento F8 puro."
+        ),
+    )
+    ahv_deck_x: Optional[float] = Field(
+        default=None,
+        description=(
+            "Sprint 5 / Tier D — Posição horizontal do convés do AHV "
+            "em metros, medida no MESMO referencial da linha de "
+            "ancoragem (X = 0 no fairlead, X = total_horz_distance no "
+            "anchor). Required quando `ahv_work_wire` set. Solver usa "
+            "como input para resolver a geometria do Work Wire."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_ahv_operational(self) -> "LineAttachment":
+        """
+        Sprint 5 / Tier D — validação de coerência quando o cenário
+        operacional está ativo (ahv_work_wire populado).
+        """
+        if self.ahv_work_wire is not None:
+            if self.kind != "ahv":
+                raise ValueError(
+                    "ahv_work_wire só é válido em LineAttachment com "
+                    f"kind='ahv' (recebido kind='{self.kind}')."
+                )
+            if self.ahv_deck_x is None:
+                raise ValueError(
+                    "Quando ahv_work_wire está set (Tier D operacional), "
+                    "ahv_deck_x é obrigatório (posição horizontal do "
+                    "convés do AHV no referencial da linha)."
+                )
+        return self
 
     @model_validator(mode="after")
     def _exactly_one_position(self) -> "LineAttachment":
@@ -1623,6 +1676,8 @@ class WatchcircleResult(BaseModel):
 # `BoundaryConditions.ahv_install: Optional["AHVInstall"]` agora que
 # `AHVInstall` foi declarada acima neste arquivo.
 BoundaryConditions.model_rebuild()
+# Sprint 5 — LineAttachment.ahv_work_wire usa WorkWireSpec via forward ref.
+LineAttachment.model_rebuild()
 
 
 __all__ = [
